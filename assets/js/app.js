@@ -3,19 +3,35 @@ window.renderAll = window.renderAll || function(){};
 window.drawDistances = window.drawDistances || function(){};
 
 var APP_NAME='Vis Lokaties';
-var APP_VERSION='0.0.0';
+var APP_META={version:'0.0.0',branch:null,commit:null};
 
-function applyAppVersion(ver){
-  if(!ver) return;
-  APP_VERSION=String(ver);
+function applyAppMeta(meta){
+  if(!meta) return;
+  if(meta.version){ APP_META.version=String(meta.version); }
+  if(meta.branch!==undefined){ APP_META.branch = meta.branch?String(meta.branch):null; }
+  if(meta.commit!==undefined){ APP_META.commit = meta.commit?String(meta.commit):null; }
   if(typeof document!=='undefined'){
     var label=document.getElementById('versionLabel');
-    if(label) label.textContent='v'+APP_VERSION;
-    if(document.title!=null) document.title=APP_NAME+' v'+APP_VERSION;
+    if(label){
+      var txt='v'+APP_META.version;
+      if(APP_META.branch){ txt+=' • '+APP_META.branch; }
+      if(APP_META.commit){ txt+=' @'+APP_META.commit.slice(0,7); }
+      label.textContent=txt;
+    }
+    if(document.title!=null){
+      var title=APP_NAME+' v'+APP_META.version;
+      if(APP_META.branch){ title+=' • '+APP_META.branch; }
+      document.title=title;
+    }
   }
 }
 
-applyAppVersion(APP_VERSION);
+applyAppMeta(APP_META);
+
+function versionSlug(){
+  var branch = APP_META.branch ? APP_META.branch.replace(/[^0-9A-Za-z._-]+/g,'-') : '';
+  return APP_META.version + (branch ? '-' + branch : '');
+}
 
 var canFetchVersion = (typeof fetch==='function');
 if(canFetchVersion){
@@ -28,9 +44,36 @@ if(canFetchVersion){
     if(!resp.ok) throw new Error('HTTP '+resp.status);
     return resp.json();
   }).then(function(pkg){
-    if(pkg && pkg.version) applyAppVersion(pkg.version);
-  }).catch(function(){ /* stilletjes falen - versie blijft fallback */ });
+    if(pkg && pkg.version) applyAppMeta({version:pkg.version});
+  }).catch(function(){ /* stilletjes falen */ });
+
+  fetch('meta.json',{cache:'no-store'}).then(function(resp){
+    if(!resp.ok) throw new Error('HTTP '+resp.status);
+    return resp.json();
+  }).then(function(meta){
+    if(meta) applyAppMeta(meta);
+  }).catch(function(){ /* ignore - ontwikkelserver nodig */ });
 }
+
+(function ensureLeafletPatches(){
+  if(typeof L==='undefined' || !L.DomEvent || L.DomEvent.__touchleavePatched){ return; }
+  var origOn=L.DomEvent.on;
+  var origOff=L.DomEvent.off;
+  var fallback=(typeof window!=='undefined' && window.__touchleaveFallback) || (function(){
+    if(typeof document!=='undefined'){
+      try{ if('onpointerleave' in document.documentElement){ return 'pointerleave'; } }
+      catch(_){ }
+    }
+    return 'mouseleave';
+  })();
+  function repl(types){
+    if(typeof types!=='string' || types.indexOf('touchleave')===-1){ return types; }
+    return types.split(/\s+/).map(function(t){ return t==='touchleave'?fallback:t; }).join(' ');
+  }
+  L.DomEvent.on=function(obj, types, fn, context){ return origOn.call(this,obj,repl(types),fn,context); };
+  L.DomEvent.off=function(obj, types, fn, context){ return origOff.call(this,obj,repl(types),fn,context); };
+  L.DomEvent.__touchleavePatched=true;
+})();
 
 // ===== helpers / status =====
 function S(m){var el=document.getElementById("statusLine"); if(el) el.textContent=String(m||'');}
@@ -365,35 +408,8 @@ function attachMarker(m,type,id){
       L.DomEvent.disableClickPropagation(m._icon);
       L.DomEvent.disableScrollPropagation(m._icon);
     }catch(_){ }
-    m._icon.style.cursor='grab';
-
-    if(m._icon){
-      try{ m._icon.style.touchAction='none'; }catch(_){ }
-    }
-
-    function beginPointerHold(){
-      if(typeof window==='undefined') return;
-      disableMapDrag();
-      m.__pointerHold=true;
-      if(m._icon){ m._icon.style.cursor='grabbing'; }
-      function release(){
-        ['pointerup','pointercancel','mouseup','touchend','touchcancel'].forEach(function(type){
-          try{ window.removeEventListener(type, release, true); }catch(_){ }
-        });
-        if(!m.__draggingActive){
-          restoreMapDrag();
-          if(m._icon){ m._icon.style.cursor='grab'; }
-        }
-        m.__pointerHold=false;
-      }
-      ['pointerup','pointercancel','mouseup','touchend','touchcancel'].forEach(function(type){
-        try{ window.addEventListener(type, release, true); }catch(_){ }
-      });
-    }
-
-    ['pointerdown','mousedown','touchstart'].forEach(function(type){
-      try{ L.DomEvent.on(m._icon,type,beginPointerHold); }catch(_){ }
-    });
+    try{ m._icon.style.cursor='grab'; }catch(_){ }
+    try{ m._icon.style.touchAction='none'; }catch(_){ }
   });
   function disableMapDrag(){
     if(!map || !map.dragging || typeof map.dragging.disable!=='function') return;
@@ -1310,7 +1326,7 @@ document.getElementById('btnLocalReset').addEventListener('click', function(){
 document.getElementById('btnSaveHtml').addEventListener('click', function(){
   var src = document.documentElement.outerHTML;
   var blob = new Blob([src],{type:'text/html;charset=utf-8'});
-  var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=APP_NAME+' v'+APP_VERSION+'.html'; a.click(); setTimeout(function(){URL.revokeObjectURL(a.href)},1000);
+    var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=APP_NAME+' v'+versionSlug()+'.html'; a.click(); setTimeout(function(){URL.revokeObjectURL(a.href)},1000);
 });
 // 🔥 Download inclusief data-snapshot
 document.getElementById('btnSaveHtmlWithData').addEventListener('click', function(){
@@ -1328,7 +1344,7 @@ document.getElementById('btnSaveHtmlWithData').addEventListener('click', functio
     snapEl.textContent = JSON.stringify(db);
     var src = document.documentElement.outerHTML;
     var blob = new Blob([src],{type:'text/html;charset=utf-8'});
-    var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=APP_NAME+' v'+APP_VERSION+' (met data).html'; a.click();
+    var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=APP_NAME+' v'+versionSlug()+' (met data).html'; a.click();
     setTimeout(function(){URL.revokeObjectURL(a.href)},1000);
     if(created && snapEl.parentNode){ snapEl.parentNode.removeChild(snapEl); } else { snapEl.textContent = prev || ''; }
     S('HTML met data gedownload.');

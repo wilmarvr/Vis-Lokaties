@@ -51,4 +51,36 @@
   if(typeof EventTarget !== 'undefined'){ patchTarget(EventTarget.prototype); }
   if(typeof Node !== 'undefined'){ patchTarget(Node.prototype); }
   if(typeof HTMLElement !== 'undefined'){ patchTarget(HTMLElement.prototype); }
+  try{ if(typeof window!=='undefined'){ Object.defineProperty(window,'__touchleaveFallback',{value:fallbackEvent, configurable:true}); } }
+  catch(_){ }
+})();
+
+(function(){
+  if(typeof MouseEvent==='undefined' || typeof Object.defineProperty!=='function'){ return; }
+  try{
+    if(!Object.getOwnPropertyDescriptor(MouseEvent.prototype,'mozPressure')){
+      Object.defineProperty(MouseEvent.prototype,'mozPressure',{
+        configurable:true,
+        get:function(){ return typeof this.pressure==='number'?this.pressure:0; }
+      });
+    }
+  }catch(_){ }
+  try{
+    if(!Object.getOwnPropertyDescriptor(MouseEvent.prototype,'mozInputSource')){
+      Object.defineProperty(MouseEvent.prototype,'mozInputSource',{
+        configurable:true,
+        get:function(){
+          if(typeof this.pointerType==='string'){
+            switch(this.pointerType){
+              case 'mouse': return 1;
+              case 'pen': return 3;
+              case 'touch': return 4;
+              default: return 0;
+            }
+          }
+          return 0;
+        }
+      });
+    }
+  }catch(_){ }
 })();
