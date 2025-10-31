@@ -1,0 +1,9 @@
+{
+  "name": "vis-lokaties",
+  "version": "0.1.0",
+  "description": "Vis Lokaties webapp",
+  "scripts": {
+    "test": "node --check assets/js/app.js",
+    "start": "node server.js"
+  }
+}
