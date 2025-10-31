@@ -1,28 +1,36 @@
-// --- FIX: 'touchleave' veilig mappen + fallback (voorkomt "wrong event specified: touchleave")
-(function(){
-  var supportsPointer = 'PointerEvent' in window;
-  var _add = EventTarget.prototype.addEventListener;
-  EventTarget.prototype.addEventListener = function(type, listener, options){
-    if (type === 'touchleave') {
-      try { return _add.call(this, supportsPointer ? 'pointerleave' : 'mouseleave', listener, options); }
-      catch(e) {
-        try { return _add.call(this, 'mouseleave', listener, options); }
-        catch(e2){ return; }
-      }
-    }
-    try { return _add.call(this, type, listener, options); }
-    catch(e) {
-      if (type === 'touchleave') {
-        try { return _add.call(this, 'mouseleave', listener, options); } catch(_){ return; }
-      }
-      throw e;
-    }
-  };
-})();
-
 // --- Vroeg: no-ops zodat whenReady-callbacks nooit breken
 window.renderAll = window.renderAll || function(){};
 window.drawDistances = window.drawDistances || function(){};
+
+var APP_NAME='Vis Lokaties';
+var APP_VERSION='0.0.0';
+
+function applyAppVersion(ver){
+  if(!ver) return;
+  APP_VERSION=String(ver);
+  if(typeof document!=='undefined'){
+    var label=document.getElementById('versionLabel');
+    if(label) label.textContent='v'+APP_VERSION;
+    if(document.title!=null) document.title=APP_NAME+' v'+APP_VERSION;
+  }
+}
+
+applyAppVersion(APP_VERSION);
+
+var canFetchVersion = (typeof fetch==='function');
+if(canFetchVersion){
+  var proto=(typeof window!=='undefined' && window.location && window.location.protocol)||'';
+  if(proto==='file:') canFetchVersion=false;
+}
+
+if(canFetchVersion){
+  fetch('package.json',{cache:'no-store'}).then(function(resp){
+    if(!resp.ok) throw new Error('HTTP '+resp.status);
+    return resp.json();
+  }).then(function(pkg){
+    if(pkg && pkg.version) applyAppVersion(pkg.version);
+  }).catch(function(){ /* stilletjes falen - versie blijft fallback */ });
+}
 
 // ===== helpers / status =====
 function S(m){var el=document.getElementById("statusLine"); if(el) el.textContent=String(m||'');}
@@ -52,30 +60,57 @@ function coloredIcon(hexOrHsl, glyph){
 var DB_KEY="lv_db_main"; // NIET wijzigen
 var DB_FILE="data/database.json"; // basisbestand op schijf
 var db={waters:[],steks:[],rigs:[],bathy:{points:[],datasets:[]},settings:{waterColor:"#33a1ff",activeUserId:null},users:[]};
-// 1) lokale browserdata (per gebruiker)
-// 2) fallback naar gedeelde JSON-database
-(function(){
-  try{
-    var raw=localStorage.getItem(DB_KEY);
-    if(raw){
-      db=JSON.parse(raw);
+
+var dbReady = loadInitialDB().then(function(info){
+  normalizeDB();
+  renderUserPanel();
+  if(info && info.warning){ S(info.warning); }
+  return info;
+}).catch(function(err){
+  console.warn('Kon database niet laden:', err);
+  normalizeDB();
+  renderUserPanel();
+  S('Database laden mislukt, start met lege data.');
+  return {source:'error', error:err};
+});
+
+function saveDB(){try{localStorage.setItem(DB_KEY,JSON.stringify(db));}catch(e){}}
+function loadInitialDB(){
+  return new Promise(function(resolve){
+    try{
+      var raw=localStorage.getItem(DB_KEY);
+      if(raw){
+        db=JSON.parse(raw);
+        resolve({source:'local'});
+        return;
+      }
+    }catch(e){
+      console.warn('Kon lokale opslag niet lezen:', e);
+    }
+
+    var protocol=(window.location && window.location.protocol)||'';
+    if(protocol==='file:'){
+      resolve({source:'file-protocol', warning:'Open de app via een lokale server (bijv. npm start) om data/database.json te laden. De browser blokkeert file:// verzoeken.'});
       return;
     }
-  }catch(e){}
-  try{
-    var xhr=new XMLHttpRequest();
-    xhr.open('GET', DB_FILE, false);
-    if(xhr.overrideMimeType) xhr.overrideMimeType('application/json');
-    xhr.send(null);
-    if(xhr.status>=200 && xhr.status<300 && xhr.responseText){
-      var parsed=JSON.parse(xhr.responseText);
-      if(parsed && typeof parsed==='object'){ db=parsed; }
+
+    if(typeof fetch!=='function'){
+      resolve({source:'empty', warning:'Browser ondersteunt geen fetch; start met lege database.'});
+      return;
     }
-  }catch(e){}
-})();
-normalizeDB();
-renderUserPanel();
-function saveDB(){try{localStorage.setItem(DB_KEY,JSON.stringify(db));}catch(e){}}
+
+    fetch(DB_FILE,{cache:'no-store'}).then(function(resp){
+      if(!resp.ok){ throw new Error('HTTP '+resp.status); }
+      return resp.json();
+    }).then(function(json){
+      if(json && typeof json==='object'){ db=json; }
+      resolve({source:'file'});
+    }).catch(function(err){
+      console.warn('Kon '+DB_FILE+' niet ophalen:', err);
+      resolve({source:'empty', warning:'Database laden mislukt, start met lege data.'});
+    });
+  });
+}
 function normalizeDB(){
   function num(v){ return (typeof v==='string'? parseFloat(v) : v); }
   db.steks=(Array.isArray(db.steks)?db.steks:[]).map(function(s){
@@ -263,7 +298,9 @@ map.whenReady(function(){
   contourLayer=L.featureGroup([], {pane:'contourPane'}).addTo(map);
   measureLayer=L.layerGroup([], {pane:'measurePane'}).addTo(map);
 
-  if (typeof window.renderAll === 'function') window.renderAll();
+  dbReady.then(function(){
+    if (typeof window.renderAll === 'function') window.renderAll();
+  });
 });
 
 // ===== muispositie + zoom + diepte tooltip =====
@@ -313,18 +350,31 @@ function attachMarker(m,type,id){
   if(m.dragging && typeof m.dragging.enable === 'function') { m.dragging.enable(); }
 
   // kaart niet pannen tijdens slepen / down
-  function stopAll(ev){ if(ev && ev.originalEvent){ ev.originalEvent.stopPropagation(); } }
-  m.on('mousedown touchstart pointerdown', function(ev){ stopAll(ev); try{ map.dragging.disable(); }catch(_){} });
-  m.on('mouseup touchend pointerup',     function(ev){ stopAll(ev); try{ map.dragging.enable();  }catch(_){} });
-
+  function consume(ev){
+    if(!ev) return;
+    if(ev.preventDefault) ev.preventDefault();
+    if(ev.stopPropagation) ev.stopPropagation();
+    var orig=ev.originalEvent;
+    if(orig){
+      if(orig.preventDefault) orig.preventDefault();
+      if(orig.stopPropagation) orig.stopPropagation();
+    }
+  }
+  m.on('add', function(){
+    if(m._icon){
+      try{ L.DomEvent.disableClickPropagation(m._icon); L.DomEvent.disableScrollPropagation(m._icon); }catch(_){ }
+      m._icon.style.cursor='grab';
+    }
+  });
+  m.on('mousedown touchstart pointerdown', consume);
   m.on('dragstart',function(ev){
-    stopAll(ev);
+    consume(ev);
     try{ map.dragging.disable(); }catch(_){}
     if(useCluster && cluster){ try{ cluster.removeLayer(m);}catch(_){ } m.addTo(map); }
   });
-  m.on('drag',function(){ drawDistances(); });
+  m.on('drag',function(ev){ consume(ev); drawDistances(); });
   m.on('dragend',function(ev){
-    stopAll(ev);
+    consume(ev);
     try{ map.dragging.enable(); }catch(_){}
     if(useCluster && cluster){ try{ map.removeLayer(m);}catch(_){ } cluster.addLayer(m); }
     var ll=ev.target.getLatLng();
@@ -1104,7 +1154,7 @@ document.getElementById('btnLocalReset').addEventListener('click', function(){
 document.getElementById('btnSaveHtml').addEventListener('click', function(){
   var src = document.documentElement.outerHTML;
   var blob = new Blob([src],{type:'text/html;charset=utf-8'});
-  var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='Vis Lokaties v0.0.0.html'; a.click(); setTimeout(function(){URL.revokeObjectURL(a.href)},1000);
+  var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=APP_NAME+' v'+APP_VERSION+'.html'; a.click(); setTimeout(function(){URL.revokeObjectURL(a.href)},1000);
 });
 // 🔥 Download inclusief data-snapshot
 document.getElementById('btnSaveHtmlWithData').addEventListener('click', function(){
@@ -1122,7 +1172,7 @@ document.getElementById('btnSaveHtmlWithData').addEventListener('click', functio
     snapEl.textContent = JSON.stringify(db);
     var src = document.documentElement.outerHTML;
     var blob = new Blob([src],{type:'text/html;charset=utf-8'});
-    var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='Vis Lokaties v0.0.0 (met data).html'; a.click();
+    var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=APP_NAME+' v'+APP_VERSION+' (met data).html'; a.click();
     setTimeout(function(){URL.revokeObjectURL(a.href)},1000);
     if(created && snapEl.parentNode){ snapEl.parentNode.removeChild(snapEl); } else { snapEl.textContent = prev || ''; }
     S('HTML met data gedownload.');

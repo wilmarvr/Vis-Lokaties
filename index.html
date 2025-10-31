@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Vis Lokaties v0.0.0</title>
+<title>Vis Lokaties</title>
 
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
@@ -11,10 +11,11 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css">
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
 <link rel="stylesheet" href="assets/css/main.css">
+<script src="assets/js/polyfills.js"></script>
 </head>
 <body>
 <div id="toolbar">
-  <h3>🎣 Vis Lokaties v0.0.0</h3>
+  <h3 id="appTitle">🎣 Vis Lokaties <span id="versionLabel" class="muted"></span></h3>
 
   <div id="userPanel">
     <label for="userSelect">👤 Gebruiker:</label>
