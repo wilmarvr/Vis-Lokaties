@@ -357,9 +357,7 @@ function attachMarker(m,type,id){
     if(!ev) return;
     if(ev.stopPropagation) ev.stopPropagation();
     var orig=ev.originalEvent;
-    if(orig){
-      if(orig.stopPropagation) orig.stopPropagation();
-    }
+    if(orig && orig.stopPropagation){ orig.stopPropagation(); }
   }
   m.on('add', function(){
     if(!m._icon) return;
@@ -372,9 +370,29 @@ function attachMarker(m,type,id){
     if(m._icon){
       try{ m._icon.style.touchAction='none'; }catch(_){ }
     }
-    function stopOnly(ev){ consume(ev); }
-    ['pointerdown','mousedown','touchstart','pointerup','pointercancel','mouseup','touchend','touchcancel'].forEach(function(type){
-      try{ L.DomEvent.on(m._icon,type,stopOnly); }catch(_){ }
+
+    function beginPointerHold(){
+      if(typeof window==='undefined') return;
+      disableMapDrag();
+      m.__pointerHold=true;
+      if(m._icon){ m._icon.style.cursor='grabbing'; }
+      function release(){
+        ['pointerup','pointercancel','mouseup','touchend','touchcancel'].forEach(function(type){
+          try{ window.removeEventListener(type, release, true); }catch(_){ }
+        });
+        if(!m.__draggingActive){
+          restoreMapDrag();
+          if(m._icon){ m._icon.style.cursor='grab'; }
+        }
+        m.__pointerHold=false;
+      }
+      ['pointerup','pointercancel','mouseup','touchend','touchcancel'].forEach(function(type){
+        try{ window.addEventListener(type, release, true); }catch(_){ }
+      });
+    }
+
+    ['pointerdown','mousedown','touchstart'].forEach(function(type){
+      try{ L.DomEvent.on(m._icon,type,beginPointerHold); }catch(_){ }
     });
   });
   function disableMapDrag(){
@@ -394,10 +412,9 @@ function attachMarker(m,type,id){
     }
     m.__mapDragRestore=null;
   }
-  m.on('mousedown touchstart pointerdown', function(ev){ consume(ev); });
-  m.on('mouseup touchend pointerup touchcancel contextmenu', function(ev){ consume(ev); });
   m.on('dragstart',function(ev){
     consume(ev);
+    m.__draggingActive=true;
     disableMapDrag();
     if(m._icon){ m._icon.style.cursor='grabbing'; }
     if(useCluster && cluster){ try{ cluster.removeLayer(m);}catch(_){ } m.addTo(map); }
@@ -405,6 +422,7 @@ function attachMarker(m,type,id){
   m.on('drag',function(ev){ consume(ev); drawDistances(); });
   m.on('dragend',function(ev){
     consume(ev);
+    m.__draggingActive=false;
     restoreMapDrag();
     if(m._icon){ m._icon.style.cursor='grab'; }
     if(useCluster && cluster){ try{ map.removeLayer(m);}catch(_){ } cluster.addLayer(m); }
