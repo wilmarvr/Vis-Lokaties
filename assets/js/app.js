@@ -457,6 +457,8 @@ function interpIDW(lat,lon,pts,R,K){
   }
   return num/den;
 }
+</script>
+<script>
 // ====== OVERZICHT / RENDER ======
 window.renderAll = function(){
   if(!map || !map._loaded) { map.whenReady(window.renderAll); return; }
