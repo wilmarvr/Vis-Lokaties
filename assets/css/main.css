@@ -1,6 +1,8 @@
 :root { --bg:#0b1119; --panel:#111a23; --txt:#E6EDF3; --accent:#33a1ff; }
 *{box-sizing:border-box}
 body{ margin:0;background:var(--bg);color:var(--txt);font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;height:100vh;overflow:hidden;}
+#appTitle{ display:flex; align-items:center; gap:6px; margin:6px 0 4px; }
+.muted{ color:#8ea0b5; font-weight:500; }
 #toolbar{ position:absolute; top:0; left:0; width:320px; height:100%; overflow-y:auto; background:var(--panel); box-shadow:2px 0 10px #000a; padding:6px; z-index:9999; }
 #userPanel{ display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin:6px 0; }
 #userPanel label{ font-weight:600; }

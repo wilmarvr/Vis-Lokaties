@@ -2,6 +2,36 @@
 window.renderAll = window.renderAll || function(){};
 window.drawDistances = window.drawDistances || function(){};
 
+var APP_NAME='Vis Lokaties';
+var APP_VERSION='0.0.0';
+
+function applyAppVersion(ver){
+  if(!ver) return;
+  APP_VERSION=String(ver);
+  if(typeof document!=='undefined'){
+    var label=document.getElementById('versionLabel');
+    if(label) label.textContent='v'+APP_VERSION;
+    if(document.title!=null) document.title=APP_NAME+' v'+APP_VERSION;
+  }
+}
+
+applyAppVersion(APP_VERSION);
+
+var canFetchVersion = (typeof fetch==='function');
+if(canFetchVersion){
+  var proto=(typeof window!=='undefined' && window.location && window.location.protocol)||'';
+  if(proto==='file:') canFetchVersion=false;
+}
+
+if(canFetchVersion){
+  fetch('package.json',{cache:'no-store'}).then(function(resp){
+    if(!resp.ok) throw new Error('HTTP '+resp.status);
+    return resp.json();
+  }).then(function(pkg){
+    if(pkg && pkg.version) applyAppVersion(pkg.version);
+  }).catch(function(){ /* stilletjes falen - versie blijft fallback */ });
+}
+
 // ===== helpers / status =====
 function S(m){var el=document.getElementById("statusLine"); if(el) el.textContent=String(m||'');}
 function I(m){var el=document.getElementById("footerDetect"); if(el) el.textContent=String(m||''); var di=document.getElementById("detectInfo"); if(di) di.textContent=String(m||'');}
@@ -1124,7 +1154,7 @@ document.getElementById('btnLocalReset').addEventListener('click', function(){
 document.getElementById('btnSaveHtml').addEventListener('click', function(){
   var src = document.documentElement.outerHTML;
   var blob = new Blob([src],{type:'text/html;charset=utf-8'});
-  var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='Vis Lokaties v0.0.0.html'; a.click(); setTimeout(function(){URL.revokeObjectURL(a.href)},1000);
+  var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=APP_NAME+' v'+APP_VERSION+'.html'; a.click(); setTimeout(function(){URL.revokeObjectURL(a.href)},1000);
 });
 // 🔥 Download inclusief data-snapshot
 document.getElementById('btnSaveHtmlWithData').addEventListener('click', function(){
@@ -1142,7 +1172,7 @@ document.getElementById('btnSaveHtmlWithData').addEventListener('click', functio
     snapEl.textContent = JSON.stringify(db);
     var src = document.documentElement.outerHTML;
     var blob = new Blob([src],{type:'text/html;charset=utf-8'});
-    var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='Vis Lokaties v0.0.0 (met data).html'; a.click();
+    var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=APP_NAME+' v'+APP_VERSION+' (met data).html'; a.click();
     setTimeout(function(){URL.revokeObjectURL(a.href)},1000);
     if(created && snapEl.parentNode){ snapEl.parentNode.removeChild(snapEl); } else { snapEl.textContent = prev || ''; }
     S('HTML met data gedownload.');
