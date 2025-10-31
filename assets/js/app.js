@@ -1,3 +1,25 @@
+// --- FIX: 'touchleave' veilig mappen + fallback (voorkomt "wrong event specified: touchleave")
+(function(){
+  var supportsPointer = 'PointerEvent' in window;
+  var _add = EventTarget.prototype.addEventListener;
+  EventTarget.prototype.addEventListener = function(type, listener, options){
+    if (type === 'touchleave') {
+      try { return _add.call(this, supportsPointer ? 'pointerleave' : 'mouseleave', listener, options); }
+      catch(e) {
+        try { return _add.call(this, 'mouseleave', listener, options); }
+        catch(e2){ return; }
+      }
+    }
+    try { return _add.call(this, type, listener, options); }
+    catch(e) {
+      if (type === 'touchleave') {
+        try { return _add.call(this, 'mouseleave', listener, options); } catch(_){ return; }
+      }
+      throw e;
+    }
+  };
+})();
+
 // --- Vroeg: no-ops zodat whenReady-callbacks nooit breken
 window.renderAll = window.renderAll || function(){};
 window.drawDistances = window.drawDistances || function(){};
@@ -30,57 +52,30 @@ function coloredIcon(hexOrHsl, glyph){
 var DB_KEY="lv_db_main"; // NIET wijzigen
 var DB_FILE="data/database.json"; // basisbestand op schijf
 var db={waters:[],steks:[],rigs:[],bathy:{points:[],datasets:[]},settings:{waterColor:"#33a1ff",activeUserId:null},users:[]};
-
-var dbReady = loadInitialDB().then(function(info){
-  normalizeDB();
-  renderUserPanel();
-  if(info && info.warning){ S(info.warning); }
-  return info;
-}).catch(function(err){
-  console.warn('Kon database niet laden:', err);
-  normalizeDB();
-  renderUserPanel();
-  S('Database laden mislukt, start met lege data.');
-  return {source:'error', error:err};
-});
-
+// 1) lokale browserdata (per gebruiker)
+// 2) fallback naar gedeelde JSON-database
+(function(){
+  try{
+    var raw=localStorage.getItem(DB_KEY);
+    if(raw){
+      db=JSON.parse(raw);
+      return;
+    }
+  }catch(e){}
+  try{
+    var xhr=new XMLHttpRequest();
+    xhr.open('GET', DB_FILE, false);
+    if(xhr.overrideMimeType) xhr.overrideMimeType('application/json');
+    xhr.send(null);
+    if(xhr.status>=200 && xhr.status<300 && xhr.responseText){
+      var parsed=JSON.parse(xhr.responseText);
+      if(parsed && typeof parsed==='object'){ db=parsed; }
+    }
+  }catch(e){}
+})();
+normalizeDB();
+renderUserPanel();
 function saveDB(){try{localStorage.setItem(DB_KEY,JSON.stringify(db));}catch(e){}}
-function loadInitialDB(){
-  return new Promise(function(resolve){
-    try{
-      var raw=localStorage.getItem(DB_KEY);
-      if(raw){
-        db=JSON.parse(raw);
-        resolve({source:'local'});
-        return;
-      }
-    }catch(e){
-      console.warn('Kon lokale opslag niet lezen:', e);
-    }
-
-    var protocol=(window.location && window.location.protocol)||'';
-    if(protocol==='file:'){
-      resolve({source:'file-protocol', warning:'Open de app via een lokale server (bijv. npm start) om data/database.json te laden. De browser blokkeert file:// verzoeken.'});
-      return;
-    }
-
-    if(typeof fetch!=='function'){
-      resolve({source:'empty', warning:'Browser ondersteunt geen fetch; start met lege database.'});
-      return;
-    }
-
-    fetch(DB_FILE,{cache:'no-store'}).then(function(resp){
-      if(!resp.ok){ throw new Error('HTTP '+resp.status); }
-      return resp.json();
-    }).then(function(json){
-      if(json && typeof json==='object'){ db=json; }
-      resolve({source:'file'});
-    }).catch(function(err){
-      console.warn('Kon '+DB_FILE+' niet ophalen:', err);
-      resolve({source:'empty', warning:'Database laden mislukt, start met lege data.'});
-    });
-  });
-}
 function normalizeDB(){
   function num(v){ return (typeof v==='string'? parseFloat(v) : v); }
   db.steks=(Array.isArray(db.steks)?db.steks:[]).map(function(s){
@@ -268,9 +263,7 @@ map.whenReady(function(){
   contourLayer=L.featureGroup([], {pane:'contourPane'}).addTo(map);
   measureLayer=L.layerGroup([], {pane:'measurePane'}).addTo(map);
 
-  dbReady.then(function(){
-    if (typeof window.renderAll === 'function') window.renderAll();
-  });
+  if (typeof window.renderAll === 'function') window.renderAll();
 });
 
 // ===== muispositie + zoom + diepte tooltip =====
