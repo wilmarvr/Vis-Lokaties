@@ -23,17 +23,35 @@ const MIME = {
 let gitMetaCache = null;
 let gitMetaTime = 0;
 
+function deriveVersion(baseVersion, commitCount){
+  const parts = String(baseVersion || '0.0.0').split('.');
+  while(parts.length < 3){ parts.push('0'); }
+  const patch = Number(parts[2]) || 0;
+  const count = Number(commitCount);
+  if(Number.isFinite(count) && count > 0){
+    parts[2] = String(patch + count);
+  } else {
+    parts[2] = String(patch);
+  }
+  return parts.slice(0,3).join('.');
+}
+
 function getGitMeta(cb){
   const now = Date.now();
   if(gitMetaCache && (now - gitMetaTime) < 5000){ cb(null, gitMetaCache); return; }
   exec('git rev-parse --abbrev-ref HEAD', {cwd:root}, (branchErr, branchStd = '') => {
     exec('git rev-parse HEAD', {cwd:root}, (commitErr, commitStd = '') => {
-      gitMetaCache = {
-        branch: branchErr ? null : (branchStd.trim() || null),
-        commit: commitErr ? null : (commitStd.trim() || null)
-      };
-      gitMetaTime = Date.now();
-      cb(null, gitMetaCache);
+      exec('git rev-list --count HEAD', {cwd:root}, (countErr, countStd = '') => {
+        const commitCount = countErr ? null : Number(countStd.trim() || '0');
+        gitMetaCache = {
+          branch: branchErr ? null : (branchStd.trim() || null),
+          commit: commitErr ? null : (commitStd.trim() || null),
+          commitCount: Number.isFinite(commitCount) ? commitCount : null,
+          version: deriveVersion(pkg && pkg.version, commitCount)
+        };
+        gitMetaTime = Date.now();
+        cb(null, gitMetaCache);
+      });
     });
   });
 }
@@ -51,7 +69,7 @@ const server = http.createServer((req, res) => {
   if(urlPath === '/meta.json'){
     getGitMeta((_, meta = {}) => {
       const body = JSON.stringify({
-        version: (pkg && pkg.version) ? pkg.version : '0.0.0',
+        version: (meta && meta.version) ? meta.version : ((pkg && pkg.version) ? pkg.version : '0.0.0'),
         branch: meta.branch || null,
         commit: meta.commit || null
       });

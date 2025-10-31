@@ -3,7 +3,7 @@ window.renderAll = window.renderAll || function(){};
 window.drawDistances = window.drawDistances || function(){};
 
 var APP_NAME='Vis Lokaties';
-var APP_META={version:'0.0.0',branch:null,commit:null};
+var APP_META={version:'0.1.0',branch:null,commit:null};
 
 function applyAppMeta(meta){
   if(!meta) return;
@@ -410,6 +410,57 @@ function attachMarker(m,type,id){
     }catch(_){ }
     try{ m._icon.style.cursor='grab'; }catch(_){ }
     try{ m._icon.style.touchAction='none'; }catch(_){ }
+    try{ if(m.dragging && typeof m.dragging.enable==='function'){ m.dragging.enable(); } }catch(_){ }
+
+    if(!m.__dragIconHandlers){
+      var downEvts=['pointerdown','touchstart','mousedown'];
+      var upEvts=['pointerup','touchend','mouseup','touchcancel','pointercancel','mouseout','mouseleave'];
+      var iconEl=m._icon;
+      var shadowEl=m._shadow||null;
+      var downHandler=function(ev){
+        disableMapDrag();
+        if(iconEl){ try{ iconEl.style.cursor='grabbing'; }catch(_){ } }
+        if(ev && ev.stopPropagation){ ev.stopPropagation(); }
+        if(ev && ev.originalEvent && typeof ev.originalEvent.stopPropagation==='function'){
+          ev.originalEvent.stopPropagation();
+        }
+      };
+      var upHandler=function(ev){
+        if(ev && ev.stopPropagation){ ev.stopPropagation(); }
+        if(ev && ev.originalEvent && typeof ev.originalEvent.stopPropagation==='function'){
+          ev.originalEvent.stopPropagation();
+        }
+        if(!m.__draggingActive){
+          restoreMapDrag();
+          if(iconEl){ try{ iconEl.style.cursor='grab'; }catch(_){ } }
+        }
+      };
+      m.__dragIconHandlers={down:downHandler, up:upHandler};
+      downEvts.forEach(function(evt){
+        try{ L.DomEvent.on(iconEl, evt, downHandler); }catch(_){ }
+        if(shadowEl){ try{ L.DomEvent.on(shadowEl, evt, downHandler); }catch(_){ } }
+      });
+      upEvts.forEach(function(evt){
+        try{ L.DomEvent.on(iconEl, evt, upHandler); }catch(_){ }
+        if(shadowEl){ try{ L.DomEvent.on(shadowEl, evt, upHandler); }catch(_){ } }
+      });
+    }
+  });
+  m.on('remove', function(){
+    if(!m.__dragIconHandlers) return;
+    var iconEl=m._icon;
+    var shadowEl=m._shadow||null;
+    var downEvts=['pointerdown','touchstart','mousedown'];
+    var upEvts=['pointerup','touchend','mouseup','touchcancel','pointercancel','mouseout','mouseleave'];
+    downEvts.forEach(function(evt){
+      try{ L.DomEvent.off(iconEl, evt, m.__dragIconHandlers.down); }catch(_){ }
+      if(shadowEl){ try{ L.DomEvent.off(shadowEl, evt, m.__dragIconHandlers.down); }catch(_){ } }
+    });
+    upEvts.forEach(function(evt){
+      try{ L.DomEvent.off(iconEl, evt, m.__dragIconHandlers.up); }catch(_){ }
+      if(shadowEl){ try{ L.DomEvent.off(shadowEl, evt, m.__dragIconHandlers.up); }catch(_){ } }
+    });
+    m.__dragIconHandlers=null;
   });
   function disableMapDrag(){
     if(!map || !map.dragging || typeof map.dragging.disable!=='function') return;
