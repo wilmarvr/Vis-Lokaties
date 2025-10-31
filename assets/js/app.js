@@ -355,11 +355,9 @@ function attachMarker(m,type,id){
   // kaart niet pannen tijdens slepen / down
   function consume(ev){
     if(!ev) return;
-    if(ev.preventDefault) ev.preventDefault();
     if(ev.stopPropagation) ev.stopPropagation();
     var orig=ev.originalEvent;
     if(orig){
-      if(orig.preventDefault) orig.preventDefault();
       if(orig.stopPropagation) orig.stopPropagation();
     }
   }
@@ -371,24 +369,12 @@ function attachMarker(m,type,id){
     }catch(_){ }
     m._icon.style.cursor='grab';
 
-    function iconDown(ev){
-      if(ev && typeof ev.type==='string' && ev.type.indexOf('touch')===0 && ev.touches && ev.touches.length>1){ return; }
-      consume(ev);
-      disableMapDrag();
-      if(m.dragging && typeof m.dragging.enable==='function'){ try{ m.dragging.enable(); }catch(_){ } }
-      if(m._icon){ m._icon.style.cursor='grabbing'; }
+    if(m._icon){
+      try{ m._icon.style.touchAction='none'; }catch(_){ }
     }
-    function iconUp(ev){
-      consume(ev);
-      restoreMapDrag();
-      if(m._icon){ m._icon.style.cursor='grab'; }
-    }
-
-    ['pointerdown','mousedown','touchstart'].forEach(function(type){
-      try{ L.DomEvent.on(m._icon,type,iconDown); }catch(_){ }
-    });
-    ['pointerup','pointercancel','mouseup','touchend','touchcancel'].forEach(function(type){
-      try{ L.DomEvent.on(m._icon,type,iconUp); }catch(_){ }
+    function stopOnly(ev){ consume(ev); }
+    ['pointerdown','mousedown','touchstart','pointerup','pointercancel','mouseup','touchend','touchcancel'].forEach(function(type){
+      try{ L.DomEvent.on(m._icon,type,stopOnly); }catch(_){ }
     });
   });
   function disableMapDrag(){
@@ -408,9 +394,8 @@ function attachMarker(m,type,id){
     }
     m.__mapDragRestore=null;
   }
-  function handleDown(ev){ consume(ev); disableMapDrag(); }
-  m.on('mousedown touchstart pointerdown', handleDown);
-  m.on('mouseup touchend pointerup touchcancel contextmenu', function(ev){ consume(ev); restoreMapDrag(); });
+  m.on('mousedown touchstart pointerdown', function(ev){ consume(ev); });
+  m.on('mouseup touchend pointerup touchcancel contextmenu', function(ev){ consume(ev); });
   m.on('dragstart',function(ev){
     consume(ev);
     disableMapDrag();
