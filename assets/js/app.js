@@ -364,10 +364,32 @@ function attachMarker(m,type,id){
     }
   }
   m.on('add', function(){
-    if(m._icon){
-      try{ L.DomEvent.disableClickPropagation(m._icon); L.DomEvent.disableScrollPropagation(m._icon); }catch(_){ }
-      m._icon.style.cursor='grab';
+    if(!m._icon) return;
+    try{
+      L.DomEvent.disableClickPropagation(m._icon);
+      L.DomEvent.disableScrollPropagation(m._icon);
+    }catch(_){ }
+    m._icon.style.cursor='grab';
+
+    function iconDown(ev){
+      if(ev && typeof ev.type==='string' && ev.type.indexOf('touch')===0 && ev.touches && ev.touches.length>1){ return; }
+      consume(ev);
+      disableMapDrag();
+      if(m.dragging && typeof m.dragging.enable==='function'){ try{ m.dragging.enable(); }catch(_){ } }
+      if(m._icon){ m._icon.style.cursor='grabbing'; }
     }
+    function iconUp(ev){
+      consume(ev);
+      restoreMapDrag();
+      if(m._icon){ m._icon.style.cursor='grab'; }
+    }
+
+    ['pointerdown','mousedown','touchstart'].forEach(function(type){
+      try{ L.DomEvent.on(m._icon,type,iconDown); }catch(_){ }
+    });
+    ['pointerup','pointercancel','mouseup','touchend','touchcancel'].forEach(function(type){
+      try{ L.DomEvent.on(m._icon,type,iconUp); }catch(_){ }
+    });
   });
   function disableMapDrag(){
     if(!map || !map.dragging || typeof map.dragging.disable!=='function') return;
