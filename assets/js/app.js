@@ -63,12 +63,14 @@ var db={waters:[],steks:[],rigs:[],bathy:{points:[],datasets:[]},settings:{water
 
 var dbReady = loadInitialDB().then(function(info){
   normalizeDB();
+  if(autoLinkHierarchy()) saveDB();
   renderUserPanel();
   if(info && info.warning){ S(info.warning); }
   return info;
 }).catch(function(err){
   console.warn('Kon database niet laden:', err);
   normalizeDB();
+  autoLinkHierarchy();
   renderUserPanel();
   S('Database laden mislukt, start met lege data.');
   return {source:'error', error:err};
@@ -348,6 +350,7 @@ function purgeAllMarkers(){
 function attachMarker(m,type,id){
   // altijd drag activeren
   if(m.dragging && typeof m.dragging.enable === 'function') { m.dragging.enable(); }
+  m.__mapDragRestore=null;
 
   // kaart niet pannen tijdens slepen / down
   function consume(ev){
@@ -366,27 +369,74 @@ function attachMarker(m,type,id){
       m._icon.style.cursor='grab';
     }
   });
-  m.on('mousedown touchstart pointerdown', consume);
+  function disableMapDrag(){
+    if(!map || !map.dragging || typeof map.dragging.disable!=='function') return;
+    if(m.__mapDragRestore==null){
+      try{ m.__mapDragRestore = (typeof map.dragging.enabled==='function') ? map.dragging.enabled() : true; }
+      catch(_){ m.__mapDragRestore=true; }
+    }
+    if(m.__mapDragRestore){
+      try{ map.dragging.disable(); }catch(_){ }
+    }
+  }
+  function restoreMapDrag(){
+    if(!map || !map.dragging || typeof map.dragging.enable!=='function') return;
+    if(m.__mapDragRestore){
+      try{ map.dragging.enable(); }catch(_){ }
+    }
+    m.__mapDragRestore=null;
+  }
+  function handleDown(ev){ consume(ev); disableMapDrag(); }
+  m.on('mousedown touchstart pointerdown', handleDown);
+  m.on('mouseup touchend pointerup touchcancel contextmenu', function(ev){ consume(ev); restoreMapDrag(); });
   m.on('dragstart',function(ev){
     consume(ev);
-    try{ map.dragging.disable(); }catch(_){}
+    disableMapDrag();
+    if(m._icon){ m._icon.style.cursor='grabbing'; }
     if(useCluster && cluster){ try{ cluster.removeLayer(m);}catch(_){ } m.addTo(map); }
   });
   m.on('drag',function(ev){ consume(ev); drawDistances(); });
   m.on('dragend',function(ev){
     consume(ev);
-    try{ map.dragging.enable(); }catch(_){}
+    restoreMapDrag();
+    if(m._icon){ m._icon.style.cursor='grab'; }
     if(useCluster && cluster){ try{ map.removeLayer(m);}catch(_){ } cluster.addLayer(m); }
     var ll=ev.target.getLatLng();
+    var statusMsg = type+' verplaatst';
     if(type==='stek'){
       var s=db.steks.find(function(x){return x.id===id;});
-      if(s){ s.lat=ll.lat; s.lng=ll.lng; s.waterId = nearestWaterIdForLatLng(ll.lat,ll.lng) || s.waterId || null; }
+      if(s){
+        s.lat=ll.lat; s.lng=ll.lng;
+        var newWater = nearestWaterIdForLatLng(ll.lat,ll.lng);
+        if(newWater && newWater!==s.waterId){
+          s.waterId = newWater;
+        }
+        if(s.waterId){
+          var w = nameOfWater(s.waterId) || s.waterId;
+          statusMsg += ' • gekoppeld aan '+w;
+        }
+      }
     }
     if(type==='rig'){
       var r=db.rigs.find(function(x){return x.id===id;});
-      if(r){ r.lat=ll.lat; r.lng=ll.lng; r.waterId = nearestWaterIdForLatLng(ll.lat,ll.lng) || r.waterId || null; }
+      if(r){
+        r.lat=ll.lat; r.lng=ll.lng;
+        var bestStek = nearestStekForLatLng(ll.lat,ll.lng);
+        if(bestStek && bestStek.stek){
+          r.stekId = bestStek.stek.id;
+          if(bestStek.stek.waterId){ r.waterId = bestStek.stek.waterId; }
+          statusMsg += ' • gekoppeld aan stek '+(bestStek.stek.name||bestStek.stek.id);
+        }
+        if(!r.waterId){
+          var w = nearestWaterIdForLatLng(ll.lat,ll.lng);
+          if(w) r.waterId = w;
+        }
+        if(r.waterId){
+          statusMsg += ' • water '+(nameOfWater(r.waterId)||r.waterId);
+        }
+      }
     }
-    saveDB(); renderAll(); S(type+' verplaatst & gekoppeld.');
+    saveDB(); renderAll(); S(statusMsg+'.');
   });
 
   // selectie (ongewijzigd)
@@ -422,7 +472,14 @@ function makeRigMarker(r){
 
 // ===== water-koppeling =====
 function nearestWaterIdForLatLng(lat, lng, edgeMaxMeters){
-  edgeMaxMeters = edgeMaxMeters || (parseFloat(document.getElementById("detMaxEdge").value)||250);
+  if(!edgeMaxMeters){
+    var edgeInput = (typeof document!=='undefined') ? document.getElementById('detMaxEdge') : null;
+    if(edgeInput){
+      var parsed = parseFloat(edgeInput.value);
+      if(!isNaN(parsed)) edgeMaxMeters = parsed;
+    }
+  }
+  edgeMaxMeters = edgeMaxMeters || 250;
   var waters=visibleWaters();
   if(!waters.length) return null;
   var pt = turf.point([lng, lat]);
@@ -445,6 +502,62 @@ function nearestWaterIdForLatLng(lat, lng, edgeMaxMeters){
   if(best.id==null) return null;
   if(!best.inside && !(best.dist<=edgeMaxMeters)) return null;
   return best.id;
+}
+
+function nearestStekForLatLng(lat, lng, maxMeters){
+  if(!maxMeters){
+    var edgeInput = (typeof document!=='undefined') ? document.getElementById('detMaxEdge') : null;
+    if(edgeInput){
+      var parsed = parseFloat(edgeInput.value);
+      if(!isNaN(parsed)) maxMeters = parsed;
+    }
+  }
+  maxMeters = maxMeters || 250;
+  var steks = (db.steks||[]);
+  if(!steks.length) return null;
+  var best = {stek:null, dist:Infinity};
+  steks.forEach(function(s){
+    if(!isFinite(s.lat) || !isFinite(s.lng)) return;
+    var d = distM({lat:lat, lon:lng},{lat:s.lat, lon:s.lng});
+    if(d < best.dist){
+      best = {stek:s, dist:d};
+    }
+  });
+  if(!best.stek) return null;
+  if(best.dist>maxMeters) return null;
+  return best;
+}
+
+function autoLinkHierarchy(){
+  var changed=false;
+  (db.steks||[]).forEach(function(s){
+    if(!s || !isFinite(s.lat) || !isFinite(s.lng)) return;
+    if(!s.waterId){
+      var w = nearestWaterIdForLatLng(s.lat, s.lng);
+      if(w){ s.waterId = w; changed=true; }
+    }
+  });
+  (db.rigs||[]).forEach(function(r){
+    if(!r || !isFinite(r.lat) || !isFinite(r.lng)) return;
+    var stek = null;
+    if(r.stekId){ stek = (db.steks||[]).find(function(s){return s.id===r.stekId;}) || null; }
+    if(!stek){
+      var nearest = nearestStekForLatLng(r.lat, r.lng);
+      if(nearest && nearest.stek){
+        r.stekId = nearest.stek.id;
+        stek = nearest.stek;
+        changed=true;
+      }
+    }
+    if(stek && stek.waterId && r.waterId!==stek.waterId){
+      r.waterId = stek.waterId;
+      changed=true;
+    }else if(!r.waterId){
+      var w = nearestWaterIdForLatLng(r.lat, r.lng);
+      if(w){ r.waterId = w; changed=true; }
+    }
+  });
+  return changed;
 }
 
 // ===== picker =====
@@ -480,11 +593,27 @@ map.on('click', function(ev){
   if(!clickAddMode) return;
   var wId = nearestWaterIdForLatLng(ev.latlng.lat, ev.latlng.lng);
   if(clickAddMode==='stek'){
-    db.steks.push(assignOwner({id:uid('stek'),name:'Stek',lat:ev.latlng.lat,lng:ev.latlng.lng,waterId:wId||null}));
-    S('Stek geplaatst en '+(wId?'gekoppeld aan water.':'(nog) geen water gevonden.'));
+    var stek = assignOwner({id:uid('stek'),name:'Stek',lat:ev.latlng.lat,lng:ev.latlng.lng,waterId:wId||null});
+    if(!stek.waterId){
+      var autoWater = nearestWaterIdForLatLng(stek.lat, stek.lng);
+      if(autoWater) stek.waterId = autoWater;
+    }
+    db.steks.push(stek);
+    S('Stek geplaatst en '+(stek.waterId?'gekoppeld aan water.':'(nog) geen water gevonden.'));
   }else{
-    db.rigs.push(assignOwner({id:uid('rig'),name:'Rig',lat:ev.latlng.lat,lng:ev.latlng.lng,stekId:null,waterId:wId||null}));
-    S('Rig geplaatst en '+(wId?'gekoppeld aan water.':'(nog) geen water gevonden.')+' Koppel optioneel aan stek in het overzicht.');
+    var bestStek = nearestStekForLatLng(ev.latlng.lat, ev.latlng.lng);
+    var stekId = bestStek && bestStek.stek ? bestStek.stek.id : null;
+    var rigWater = (bestStek && bestStek.stek && bestStek.stek.waterId) ? bestStek.stek.waterId : (wId||null);
+    var rig = assignOwner({id:uid('rig'),name:'Rig',lat:ev.latlng.lat,lng:ev.latlng.lng,stekId:stekId,waterId:rigWater||null});
+    if(!rig.waterId){
+      var extraWater = nearestWaterIdForLatLng(rig.lat, rig.lng);
+      if(extraWater) rig.waterId = extraWater;
+    }
+    db.rigs.push(rig);
+    var msg='Rig geplaatst';
+    if(stekId){ msg+=' • gekoppeld aan '+((bestStek.stek.name||bestStek.stek.id)); }
+    msg+=' • '+(rig.waterId?'gekoppeld aan water.':'(nog) geen water gevonden.');
+    S(msg);
   }
   saveDB(); renderAll(); setClickMode(null);
 });
@@ -613,7 +742,8 @@ function buildOverview(){
   steks.forEach(function(s){
     var rigsCount=rigs.filter(function(r){return r.stekId===s.id;}).length; var wName=nameOfWater(s.waterId)||"(geen)";
     var tr=document.createElement("tr");
-    tr.innerHTML='<td>'+esc(s.name||"(stek)")+'</td><td>'+s.id+'</td><td>'+esc(wName)+'</td><td>'+rigsCount+'</td>'+
+    var col=colorForStekId(s.id).fill;
+    tr.innerHTML='<td><span class="color-chip" style="background:'+col+'"></span>'+esc(s.name||"(stek)")+'</td><td>'+s.id+'</td><td>'+esc(wName)+'</td><td>'+rigsCount+'</td>'+
       '<td><button data-id="'+s.id+'" class="btn small btnRenStek">Hernoem</button></td>'+
       '<td><button data-id="'+s.id+'" class="btn small btnReWaterStek">Koppel water</button></td>'+
       '<td><button data-id="'+s.id+'" class="btn small btnDelStek danger">Verwijder</button></td>';
@@ -628,8 +758,9 @@ function buildOverview(){
   var rBody=rTable.querySelector("tbody");
   rigs.forEach(function(r){
     var s=(db.steks||[]).find(function(x){return x.id===r.stekId;});
+    var chipColor = s ? colorForStekId(s.id).fill : '#666';
     var tr=document.createElement("tr");
-    tr.innerHTML='<td>'+esc(r.name||"(rig)")+'</td><td>'+r.id+'</td><td>'+esc(s?(s.name||s.id):"(geen)")+'</td><td>'+esc(nameOfWater(r.waterId)||"(auto)")+'</td>'+
+    tr.innerHTML='<td><span class="color-chip rig-chip" style="background:'+chipColor+'"></span>'+esc(r.name||"(rig)")+'</td><td>'+r.id+'</td><td>'+esc(s?(s.name||s.id):"(geen)")+'</td><td>'+esc(nameOfWater(r.waterId)||"(auto)")+'</td>'+
       '<td><button data-id="'+r.id+'" class="btn small btnRenRig">Hernoem</button></td>'+
       '<td><button data-id="'+r.id+'" class="btn small btnReStekRig">Koppel stek</button></td>'+
       '<td><button data-id="'+r.id+'" class="btn small btnReWaterRig">Koppel water</button></td>'+
