@@ -1,0 +1,13 @@
+{
+  "title": "Vis Lokaties",
+  "tab_map": "Kaart / GPS",
+  "tab_data": "Data / Analyse",
+  "tab_weather": "Weer / Wind",
+  "tab_about": "Over / Changelog",
+  "status_ready": "Gereed",
+  "status_error": "Fout opgetreden",
+  "btn_heatmap": "Heatmap tonen",
+  "btn_contours": "Contouren maken",
+  "btn_detect": "Detectie uitvoeren",
+  "footer": "© 2025 Vis Lokaties – Alle rechten voorbehouden"
+}

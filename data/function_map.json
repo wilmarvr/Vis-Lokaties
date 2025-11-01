@@ -1,0 +1,14 @@
+{
+  "detectOSMWater": "map.js",
+  "depthTip": "map.js",
+  "wxDrawArrows": "weather.js",
+  "showHeatmap": "map.js",
+  "makeContours": "map.js",
+  "clearContours": "map.js",
+  "importCSV": "data.js",
+  "exportZIP": "data.js",
+  "toggleTheme": "core.js",
+  "loadLanguage": "ui.js",
+  "loadChangelog": "ui.js",
+  "updateOverview": "ui.js"
+}

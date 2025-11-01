@@ -1,0 +1,13 @@
+{
+  "title": "Fishing Locations",
+  "tab_map": "Map / GPS",
+  "tab_data": "Data / Analysis",
+  "tab_weather": "Weather / Wind",
+  "tab_about": "About / Changelog",
+  "status_ready": "Ready",
+  "status_error": "An error occurred",
+  "btn_heatmap": "Show heatmap",
+  "btn_contours": "Generate contours",
+  "btn_detect": "Run detection",
+  "footer": "© 2025 Fishing Locations – All rights reserved"
+}
