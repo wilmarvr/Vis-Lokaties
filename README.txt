@@ -1,5 +1,5 @@
 =======================================================
-Vis Lokaties – v0.0.0 (complete basis)
+Vis Lokaties – v0.1.0 (detectie + database)
 =======================================================
 Modulaire herbouw van het oorspronkelijke project
 Vis Lokaties 1.1.4-d.
@@ -15,6 +15,7 @@ STRUCTUUR:
      map.js
      ui.js
      data.js
+     db.js
      helpers.js
      weather.js
    img/
@@ -24,16 +25,29 @@ STRUCTUUR:
    changelog.json
    database.sql
    function_map.json
+ api/
+   config.php
+   db.php
+   list_spots.php
+   save_spot.php
+   delete_spot.php
+   reset_spots.php
  lang/
    nl.json
    en.json
  docs/
    README_PUBLIC.md
 
-THEMA:
-- Standaard: donker
-- Licht thema via 🌗 knop
+THEMA & UI:
+- Standaard: donker, licht thema via 🌗 knop
+- Nieuwe panelen voor detectie, beheer en weer-output
+
+DATABASE (XAMPP):
+- Maak een MySQL database `vis_lokaties`
+- Pas credentials aan in `api/config.php`
+- Plaats de repo onder de XAMPP webroot zodat `/api/*.php` bereikbaar is
+- Tabellen worden automatisch aangemaakt bij de eerste call
 
 VERSIE:
-- 0.0.0 = basisversie (volledig functioneel)
-- Toekomstige versies: 0.1.0+, 1.0.0, etc.
+- 0.1.0 = detectie/herbouw + MySQL synchronisatie
+- Toekomstige versies: 0.2.0+, 1.0.0, etc.

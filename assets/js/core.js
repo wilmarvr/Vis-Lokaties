@@ -11,11 +11,22 @@ export let state = {
   gpsActive: false,
   center: [52.1, 5.1],
   zoom: 8,
+  baseLayer: "osm",
+  imports: [],
+  waters: [],
+  stekken: [],
+  rigs: [],
   settings: {
     heatmapRadius: 25,
     heatmapBlur: 15,
     cluster: true,
-    tooltipDepth: true
+    tooltipDepth: true,
+    detectionRadius: 200,
+    maxEdge: 60
+  },
+  filters: {
+    depthMin: 0,
+    depthMax: 10
   }
 };
 
@@ -27,6 +38,30 @@ export function setStatus(text, type = "info") {
   el.style.color =
     type === "error" ? "#f55" : type === "ok" ? "#0f0" : "#ccc";
   console.log(`[${type}] ${text}`);
+}
+
+export function setFooterInfo({
+  mouse,
+  zoom,
+  detect,
+  depth
+} = {}) {
+  if (mouse !== undefined) {
+    const mouseEl = document.getElementById("mouseLL");
+    if (mouseEl) mouseEl.textContent = mouse;
+  }
+  if (zoom !== undefined) {
+    const zoomEl = document.getElementById("zoomLbl");
+    if (zoomEl) zoomEl.textContent = zoom;
+  }
+  if (detect !== undefined) {
+    const detectEl = document.getElementById("detectInfo");
+    if (detectEl) detectEl.textContent = detect;
+  }
+  if (depth !== undefined) {
+    const depthEl = document.getElementById("depthInfo");
+    if (depthEl) depthEl.textContent = depth;
+  }
 }
 
 export function log(...args) {
@@ -56,7 +91,13 @@ export function loadState() {
   try {
     const saved = localStorage.getItem("vislokaties_state");
     if (saved) {
-      state = { ...state, ...JSON.parse(saved) };
+      const parsed = JSON.parse(saved);
+      state = {
+        ...state,
+        ...parsed,
+        settings: { ...state.settings, ...(parsed.settings || {}) },
+        filters: { ...state.filters, ...(parsed.filters || {}) }
+      };
       log("State geladen:", state);
     }
   } catch (e) {
@@ -85,6 +126,35 @@ export function initCore() {
   const btnResetCache = document.getElementById("btnResetCache");
   if (btnResetCache) btnResetCache.addEventListener("click", clearCache);
 
+  const baseSelect = document.getElementById("baseLayerSelect");
+  if (baseSelect) {
+    baseSelect.value = state.baseLayer || "osm";
+    baseSelect.addEventListener("change", () => {
+      state.baseLayer = baseSelect.value;
+      saveState();
+      document.dispatchEvent(new CustomEvent("vislok:basemap", { detail: baseSelect.value }));
+    });
+  }
+
+  const detectRadius = document.getElementById("detectRadius");
+  if (detectRadius) {
+    detectRadius.value = state.settings.detectionRadius;
+    detectRadius.addEventListener("input", () => {
+      state.settings.detectionRadius = parseInt(detectRadius.value, 10);
+      saveState();
+      document.dispatchEvent(new CustomEvent("vislok:detect-radius", { detail: state.settings.detectionRadius }));
+    });
+  }
+
+  const detectMaxEdge = document.getElementById("detectMaxEdge");
+  if (detectMaxEdge) {
+    detectMaxEdge.value = state.settings.maxEdge;
+    detectMaxEdge.addEventListener("change", () => {
+      state.settings.maxEdge = parseFloat(detectMaxEdge.value);
+      saveState();
+    });
+  }
+
   // Versie tonen
   log(`Vis Lokaties v${APP_VERSION} gestart`);
   setStatus("Gereed");
@@ -99,7 +169,8 @@ window.VisLokCore = {
   saveState,
   loadState,
   clearCache,
-  state
+  state,
+  setFooterInfo
 };
 
 /* ---------- AUTO-INIT BIJ LADEN ---------- */

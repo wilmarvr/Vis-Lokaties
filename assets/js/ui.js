@@ -1,7 +1,7 @@
 /* =======================================================
    Vis Lokaties — ui.js
    Gebruikersinterface, tabellen, taal, changelog
-   Versie: 0.0.0
+   Versie: 0.1.0
    ======================================================= */
 
 import { setStatus, log, state, saveState } from "./core.js";
@@ -38,19 +38,23 @@ export function initUI() {
 
 /* ---------- DYNAMISCHE TABS (waters, steks, rigs) ---------- */
 export function buildTabs() {
+  if (document.getElementById("tab-waters")) {
+    populateTables();
+    return;
+  }
   const container = document.createElement("section");
   container.id = "dataTabs";
   container.innerHTML = `
     <details open>
-      <summary>🏞️ Wateren</summary>
+      <summary data-i18n="tab_waters">🏞️ Wateren</summary>
       <table id="tab-waters"><thead><tr><th>ID</th><th>Naam</th><th>Lat</th><th>Lon</th></tr></thead><tbody></tbody></table>
     </details>
     <details>
-      <summary>🎣 Stekken</summary>
+      <summary data-i18n="tab_steks">🎣 Stekken</summary>
       <table id="tab-steks"><thead><tr><th>ID</th><th>Naam</th><th>Lat</th><th>Lon</th></tr></thead><tbody></tbody></table>
     </details>
     <details>
-      <summary>🪝 Rigs</summary>
+      <summary data-i18n="tab_rigs">🪝 Rigs</summary>
       <table id="tab-rigs"><thead><tr><th>ID</th><th>Naam</th><th>Lat</th><th>Lon</th></tr></thead><tbody></tbody></table>
     </details>
   `;
@@ -65,10 +69,13 @@ export async function loadLanguage(lang = "nl") {
     const dict = await response.json();
 
     document.title = dict.title;
-    document.querySelector("summary:nth-of-type(1)").textContent = dict.tab_map;
-    document.querySelector("summary:nth-of-type(2)").textContent = dict.tab_data;
-    document.querySelector("summary:nth-of-type(3)").textContent = dict.tab_weather;
-    document.querySelector("summary:nth-of-type(4)").textContent = dict.tab_about;
+
+    document.querySelectorAll("[data-i18n]").forEach(el => {
+      const key = el.getAttribute("data-i18n");
+      if (dict[key]) {
+        el.textContent = dict[key];
+      }
+    });
 
     setStatus(lang === "nl" ? "Taal gewijzigd naar Nederlands" : "Language set to English", "ok");
   } catch (err) {
@@ -104,7 +111,11 @@ export function updateOverview() {
   const tbody = document.querySelector("#overviewTable tbody");
   tbody.innerHTML = "";
 
-  const allItems = [...(state.waters || []), ...(state.stekken || []), ...(state.spots || [])];
+  const allItems = [
+    ...(state.waters || []),
+    ...(state.stekken || []),
+    ...(state.rigs || [])
+  ];
   const recent = allItems.slice(-50);
 
   for (const item of recent) {

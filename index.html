@@ -22,6 +22,9 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
 
+  <!-- Helpers -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" integrity="sha512-YirEKeosFVJeFt3PcTJS3BM4tiT6V1brweDglxkyRjO6jwxKF1uHmIiMaTZGi99ZTSdKCbFf8gDuwZQzQ0jr4A==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
   <!-- Turf & OSM -->
   <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6.5.0/turf.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/osmtogeojson@3.0.0/osmtogeojson.min.js"></script>
@@ -43,6 +46,13 @@
     </div>
 
     <div class="toolbar-right">
+      <label class="sr-only" for="baseLayerSelect">Basemap</label>
+      <select id="baseLayerSelect" title="Wissel kaartstijl">
+        <option value="osm">🗺️ OSM</option>
+        <option value="topo">🗻 Topo</option>
+        <option value="toner">📰 Toner</option>
+        <option value="dark">🌙 Donker</option>
+      </select>
       <select id="langSelect" title="Taal kiezen">
         <option value="nl">🇳🇱 NL</option>
         <option value="en">🇬🇧 EN</option>
@@ -61,7 +71,7 @@
     <aside id="uiControls">
       <!-- Kaart / GPS -->
       <details open>
-        <summary><img src="assets/img/icon-gps.png" height="16" /> Kaart / GPS</summary>
+        <summary data-i18n="tab_map"><img src="assets/img/icon-gps.png" height="16" /> Kaart / GPS</summary>
         <div class="group">
           <button id="btnTrackGPS"><img src="assets/img/icon-gps.png" height="14" /> Start GPS</button>
           <button id="btnStopGPS">⏹️ Stop GPS</button>
@@ -76,14 +86,23 @@
           <button id="btnFixDrag">🧷 Drag fix</button>
           <button id="btnDetectWater"><img src="assets/img/icon-water.png" height="14" /> OSM Water</button>
         </div>
+        <div class="group">
+          <label>Detectie radius
+            <input type="range" id="detectRadius" min="50" max="1500" step="50" value="200" />
+          </label>
+          <label>Max edge
+            <input type="number" id="detectMaxEdge" min="0" max="500" value="60" />
+          </label>
+        </div>
       </details>
 
       <!-- Data & Analyse -->
       <details>
-        <summary><img src="assets/img/icon-heat.png" height="16" /> Data / Analyse</summary>
+        <summary data-i18n="tab_data"><img src="assets/img/icon-heat.png" height="16" /> Data / Analyse</summary>
         <div class="group">
           <input type="file" id="csvFile" accept=".csv,.zip" />
           <button id="btnLoadCSV">📂 Import CSV/ZIP</button>
+          <button id="btnImportGeoJSON">🌐 Import GeoJSON</button>
         </div>
         <div class="group">
           <button id="btnShowHeat">🔥 Heatmap</button>
@@ -92,7 +111,9 @@
         </div>
         <div class="group">
           <button id="btnDrawDistances">📏 Afstanden</button>
-          <button id="btnDetectSelection"><img src="assets/img/icon-detect.png" height="14" /> Detectie</button>
+          <button id="btnDetectViewport"><img src="assets/img/icon-detect.png" height="14" /> Detectie (beeld)</button>
+          <button id="btnDetectSelection"><img src="assets/img/icon-detect.png" height="14" /> Detectie (selectie)</button>
+          <button id="btnClearSelection">🧽 Wis selectie</button>
         </div>
         <div class="group">
           <button id="btnAutoRigs">🤖 Auto Rigs</button>
@@ -101,12 +122,27 @@
         <div class="group">
           <button id="btnExportGeoJSON">🌐 GeoJSON</button>
           <button id="btnExportZIP">📦 ZIP</button>
+          <button id="btnSyncServer">🔄 Sync database</button>
+        </div>
+        <div id="importQueue" class="panel-note">Geen actieve import</div>
+      </details>
+
+      <!-- Detectie & Analyse -->
+      <details>
+        <summary data-i18n="tab_detect"><img src="assets/img/icon-detect.png" height="16" /> Detectie & Analyse</summary>
+        <div class="group">
+          <label>Diepte minimum <input type="number" id="depthMin" step="0.1" value="0" /></label>
+          <label>Diepte maximum <input type="number" id="depthMax" step="0.1" value="10" /></label>
+        </div>
+        <div class="group">
+          <button id="btnFilterDepth">🔍 Filter diepte</button>
+          <button id="btnResetDepth">♻️ Reset filters</button>
         </div>
       </details>
 
       <!-- Weer & Wind -->
       <details>
-        <summary><img src="assets/img/icon-wind.png" height="16" /> Weer / Wind</summary>
+        <summary data-i18n="tab_weather"><img src="assets/img/icon-wind.png" height="16" /> Weer / Wind</summary>
         <div class="group">
           <label>Datum <input type="date" id="wxDate" /></label>
           <label>Uur 
@@ -121,19 +157,21 @@
         </div>
         <div class="group">
           <button id="btnWeatherLoad">🌡️ Laad weerdata</button>
+          <button id="btnWeatherNow">⚡ Weer nu</button>
           <button id="btnWindOverlay"><img src="assets/img/icon-wind.png" height="14" /> Wind overlay</button>
         </div>
+        <div id="weatherOutput" class="panel-note">Geen weerdata geladen.</div>
       </details>
 
       <!-- Over / Changelog -->
       <details>
-        <summary>ℹ️ Over / Changelog</summary>
+        <summary data-i18n="tab_about">ℹ️ Over / Changelog</summary>
         <div id="tab-changelog">Wordt geladen…</div>
       </details>
 
       <!-- Overzicht -->
       <details open>
-        <summary><img src="assets/img/icon-fish.png" height="16" /> Overzicht (laatste 50 punten)</summary>
+        <summary data-i18n="tab_overview"><img src="assets/img/icon-fish.png" height="16" /> Overzicht (laatste 50 punten)</summary>
         <table id="overviewTable">
           <thead>
             <tr><th>Type</th><th>Naam</th><th>Lat</th><th>Lon</th><th>Waarde</th></tr>
@@ -141,12 +179,54 @@
           <tbody></tbody>
         </table>
       </details>
+
+      <!-- Beheer -->
+      <details>
+        <summary data-i18n="tab_manage">🛠️ Beheer</summary>
+        <div class="group form-grid">
+          <h3>Nieuw water</h3>
+          <label>Naam <input type="text" id="waterName" /></label>
+          <label>Lat <input type="number" id="waterLat" step="0.00001" /></label>
+          <label>Lon <input type="number" id="waterLon" step="0.00001" /></label>
+          <button id="btnPickWater">📍 Kies op kaart</button>
+          <button id="btnAddWater">➕ Opslaan</button>
+        </div>
+        <div class="group form-grid">
+          <h3>Nieuwe stek</h3>
+          <label>Naam <input type="text" id="stekName" /></label>
+          <label>Lat <input type="number" id="stekLat" step="0.00001" /></label>
+          <label>Lon <input type="number" id="stekLon" step="0.00001" /></label>
+          <label>Diepte <input type="number" id="stekDepth" step="0.1" /></label>
+          <button id="btnPickStek">📍 Kies op kaart</button>
+          <button id="btnAddStek">➕ Opslaan</button>
+        </div>
+        <div class="group form-grid">
+          <h3>Nieuwe rig</h3>
+          <label>Naam <input type="text" id="rigName" /></label>
+          <label>Lat <input type="number" id="rigLat" step="0.00001" /></label>
+          <label>Lon <input type="number" id="rigLon" step="0.00001" /></label>
+          <label>Opmerking <input type="text" id="rigNote" /></label>
+          <button id="btnPickRig">📍 Kies op kaart</button>
+          <button id="btnAddRig">➕ Opslaan</button>
+        </div>
+      </details>
     </aside>
   </main>
 
-  <footer>
-    <span id="statusLine">Status: Initialiseren…</span>
-    <span id="footerInfo">© 2025 Vis Lokaties</span>
-  </footer>
-</body>
+    <footer>
+      <span id="statusLine">Status: Initialiseren…</span>
+      <span id="mouseLL" class="footer-info">| Lat: – Lon: –</span>
+      <span id="zoomLbl" class="footer-info">| Zoom: –</span>
+      <span id="detectInfo" class="footer-info">| Detectie: –</span>
+      <span id="depthInfo" class="footer-info">| Diepte: –</span>
+      <span id="footerInfo">© 2025 Vis Lokaties</span>
+    </footer>
+    <script type="module" src="assets/js/db.js"></script>
+    <script type="module" src="assets/js/core.js"></script>
+    <script type="module" src="assets/js/helpers.js"></script>
+    <script type="module" src="assets/js/data.js"></script>
+    <script type="module" src="assets/js/map.js"></script>
+    <script type="module" src="assets/js/ui.js"></script>
+    <script type="module" src="assets/js/weather.js"></script>
+  </body>
 </html>
