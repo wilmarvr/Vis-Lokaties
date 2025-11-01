@@ -59,10 +59,27 @@ header small {
   cursor: pointer;
   transition: 0.2s;
 }
+.toolbar-right select {
+  min-width: 90px;
+}
 .toolbar-right button:hover {
   background: var(--accent);
   color: #fff;
   border-color: var(--accent-light);
+}
+.toolbar-right button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
 }
 
 /* ---------- LAYOUT ---------- */
@@ -119,6 +136,33 @@ details select {
 details button:hover {
   background: var(--accent);
   color: #fff;
+}
+details .group h3 {
+  margin: 4px 0 6px;
+  color: var(--accent-light);
+}
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 6px;
+  align-items: center;
+}
+.panel-note {
+  margin: 6px 8px 10px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  background: rgba(10, 14, 20, 0.8);
+  border: 1px dashed var(--border);
+  color: #9aa7ba;
+  font-size: 0.8em;
+}
+.panel-note.success {
+  border-color: var(--ok);
+  color: var(--ok);
+}
+.panel-note.error {
+  border-color: var(--error);
+  color: var(--error);
 }
 
 /* ---------- TABELLEN ---------- */
@@ -180,9 +224,12 @@ footer {
 #statusLine {
   color: var(--ok);
 }
-#mouseLL, #zoomLbl {
+#mouseLL, #zoomLbl, #detectInfo, #depthInfo {
   color: var(--accent-light);
   font-family: monospace;
+}
+.footer-info {
+  white-space: nowrap;
 }
 
 /* ---------- LEAFLET ---------- */
@@ -197,6 +244,11 @@ footer {
 .leaflet-control-layers-expanded {
   background: rgba(15,20,28,0.9);
   color: var(--fg);
+}
+
+/* ---------- PICK MODE ---------- */
+.map-pick-active {
+  cursor: crosshair !important;
 }
 
 /* ---------- TOOLTIP ---------- */

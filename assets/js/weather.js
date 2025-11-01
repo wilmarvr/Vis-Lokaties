@@ -5,50 +5,94 @@
    ======================================================= */
 
 import { setStatus, log } from "./core.js";
-import { randomColor } from "./helpers.js";
 
 let map;
 let windLayer = L.layerGroup();
+let output;
 
 export function initWeather() {
-  map = window.L?.mapInstance || window.map;
-  if (!map) map = L.map("mapContainer");
-  map.addLayer(windLayer);
+  output = document.getElementById("weatherOutput");
+  attachHandlers();
+  resolveMap();
+  log("Weather-module klaar");
+}
 
+function resolveMap() {
+  map = window.L?.mapInstance || window.map;
+  if (map) {
+    map.addLayer(windLayer);
+  } else {
+    document.addEventListener("vislok:map-ready", resolveMap, { once: true });
+  }
+}
+
+function attachHandlers() {
   const btnWeatherLoad = document.getElementById("btnWeatherLoad");
+  const btnWeatherNow = document.getElementById("btnWeatherNow");
   const btnWindOverlay = document.getElementById("btnWindOverlay");
 
-  if (btnWeatherLoad)
-    btnWeatherLoad.addEventListener("click", loadWeatherData);
-  if (btnWindOverlay)
-    btnWindOverlay.addEventListener("click", wxDrawArrows);
-
-  log("Weather-module klaar");
+  btnWeatherLoad?.addEventListener("click", loadWeatherData);
+  btnWeatherNow?.addEventListener("click", quickWeatherNow);
+  btnWindOverlay?.addEventListener("click", wxDrawArrows);
 }
 
 /* ---------- WEERDATA LADEN (Open-Meteo API) ---------- */
 export async function loadWeatherData() {
   try {
     setStatus("Weerdata ophalen...");
+    if (!map) {
+      resolveMap();
+      if (!map) throw new Error("Kaart niet gereed");
+    }
     const center = map.getCenter();
     const lat = center.lat.toFixed(4);
     const lon = center.lng.toFixed(4);
+    const params = buildWeatherParams();
     const res = await fetch(
-      `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=windspeed_10m,winddirection_10m`
+      `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=windspeed_10m,winddirection_10m&current_weather=true${params}`
     );
     const data = await res.json();
     window.currentWeather = data;
     setStatus("Weerdata geladen", "ok");
     log("Weerdata", data);
+    renderWeatherSummary(data);
   } catch (err) {
     console.error(err);
     setStatus("Fout bij ophalen weerdata", "error");
+    renderWeatherSummary();
   }
+}
+
+function buildWeatherParams() {
+  const dateInput = document.getElementById("wxDate");
+  const hourSelect = document.getElementById("wxHour");
+  const date = dateInput?.value;
+  const hour = hourSelect?.value;
+  if (!date || hour === undefined) return "";
+  return `&start_date=${date}&end_date=${date}`;
+}
+
+function quickWeatherNow() {
+  const now = new Date();
+  const dateInput = document.getElementById("wxDate");
+  const hourSelect = document.getElementById("wxHour");
+  if (dateInput) dateInput.value = now.toISOString().slice(0, 10);
+  if (hourSelect) {
+    const hour = now.getHours();
+    const options = Array.from(hourSelect.options).map(opt => parseInt(opt.value, 10));
+    const closest = options.reduce((prev, curr) => (Math.abs(curr - hour) < Math.abs(prev - hour) ? curr : prev));
+    hourSelect.value = closest.toString();
+  }
+  loadWeatherData();
 }
 
 /* ---------- WINDPIJLEN TEKENEN ---------- */
 export function wxDrawArrows() {
   try {
+    if (!map) {
+      resolveMap();
+      if (!map) throw new Error("Kaart niet gereed");
+    }
     if (!window.currentWeather) {
       setStatus("Geen weerdata beschikbaar", "error");
       return;
@@ -123,6 +167,23 @@ function speedColor(speed) {
   if (speed < 20) return "#ff0";
   if (speed < 30) return "#f80";
   return "#f00";
+}
+
+function renderWeatherSummary(data) {
+  if (!output) return;
+  if (!data) {
+    output.textContent = "Geen weerdata geladen.";
+    output.className = "panel-note";
+    return;
+  }
+  const current = data.current_weather;
+  if (current) {
+    output.innerHTML = `
+      <strong>Nu:</strong> ${current.temperature}°C, wind ${current.windspeed} m/s (${current.winddirection}°)
+    `;
+  } else {
+    output.textContent = "Weerdata beschikbaar (geen actuele waarde).";
+  }
 }
 
 /* ---------- EXPORT ALS MODULE ---------- */
