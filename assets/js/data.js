@@ -767,10 +767,10 @@ function onMapNewSpot(e) {
 function onDetection(e) {
   const detection = e.detail;
   if (!detection) return;
-  const summaryEl = document.getElementById("detectSummary");
+  const summaryEls = getDetectSummaryElements();
   const btnSave = document.getElementById("btnDetectSave");
   if (btnSave) btnSave.disabled = false;
-  if (!summaryEl) return;
+  if (!summaryEls.length) return;
   const { stats } = detection;
   const lines = [];
   lines.push(`${t("detect_points", "Punten")}: ${stats.count}`);
@@ -784,9 +784,12 @@ function onDetection(e) {
   if (Number.isFinite(stats.perimeter)) {
     lines.push(`${t("detect_perimeter", "Omtrek")}: ${stats.perimeter.toFixed(2)} km`);
   }
-  summaryEl.classList.remove("error");
-  summaryEl.classList.add("panel-note");
-  summaryEl.innerHTML = lines.join("<br>");
+  const summaryHtml = lines.join("<br>");
+  summaryEls.forEach(summaryEl => {
+    summaryEl.classList.remove("error");
+    summaryEl.classList.add("panel-note");
+    summaryEl.innerHTML = summaryHtml;
+  });
   const nameInput = document.getElementById("detectName");
   const suggestion =
     detection.nameSuggestion || (Array.isArray(stats.names) ? stats.names.find(Boolean) : null);
@@ -833,15 +836,20 @@ function onDetection(e) {
 }
 
 function clearDetectionSummary() {
-  const summaryEl = document.getElementById("detectSummary");
-  if (summaryEl) {
-    summaryEl.textContent = t("detect_idle", "Nog geen detectie uitgevoerd.");
+  const summaryEls = getDetectSummaryElements();
+  const idleText = t("detect_idle", "Nog geen detectie uitgevoerd.");
+  summaryEls.forEach(summaryEl => {
+    summaryEl.textContent = idleText;
     summaryEl.classList.remove("error");
     summaryEl.classList.add("panel-note");
-  }
+  });
   const btnSave = document.getElementById("btnDetectSave");
   if (btnSave) btnSave.disabled = true;
   setWaterDrawButtons(false);
+}
+
+function getDetectSummaryElements() {
+  return Array.from(document.querySelectorAll("[data-detect-summary]"));
 }
 
 function handleStorageTruncated(e) {
