@@ -122,10 +122,6 @@ export function initMap() {
   map.on("click", handleMapClick);
   map.on("dblclick", handleMapDoubleClick);
 
-  map.on("mousemove", handleMouseMove);
-  map.on("click", handleMapClick);
-  map.on("dblclick", handleMapDoubleClick);
-
   setFooterInfo({ zoom: `| ${t("footer_zoom", "Zoom")}: ${map.getZoom()}` });
 
   bindUI();
