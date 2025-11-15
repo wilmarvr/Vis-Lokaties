@@ -1,12 +1,3 @@
-<!DOCTYPE html>
-<html lang="nl">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Vis Lokaties v1.1.4-d</title>
-
-<!-- ====== FIX BLOK (vroeg inladen) ====== -->
-<script>
 // --- FIX: 'touchleave' veilig mappen + fallback (voorkomt "wrong event specified: touchleave")
 (function(){
   var supportsPointer = 'PointerEvent' in window;
@@ -32,218 +23,7 @@
 // --- Vroeg: no-ops zodat whenReady-callbacks nooit breken
 window.renderAll = window.renderAll || function(){};
 window.drawDistances = window.drawDistances || function(){};
-</script>
 
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-<link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css">
-<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css">
-<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
-<style>
-:root { --bg:#0b1119; --panel:#111a23; --txt:#E6EDF3; --accent:#33a1ff; }
-*{box-sizing:border-box}
-body{ margin:0;background:var(--bg);color:var(--txt);font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;height:100vh;overflow:hidden;}
-#toolbar{ position:absolute; top:0; left:0; width:320px; height:100%; overflow-y:auto; background:var(--panel); box-shadow:2px 0 10px #000a; padding:6px; z-index:9999; }
-#mapContainer{ position:absolute; left:320px; top:0; right:0; bottom:58px; z-index:0; }
-#footer{ position:absolute; left:320px; bottom:0; right:0; height:58px; background:#0e151d; border-top:1px solid #1e2a33; display:flex; align-items:center; gap:8px; padding:6px 10px; font-size:13px; z-index:10000; overflow:hidden; }
-#statusLine{ flex:3; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-#footerDetect{ flex:1; text-align:center; color:#7bf1a8; }
-#mouseLL, #zoomLbl, #mouseDepth{ flex:0 0 auto; min-width:130px; text-align:right; opacity:0.9; }
-button,select,input[type="text"],input[type="number"],input[type="date"]{ font-size:13px; background:#0e151d; color:var(--txt); border:1px solid #2a3847; border-radius:6px; padding:4px 8px; margin:2px; }
-button:hover{ background:#14202e; }
-.btn.small{ padding:2px 6px; font-size:12px; }
-.btn.danger{ background:#400; border-color:#a33; }
-details summary{ cursor:pointer; background:#122030; padding:6px; margin-top:6px; border-radius:8px; font-weight:bold; user-select:none; }
-details summary:hover{ background:#183048; }
-legend{ font-weight:bold; }
-table{ width:100%; border-collapse:collapse; margin-top:4px; font-size:13px; }
-th,td{ padding:3px 4px; border-bottom:1px solid #233; }
-th{ background:#0f1a22; position:sticky; top:0; z-index:1; }
-.progress{ width:100%; background:#081018; border-radius:6px; overflow:hidden; height:6px; }
-.bar{ height:6px; background:var(--accent); width:0%; transition:width .2s; }
-.dist-label{ background:rgba(10,10,10,.7); color:#7bf1a8; border:none; box-shadow:none; font-size:11px; padding:0 2px; }
-.sel{ filter:drop-shadow(0 0 3px #00e5ff); }
-.legend{ width:100%; height:12px; background:linear-gradient(to right,blue,cyan,green,yellow,orange,red); margin-top:4px; }
-.legend.inv{ background:linear-gradient(to right,red,orange,yellow,green,cyan,blue); }
-#gpsPanel{ position:absolute; bottom:66px; left:340px; background:#0e151d; color:var(--txt); border:1px solid #233; padding:6px 10px; border-radius:8px; display:none; z-index:20000; }
-
-/* Overzicht: stabiele horizontale scrollbar (geen overlap laatste kolom) */
-#tab-waters, #tab-steks, #tab-rigs{ overflow:auto; max-width:100%; padding-bottom:14px; scrollbar-gutter: stable both-edges; }
-#tab-waters table, #tab-steks table, #tab-rigs table{ min-width:980px; margin-right:18px; }
-
-/* Diepte tooltip */
-#depthTip{ position:absolute; pointer-events:none; z-index:88888; background:rgba(8,12,18,.85); border:1px solid #123; color:#9ee2ff; padding:2px 6px; font-size:12px; border-radius:6px; transform:translate(10px,-18px); display:none; }
-
-/* Weer/kompas */
-.leaflet-control.windCompass{ background:#0e151d; color:#fff; border:1px solid #233; border-radius:8px; padding:6px 10px; }
-#compArrow{ width:0; height:0; border-left:8px solid transparent; border-right:8px solid transparent; border-bottom:18px solid #ffce3a; margin:4px auto 0; transform-origin:50% 14px; }
-
-/* ✔︎ labels en tooltips nooit muis-events (zodat markers altijd sleepbaar blijven) */
-.leaflet-pane.labelsPane { pointer-events: none !important; z-index: 750 !important; }
-.dist-label, .leaflet-tooltip { pointer-events: none !important; }
-
-/* markers boven labels en ontvankelijk voor events */
-.leaflet-pane.markerPane  { z-index: 800 !important; pointer-events: auto !important; }
-.leaflet-marker-icon, .leaflet-marker-shadow { pointer-events: auto !important; }
-</style>
-</head>
-<body>
-<div id="toolbar">
-  <h3>🎣 Vis Lokaties v1.1.4-d</h3>
-
-  <div style="margin:4px 0 8px">
-    Basemap:
-    <select id="basemap">
-      <option value="osm">OSM</option>
-      <option value="toner">Toner</option>
-      <option value="terrain">Terrain</option>
-      <option value="dark">Carto Dark</option>
-    </select>
-  </div>
-
-  <details open>
-    <summary>📍 Spots</summary>
-    <div>
-      <button id="btn-add-stek">➕ Nieuwe stek (klik op kaart)</button>
-      <button id="btn-add-rig">🎯 Nieuwe rig (klik op kaart)</button>
-      <span id="clickModeBadge" class="badge" style="display:none">klikmodus actief</span><br>
-      <label><input type="checkbox" id="useCluster"> Clustering</label><br>
-      <label><input type="checkbox" id="showDistances" checked> Afstanden tonen</label><br>
-      <button id="btnForceDragFix">⚙️ Drag-fix</button>
-      <button id="btnAutoRigs">🤖 2 rigs per zichtbare stek</button>
-    </div>
-  </details>
-
-  <details>
-    <summary>🔎 Detectie</summary>
-    <div>
-      <label>Max edge (m): <input type="number" id="detMaxEdge" value="250" style="width:80px"></label><br>
-      <button id="btnDetectViewport">Detecteer uit beeld</button>
-      <button id="btnDetectFromPoints">Detecteer uit selectie</button><br>
-      <button id="btnDetectOSM">Detecteer OSM water</button><br>
-      <input type="text" id="detName" placeholder="Naam nieuw water"><br>
-      <button id="btnSaveAsWater">💾 Opslaan als water</button><br>
-      <button id="btnSelClear">🧹 Selectie wissen</button>
-    </div>
-  </details>
-
-  <details>
-    <summary>🌊 Deeper import & Heatmap</summary>
-    <div>
-      <button id="btn-import-files">📁 Importeer CSV/ZIP</button>
-      <button id="btn-import-dir">📂 Hele map</button><br>
-      <input id="fileDeeper" type="file" accept=".csv,.zip" multiple style="display:none">
-      <input id="dirDeeper" type="file" webkitdirectory directory multiple style="display:none">
-      <label><input type="checkbox" id="saveBathy" checked> Opslaan in DB</label><br>
-      <div class="progress"><div id="impBarAll" class="bar"></div></div>
-      <span id="impCount">0/0</span> | <span id="impPctAll">0%</span>
-      <pre id="queue" style="font-size:11px;max-height:80px;overflow:auto;"></pre>
-      <hr>
-      <div>Radius:<input type="range" id="hmRadius" min="1" max="50" value="25"><span id="hmR">25</span></div>
-      <div>Blur:<input type="range" id="hmBlur" min="1" max="40" value="15"><span id="hmB">15</span></div>
-      <label>Min m:<input type="number" id="hmMin" step="0.1" style="width:60px"></label>
-      <label>Max m:<input type="number" id="hmMax" step="0.1" style="width:60px"></label><br>
-      <label><input type="checkbox" id="hmInvert"> Kleuren omkeren</label>
-      <label><input type="checkbox" id="hmClip"> Alleen in beeld</label><br>
-      <label><input type="checkbox" id="hmFixed"> Vast 0–20 m bereik</label><br>
-      <div id="legend" class="legend"></div>
-      <div id="hmStats">Min: – • Max: –</div>
-      <hr>
-      <button id="btn-clear-heat">🔥 Wis heatmap</button>
-      <button id="btn-clear-bathy">💧 Wis DB bathy</button>
-      <div>Totaal punten: <span id="bathyTotal">0</span> | Heatmap: <span id="heatCount">0</span></div>
-    </div>
-  </details>
-
-  <details>
-    <summary>☁️ Weer & wind</summary>
-    <div>
-      <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap">
-        <button id="btnWeatherNow">Weer nu</button>
-        <label>Dag: <input type="date" id="wxDate"></label>
-        <label>Uur: <select id="wxHour"></select></label>
-        <button id="btnWeatherLoad">Laad weer</button>
-      </div>
-      <div id="wxOut" class="mono" style="margin-top:6px">—</div>
-      <label style="display:block;margin-top:6px"><input type="checkbox" id="wxDrawArrows"> Windrichting op kaart tekenen</label>
-      <label style="display:block">Dichtheid: <input type="range" id="wxDensity" min="1" max="6" value="3"> <span id="wxDensityLbl">3</span></label>
-    </div>
-  </details>
-
-  <details>
-    <summary>📊 Overzicht & beheren</summary>
-    <div>
-      <div class="tabs">
-        <button class="tab active" data-tab="waters">Waters</button>
-        <button class="tab" data-tab="steks">Stekken</button>
-        <button class="tab" data-tab="rigs">Rigspots</button>
-      </div>
-      <div id="tab-waters"></div>
-      <div id="tab-steks" style="display:none"></div>
-      <div id="tab-rigs" style="display:none"></div>
-    </div>
-  </details>
-
-  <details id="contourPanel">
-    <summary>🗺️ Contouren</summary>
-    <div>
-      <button id="btn-gen-contours">Maak contouren</button>
-      <button id="btn-clear-contours">Wis contouren</button>
-      <div class="muted" style="margin-top:4px">Gebruikt DB-bathymetrie binnen kaartbeeld</div>
-    </div>
-  </details>
-
-  <details>
-    <summary>🧨 Opschonen & export</summary>
-    <div>
-      <button id="btnExport">💾 Export alles</button>
-      <button id="btn-import-files2">📥 Import GeoJSON</button>
-      <input id="fileMerge" type="file" accept=".json,.geojson" style="display:none"><br>
-      <button id="btnLocalSave">💾 Opslaan in browser</button>
-      <button id="btnLocalLoad">📤 Laden uit browser</button>
-      <button id="btnLocalReset" class="btn danger">Reset browser data</button><br>
-      <button id="btnSaveHtml">📄 Download HTML</button>
-      <button id="btnSaveHtmlWithData">📄 Download HTML (met data)</button>
-    </div>
-  </details>
-
-  <details>
-    <summary>🛰️ GPS & navigatie</summary>
-    <div>
-      <button id="btnGps">📡 Start/Stop GPS</button>
-      <label>Status: <span id="gpsStatus">uit</span></label>
-    </div>
-  </details>
-</div>
-
-<div id="mapContainer"></div>
-<div id="footer">
-  <div id="statusLine">Klaar.</div>
-  <div id="footerDetect">—</div>
-  <div id="mouseDepth">Diepte: —</div>
-  <div id="mouseLL">—</div>
-  <div id="zoomLbl">—</div>
-</div>
-<div id="depthTip"></div>
-
-<div id="gpsPanel">
-  📍 GPS: Lat <span id="gpsLat">–</span> Lon <span id="gpsLon">–</span><br>
-  🎯 Nauwkeurigheid: <span id="gpsAcc">–</span> m | Snelheid: <span id="gpsSpd">–</span> m/s | Koers: <span id="gpsBrg">–</span>°
-</div>
-
-<!-- Leaflet & plugins -->
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
-<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
-<script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
-
-<!-- Extra libs -->
-<script src="https://unpkg.com/jszip@3.10.1/dist/jszip.min.js"></script>
-<script src="https://unpkg.com/@turf/turf@6.5.0/turf.min.js"></script>
-
-<!-- (optioneel) snapshot container: wordt bij 'Download HTML (met data)' gevuld -->
-<script type="application/json" id="lv_db_snapshot">{}</script>
-
-<script>
 // ===== helpers / status =====
 function S(m){var el=document.getElementById("statusLine"); if(el) el.textContent=String(m||'');}
 function I(m){var el=document.getElementById("footerDetect"); if(el) el.textContent=String(m||''); var di=document.getElementById("detectInfo"); if(di) di.textContent=String(m||'');}
@@ -269,22 +49,42 @@ function coloredIcon(hexOrHsl, glyph){
 }
 
 // ===== DB (zelfde key) + snapshot loader =====
-var DB_KEY="lv_db_main"; // NIET wijzigen
-var db={waters:[],steks:[],rigs:[],bathy:{points:[],datasets:[]},settings:{waterColor:"#33a1ff"}};
+var DB_KEY="lv_db_main"; // historische sleutelnaam (voor exports)
+function createEmptyDB(){
+  return {waters:[],steks:[],rigs:[],bathy:{points:[],datasets:[]},settings:{waterColor:"#33a1ff"}};
+}
+var db=createEmptyDB();
 // 1) snapshot uit <script id="lv_db_snapshot"> (als niet leeg)
-// 2) anders localStorage
 (function(){
   try{
     var snapEl=document.getElementById('lv_db_snapshot');
     if(snapEl && snapEl.textContent && snapEl.textContent.trim() && snapEl.textContent.trim()!=='{}'){
       db = JSON.parse(snapEl.textContent);
-    }else{
-      var raw=localStorage.getItem(DB_KEY); if(raw) db=JSON.parse(raw);
     }
-  }catch(e){}
+  }catch(e){ console.warn('Kon snapshot niet lezen', e); }
 })();
 normalizeDB();
-function saveDB(){try{localStorage.setItem(DB_KEY,JSON.stringify(db));}catch(e){}}
+async function loadDBFromServer(showStatus){
+  try{
+    var res = await fetch('/api/db');
+    if(!res.ok) throw new Error('Server gaf status '+res.status);
+    var payload = await res.json();
+    if(payload){ db = payload; }
+    normalizeDB();
+    if(typeof window.renderAll === 'function'){ window.renderAll(); }
+    if(showStatus!==false) S('Data geladen van server.');
+  }catch(e){
+    console.error('Laden van server mislukt', e);
+    if(showStatus!==false) S('Serverdata laden mislukt. Lege dataset actief.');
+  }
+}
+function saveDB(showStatus){
+  var body = JSON.stringify(db);
+  return fetch('/api/db',{method:'POST', headers:{'Content-Type':'application/json'}, body:body})
+    .then(function(res){ if(!res.ok) throw new Error('Status '+res.status); return res.json().catch(function(){ return null;}); })
+    .then(function(){ if(showStatus!==false) S('Data opgeslagen op server.'); })
+    .catch(function(err){ console.error('Opslaan op server mislukt', err); if(showStatus!==false) S('Opslaan op server mislukt.'); });
+}
 function normalizeDB(){
   function num(v){ return (typeof v==='string'? parseFloat(v) : v); }
   db.steks=(db.steks||[]).map(function(s){return {id:s.id||uid('stek'),name:s.name||"",note:s.note||"",lat:num(s.lat),lng:num(s.lng),waterId:s.waterId||null};});
@@ -529,8 +329,7 @@ function interpIDW(lat,lon,pts,R,K){
   }
   return num/den;
 }
-</script>
-<script>
+
 // ====== OVERZICHT / RENDER ======
 window.renderAll = function(){
   if(!map || !map._loaded) { map.whenReady(window.renderAll); return; }
@@ -1152,16 +951,15 @@ function startGPS(){
 function stopGPS(){ if (gpsWatchId != null) { try{ navigator.geolocation.clearWatch(gpsWatchId); }catch(_){} gpsWatchId = null; } document.getElementById('gpsStatus').textContent = 'uit'; }
 document.getElementById('btnGps').addEventListener('click', function(){ if(gpsWatchId==null) startGPS(); else stopGPS(); });
 
-// ====== Local save/export ======
-document.getElementById('btnLocalSave').addEventListener('click', function(){ saveDB(); S('Data opgeslagen in browser.'); });
-document.getElementById('btnLocalLoad').addEventListener('click', function(){
-  try{ var raw=localStorage.getItem(DB_KEY); if(raw){ db=JSON.parse(raw); normalizeDB(); renderAll(); S('Data geladen uit browser.'); } else { S('Geen data gevonden in browser.'); } }catch(e){ S('Laden mislukt.'); }
-});
+// ====== Server opslag & export ======
+document.getElementById('btnLocalSave').addEventListener('click', function(){ saveDB(true); });
+document.getElementById('btnLocalLoad').addEventListener('click', function(){ loadDBFromServer(true); });
 document.getElementById('btnLocalReset').addEventListener('click', function(){
-  if(!confirm('Alle lokale data wissen?')) return;
-  try{ localStorage.removeItem(DB_KEY); }catch(_){}
-  db={waters:[],steks:[],rigs:[],bathy:{points:[],datasets:[]},settings:{waterColor:"#33a1ff"}};
-  renderAll(); S('Lokale data gewist.');
+  if(!confirm('Alle serverdata wissen en opnieuw beginnen?')) return;
+  db=createEmptyDB();
+  normalizeDB();
+  renderAll();
+  saveDB(true);
 });
 document.getElementById('btnSaveHtml').addEventListener('click', function(){
   var src = document.documentElement.outerHTML;
@@ -1348,7 +1146,5 @@ document.getElementById('btnAutoRigs').addEventListener('click', function(){
   document.querySelectorAll('[id]').forEach(function(el){ if(!el.id) return; if(seen.has(el.id)) el.remove(); else seen.add(el.id); });
 })();
 
+loadDBFromServer(false);
 S('Klaar.');
-</script>
-</body>
-</html>
