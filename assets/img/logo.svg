@@ -1,7 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="100" fill="#0d1117"></rect>
-  <circle cx="256" cy="256" r="200" fill="#1e90ff" opacity="0.2"></circle>
-  <path d="M120 256c60-80 212-80 272 0-60 80-212 80-272 0z" fill="#1e90ff"></path>
-  <circle cx="180" cy="250" r="12" fill="#fff"></circle>
-  <text x="256" y="430" font-family="Segoe UI, Arial" font-size="60" text-anchor="middle" fill="#ffffff">Vis Lokaties</text>
-</svg>
