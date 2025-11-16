@@ -26,6 +26,19 @@
     }
   }
 
+  function nearestStekIdForLatLng(lat, lng, edgeMaxMeters){
+    var best=null, bestDist=Infinity;
+    (db.steks||[]).forEach(function(s){
+      if(!Number.isFinite(s.lat)||!Number.isFinite(s.lng)) return;
+      var d=distM({lat:lat,lon:lng},{lat:s.lat,lon:s.lng});
+      if(d<bestDist){ bestDist=d; best=s.id; }
+    });
+    if(best==null) return null;
+    if(typeof edgeMaxMeters==='number' && bestDist>edgeMaxMeters){ return null; }
+    return best;
+  }
+  window.nearestStekIdForLatLng = nearestStekIdForLatLng;
+
   var selectMode=false;
   var useCluster=false;
   document.getElementById('useCluster').checked=false;
@@ -65,7 +78,19 @@
       }
       if(type==='rig'){
         var r=db.rigs.find(function(x){return x.id===id;});
-        if(r){ r.lat=ll.lat; r.lng=ll.lng; r.waterId = nearestWaterIdForLatLng(ll.lat,ll.lng) || r.waterId || null; }
+        if(r){
+          r.lat=ll.lat; r.lng=ll.lng;
+          var parent=db.steks.find(function(x){return x.id===r.stekId;});
+          if(!parent){
+            var autoStek = nearestStekIdForLatLng(ll.lat,ll.lng,1000);
+            if(autoStek){ r.stekId=autoStek; parent=db.steks.find(function(x){return x.id===autoStek;}); }
+          }
+          if(parent && parent.waterId){
+            r.waterId = parent.waterId;
+          } else {
+            r.waterId = nearestWaterIdForLatLng(ll.lat,ll.lng) || r.waterId || null;
+          }
+        }
       }
       clearEntireSelection();
       setTimeout(function(){ m.__skipNextClick = false; }, 0);
@@ -105,16 +130,45 @@
 
   // Click-to-add logic
   var clickAddMode=null, badge=document.getElementById('clickModeBadge');
+  var pendingRigStekId=null, pendingRigName='';
+  function updateClickBadge(){
+    if(!badge){ return; }
+    if(!clickAddMode){ badge.style.display='none'; return; }
+    var text = clickAddMode==='stek' ? 'Click to place swim' : 'Click to place rig';
+    if(clickAddMode==='rig' && pendingRigName){ text += ' • '+pendingRigName; }
+    badge.textContent = text;
+    badge.style.display='inline-block';
+  }
   function setClickMode(mode){
     clickAddMode=mode;
+    if(!mode){ pendingRigStekId=null; pendingRigName=''; }
     map.getContainer().style.cursor = mode? 'crosshair' : '';
-    if(badge) badge.style.display = mode? 'inline-block' : 'none';
-    S(mode? ('Click on the map to place a '+(mode==='stek'?'swim':'rig')+'. Press Esc to cancel.') : 'Ready.');
+    updateClickBadge();
+    if(!mode){ S('Ready.'); return; }
+    if(mode==='stek'){ S('Click on the map to place a swim. Press Esc to cancel.'); }
+    if(mode==='rig'){ S('Click on the map to place a rig'+(pendingRigName?' for '+pendingRigName:'')+'. Press Esc to cancel.'); }
   }
   window.setClickMode = setClickMode;
   document.addEventListener('keydown', function(e){ if(e.key==='Escape' && clickAddMode){ setClickMode(null); }});
   document.getElementById('btn-add-stek').addEventListener('click', function(){ setClickMode('stek'); });
-  document.getElementById('btn-add-rig').addEventListener('click', function(){ setClickMode('rig'); });
+  function chooseRigParent(){
+    if(!(db.steks||[]).length){ alert('Create a swim first.'); return Promise.resolve(null); }
+    var opts=(db.steks||[]).map(function(s){
+      var name=s.name||s.id;
+      var water=nameOfWater(s.waterId)||'no water';
+      return {id:s.id, text:name+' • '+water};
+    }).sort(function(a,b){ return a.text.localeCompare(b.text); });
+    return window.pickFromList('Select swim for new rig', opts);
+  }
+  document.getElementById('btn-add-rig').addEventListener('click', function(){
+    chooseRigParent().then(function(choice){
+      if(!choice) return;
+      pendingRigStekId=choice;
+      var parent=(db.steks||[]).find(function(s){return s.id===choice;});
+      pendingRigName=parent?(parent.name||parent.id):'';
+      setClickMode('rig');
+    });
+  });
   map.on('click', function(ev){
     if(!clickAddMode) return;
     var wId = nearestWaterIdForLatLng(ev.latlng.lat, ev.latlng.lng);
@@ -122,8 +176,16 @@
       db.steks.push({id:uid('stek'),name:'Swim',lat:ev.latlng.lat,lng:ev.latlng.lng,waterId:wId||null});
       S('Swim added '+(wId?'and linked to water.':'(no water found yet).'));
     }else{
-      db.rigs.push({id:uid('rig'),name:'Rig',lat:ev.latlng.lat,lng:ev.latlng.lng,stekId:null,waterId:wId||null});
-      S('Rig added '+(wId?'and linked to water.':'(no water found yet).')+' Link it inside the overview.');
+      var stekId = pendingRigStekId || nearestStekIdForLatLng(ev.latlng.lat, ev.latlng.lng, 750);
+      var parent = stekId ? (db.steks||[]).find(function(s){return s.id===stekId;}) : null;
+      if(!parent){
+        alert('Select a swim for the rig first.');
+        setClickMode(null);
+        return;
+      }
+      var rigWaterId = parent.waterId || wId || nearestWaterIdForLatLng(ev.latlng.lat, ev.latlng.lng) || null;
+      db.rigs.push({id:uid('rig'),name:'Rig',lat:ev.latlng.lat,lng:ev.latlng.lng,stekId:parent.id,waterId:rigWaterId});
+      S('Rig added and linked to '+(parent.name||parent.id)+'.');
     }
     saveDB(); renderAll(); setClickMode(null);
   });

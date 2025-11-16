@@ -34,6 +34,10 @@
   }
   var datasetTable=document.getElementById('datasetTable');
   var datasetBody=datasetTable?datasetTable.querySelector('tbody'):null;
+  var APPEND_BATCH_LIMIT = 8000;
+  var pendingUploads = [];
+  var queuedPointCount = 0;
+  var pendingKeyMirror = new Set();
   function renderDatasets(){
     if(!datasetBody) return;
     datasetBody.innerHTML='';
@@ -73,6 +77,7 @@
   }
   function seedExistingKeys(){
     existingKeys.clear();
+    pendingKeyMirror.clear();
     (rawAll||[]).forEach(function(p){
       var lat=Number(p.lat!=null?p.lat:p.latitude);
       var lon=Number(p.lon!=null?p.lon:p.lng);
@@ -303,35 +308,80 @@
         var lat=Number(p.lat), lon=Number(p.lon), dep=Number(p.dep);
         if(!Number.isFinite(lat)||!Number.isFinite(lon)||!Number.isFinite(dep)) return;
         var key=pointKey(lat,lon,dep);
-        if(existingKeys.has(key)) return;
+        if(existingKeys.has(key) || pendingKeyMirror.has(key)) return;
         p.lat=lat; p.lon=lon; p.dep=dep;
         fresh.push(p);
         keys.push(key);
+        pendingKeyMirror.add(key);
       });
       return {points:fresh, keys:keys};
     }
 
-    function appendChunk(points, datasetMeta, label){
-      var dsList = datasetMeta ? [datasetMeta] : [];
-      if((!points || !points.length) && !dsList.length){ return Promise.resolve(); }
+    function sendBathyPayload(payload, label){
+      payload = payload || {};
+      var pts = Array.isArray(payload.points) ? payload.points : [];
+      var ds  = Array.isArray(payload.datasets) ? payload.datasets : [];
+      if(!pts.length && !ds.length){ return Promise.resolve(); }
       if(typeof window.appendBathyToServer !== 'function'){
         var fallback=(typeof window.saveDBImmediate==='function')?window.saveDBImmediate:window.saveDB;
         return (typeof fallback==='function') ? fallback() : Promise.resolve();
       }
-      var payload={
-        points:(points||[]).map(function(p){
-          return {lat:p.lat, lon:p.lon, dep:p.dep, dataset_id:p.dataset_id||null};
-        }),
-        datasets:dsList.map(function(ds){ return {id:ds.id, payload:ds}; })
-      };
-      return window.appendBathyToServer(payload).then(function(res){
-        if(label){ S('Stored '+(points?points.length:0)+' points from '+label); }
+      return window.appendBathyToServer({points:pts,datasets:ds}).then(function(res){
+        if(label){ S('Stored '+pts.length+' points ('+label+').'); }
         return res;
       }).catch(function(err){
         console.error('Bathymetry save failed', err);
         S('Bathymetry save failed: '+err.message);
         throw err;
       });
+    }
+
+    function flushBathyQueue(force){
+      if(!pendingUploads.length){ return Promise.resolve(); }
+      var limit = force ? Infinity : APPEND_BATCH_LIMIT;
+      var take=[], totalPts=0;
+      while(pendingUploads.length && (force || !take.length || totalPts < limit)){
+        var entry = pendingUploads.shift();
+        take.push(entry);
+        var count = (entry.points&&entry.points.length)||0;
+        totalPts += count;
+        queuedPointCount -= count;
+        if(!force && totalPts >= limit){ break; }
+      }
+      if(queuedPointCount < 0) queuedPointCount = 0;
+      var payload={points:[],datasets:[]};
+      take.forEach(function(entry){
+        (entry.points||[]).forEach(function(p){
+          payload.points.push({lat:p.lat, lon:p.lon, dep:p.dep, dataset_id:p.dataset_id||null});
+        });
+        if(entry.meta){ payload.datasets.push({id:entry.meta.id, payload:entry.meta}); }
+      });
+      var batchLabel = take.length===1 ? (take[0].label||'dataset') : take.length+' files';
+      if(!payload.points.length && !payload.datasets.length){
+        take.forEach(function(entry){ if(entry.keys){ entry.keys.forEach(function(k){ pendingKeyMirror.delete(k); }); } });
+        return Promise.resolve();
+      }
+      return sendBathyPayload(payload, batchLabel).then(function(res){
+        take.forEach(function(entry){
+          integrateBathy(entry.points, entry.meta, entry.keys);
+          if(entry.keys){ entry.keys.forEach(function(k){ pendingKeyMirror.delete(k); }); }
+        });
+        renderDatasets();
+        return res;
+      }).catch(function(err){
+        take.forEach(function(entry){ if(entry.keys){ entry.keys.forEach(function(k){ pendingKeyMirror.delete(k); }); } });
+        throw err;
+      });
+    }
+
+    function queueBathyEntry(entry, forceFlush){
+      entry = entry || {points:[], keys:[]};
+      pendingUploads.push(entry);
+      queuedPointCount += (entry.points&&entry.points.length)||0;
+      if(forceFlush || queuedPointCount >= APPEND_BATCH_LIMIT){
+        return flushBathyQueue(!!forceFlush);
+      }
+      return Promise.resolve();
     }
 
     function afterEnumerate(){
@@ -344,9 +394,14 @@
 
       (function nextTask(idx){
         if(idx>=tasks.length){
-          setOverall(total,total);
-          renderDatasets();
-          S('Import finished.');
+          flushBathyQueue(true).then(function(){
+            setOverall(total,total);
+            renderDatasets();
+            S('Import finished.');
+          }).catch(function(err){
+            console.error('Import failed', err);
+            S('Import failed: '+err.message);
+          });
           return;
         }
         var task = tasks[idx];
@@ -361,11 +416,9 @@
           }
           var meta=createDatasetMeta(task.label, parsed.summary, filtered.points);
           if(meta){ meta.pointCount = filtered.points.length; }
-          return appendChunk(filtered.points, meta, task.label).then(function(){
-            integrateBathy(filtered.points, meta, filtered.keys);
+          return queueBathyEntry({points:filtered.points, keys:filtered.keys, meta:meta, label:task.label}).then(function(){
             done++;
             setOverall(done,total);
-            renderDatasets();
           });
         }).catch(function(err){
           console.error('Import failed', err);
@@ -385,6 +438,9 @@
     ensureBathyStore();
     db.bathy.points=[]; db.bathy.datasets=[];
     rawAll=[]; existingKeys.clear();
+    pendingUploads.length = 0;
+    queuedPointCount = 0;
+    pendingKeyMirror.clear();
     updateLiveBathyCache(); clearHeatLayer();
     currentPoints=[]; setBathyTotal(0);
     cacheLocalDb();
