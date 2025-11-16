@@ -182,16 +182,8 @@
     if(m.dragging && typeof m.dragging.enable === 'function'){ m.dragging.enable(); }
     m.__skipNextClick = false;
 
-    m.on('mousedown touchstart pointerdown', function(){
-      if(map && map.dragging){ try{ map.dragging.disable(); }catch(_){ } }
-    });
-    m.on('mouseup touchend pointerup', function(){
-      if(map && map.dragging){ try{ map.dragging.enable(); }catch(_){ } }
-    });
-
     m.on('dragstart',function(){
       m.__skipNextClick = true;
-      if(map && map.dragging){ try{ map.dragging.disable(); }catch(_){ } }
       if(useCluster && cluster){ try{ cluster.removeLayer(m);}catch(_){ } m.addTo(map); }
     });
     m.on('drag',function(ev){
@@ -213,7 +205,6 @@
       }
     });
     m.on('dragend',function(ev){
-      if(map && map.dragging){ try{ map.dragging.enable(); }catch(_){ } }
       if(useCluster && cluster){ try{ map.removeLayer(m);}catch(_){ } cluster.addLayer(m); }
       var ll=ev.target.getLatLng();
       if(type==='stek'){
