@@ -1,6 +1,6 @@
 # Vis Lokaties
 
-The Vis Lokaties toolkit now runs as a static HTML/CSS/JS front-end plus a lightweight PHP API so it works on XAMPP and on almost any external hosting plan that offers PHP + MySQL. The installer provisions the database, grants permissions, creates the `kv` table, seeds the default JSON payload and writes `api/config.php`, so every deployment can repair itself as long as you can temporarily supply MySQL admin credentials.
+The Vis Lokaties toolkit now runs as a static HTML/CSS/JS front-end plus a lightweight PHP API so it works on XAMPP and on almost any external hosting plan that offers PHP + MySQL. The installer provisions the database, grants permissions, seeds all domain tables (`waters`, `steks`, `spots`, `bathy_points`, `bathy_datasets`, `settings`, legacy `kv`) and writes `api/config.php`, so every deployment can repair itself as long as you can temporarily supply MySQL admin credentials.
 
 ## Repository layout
 - `index.html` – user interface and Leaflet map
@@ -31,7 +31,7 @@ The Vis Lokaties toolkit now runs as a static HTML/CSS/JS front-end plus a light
 | **Clean-up & export** | Export all data, import GeoJSON, save/load/reset browser snapshots, and download standalone HTML bundles (with or without embedded JSON). |
 | **GPS & navigation** | Start or stop live GPS logging to show latitude, longitude, accuracy, speed and bearing in the floating info panel. |
 
-Status updates land in the footer, together with the mouse lat/lon, zoom level and app version (from `version.json`). Every edit (waters, swims, rigs, bathy, settings) is pushed to MySQL through `api/db.php` so the database always stays authoritative.
+Status updates land in the footer, together with the mouse lat/lon, zoom level and app version (from `version.json`). Every edit (waters, swims, rigs, bathy, settings) is pushed to MySQL through `api/db.php` so the database always stays authoritative. On each page load the API confirms that the database and all tables exist and silently re-creates them when something is missing.
 
 ## Installing on XAMPP
 1. Start **Apache** and **MySQL** inside the XAMPP Control Panel.
@@ -41,7 +41,7 @@ Status updates land in the footer, together with the mouse lat/lon, zoom level a
    - The database name (default `vislokaties`).
    - A new app user + password.
    - The host value that MySQL expects (use `localhost`, `127.0.0.1` or `::1` – match whatever host your MySQL grants target).
-4. The installer logs in with the admin account, creates the database and user, grants privileges, verifies the `kv` table schema, writes `api/config.php` and seeds the default JSON.
+4. The installer logs in with the admin account, creates the database and user, grants privileges, verifies the entire schema (waters, steks, spots, Deeper import tables, settings, legacy `kv`), writes `api/config.php` and seeds the default records.
 5. Visit [http://localhost/vis-lokaties/](http://localhost/vis-lokaties/) and start working. All edits are now persisted inside MySQL.
 
 Always open the site via `http://localhost/...` on XAMPP so every `fetch` call to `api/db.php` resolves correctly.
@@ -54,10 +54,10 @@ Always open the site via `http://localhost/...` on XAMPP so every `fetch` call t
 5. Ensure PHP 8 + `mysqli` are enabled and that requests to `api/` are allowed. After that you can use the same URLs as on XAMPP.
 
 ## Runtime architecture
-- The front-end performs `fetch` requests against `api/db.php` to pull/push the entire JSON blob (`waters`, `steks`, `rigs`, `bathy`, `settings`).
+- The front-end performs `fetch` requests against `api/db.php`, which now splits the JSON payload across normalized tables (`waters`, `steks`, `spots`, `bathy_points`, `bathy_datasets`, `settings`) before serving the combined document back to the browser.
 - `api/install.php` uses the same bootstrapper as `db.php` but adds database/user provisioning plus `config.php` creation when needed.
-- `api/bootstrap.php` reads `config.php` (or environment variables), opens the MySQL connection, ensures the `kv` table exists and validates its schema before returning data.
-- On the first run the bootstrapper seeds the default payload. Every interaction in the UI triggers `saveDB()` → `pushDbToServer()`, so MySQL stays synced.
+- `api/bootstrap.php` reads `config.php` (or environment variables), opens the MySQL connection, creates the database if it is missing and verifies every table that the UI depends on (including the Deeper import storage and the legacy `kv` table for migrations).
+- On the first run the bootstrapper seeds the default payload (either from the new tables or by migrating the legacy `kv` snapshot). Every interaction in the UI triggers `saveDB()` → `pushDbToServer()`, so MySQL stays synced.
 
 ## Versioning
 - `VERSION` and `version.json` contain the current release (`v0.0.0`). Always update both when you bump the version.

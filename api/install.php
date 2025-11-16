@@ -67,9 +67,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $appConnectHost = resolveAppConnectHost($input);
             $appConn = new mysqli($appConnectHost, $input['app_user'], $input['app_password'], $input['database'], (int) $input['admin_port']);
             $appConn->set_charset('utf8mb4');
-            ensureStorageTable($appConn);
+            ensureAppSchema($appConn);
             $status['table_ready'] = true;
-            $status['messages'][] = 'kv-tabel is aanwezig en juist.';
+            $status['messages'][] = 'Alle benodigde tabellen zijn gecontroleerd.';
 
             $configTarget = __DIR__ . '/config.php';
             $configData = [
