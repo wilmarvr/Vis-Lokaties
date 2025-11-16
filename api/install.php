@@ -6,7 +6,7 @@ require_once __DIR__ . '/bootstrap.php';
 mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 
 $defaults = [
-    'admin_host' => '127.0.0.1',
+    'admin_host' => 'localhost',
     'admin_port' => '3306',
     'admin_user' => 'root',
     'admin_password' => '',
@@ -64,7 +64,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $admin->query('FLUSH PRIVILEGES');
             $status['messages'][] = 'Rechten toegekend.';
 
-            $appConn = new mysqli($input['admin_host'], $input['app_user'], $input['app_password'], $input['database'], (int) $input['admin_port']);
+            $appConnectHost = resolveAppConnectHost($input);
+            $appConn = new mysqli($appConnectHost, $input['app_user'], $input['app_password'], $input['database'], (int) $input['admin_port']);
             $appConn->set_charset('utf8mb4');
             ensureStorageTable($appConn);
             $status['table_ready'] = true;
@@ -72,7 +73,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $configTarget = __DIR__ . '/config.php';
             $configData = [
-                'host' => $input['admin_host'],
+                'host' => $appConnectHost,
                 'port' => (int) $input['admin_port'],
                 'user' => $input['app_user'],
                 'password' => $input['app_password'],
@@ -99,8 +100,19 @@ function e(string $value): string
     return htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 }
 
+function resolveAppConnectHost(array $input): string
+{
+    $loopbackHosts = ['localhost', '127.0.0.1', '::1'];
+    if (isset($input['app_host']) && in_array($input['app_host'], $loopbackHosts, true)) {
+        return $input['app_host'];
+    }
+
+    return $input['admin_host'];
+}
+
+$previewHost = resolveAppConnectHost($input);
 $configPreview = "<?php\nreturn " . var_export([
-    'host' => $input['admin_host'],
+    'host' => $previewHost,
     'port' => (int) $input['admin_port'],
     'user' => $input['app_user'],
     'password' => $input['app_password'],

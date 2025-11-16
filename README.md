@@ -44,12 +44,14 @@ mutaties (wateren, stekken, rigs, bathy, settings) worden direct naar MySQL gepu
 4. De installer logt in met het admin-account, maakt database en gebruiker, kent rechten toe, zorgt dat de `kv`-tabel bestaat,
 schrijft `api/config.php` en seed de default dataset.
 5. Navigeer naar [http://localhost/vis-lokaties/](http://localhost/vis-lokaties/). Alle mutaties worden nu direct in MySQL opgeslagen.
+> **Tip:** Het veld “Applicatie host” bepaalt vanaf welke host MySQL jouw app laat verbinden. Vul hier `localhost`, `127.0.0.1` of `::1` in op XAMPP; de installer schrijft diezelfde waarde naar `config.php` zodat MySQL geen `Access denied` geeft doordat `localhost` en `127.0.0.1` anders worden behandeld.
+
 Start altijd via `http://localhost/...` zodat fetches naar `api/db.php` correct resolven.
 
 ## Externe hosting
 1. Upload de volledige inhoud (inclusief `api/`, `css/`, `js/`, `index.html`, `install.php` en `version.json`) naar de document-root van je host (FTP/SFTP/git deploy).
 2. Voer `install.php` (of direct `api/install.php`) uit via de browser. Op managed hosting heb je vaak phpMyAdmin-gegevens waarmee je tijdelijk als admin kunt inloggen; de installer doet de rest (database, gebruiker, `kv`-tabel, config-bestand).
-3. Kun je geen admin-credentials krijgen? Maak dan handmatig een database en gebruiker in het hostingpaneel en vul die in `api/config.php`. De app zorgt zelf dat de tabellen correct blijven.
+3. Kun je geen admin-credentials krijgen? Maak dan handmatig een database en gebruiker in het hostingpaneel en vul die in `api/config.php`. Zet “Applicatie host” gelijk aan het hostpatroon dat je in het paneel hebt ingesteld (bijvoorbeeld `%`, `localhost` of de servernaam) zodat de installer dezelfde waarde voor de verbindingshost gebruikt.
 4. Eventueel kun je environment-variabelen (`DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`) gebruiken als jouw host dat ondersteunt; `config.php` is dan optioneel.
 5. Zorg dat PHP 8 + `mysqli` draait en dat `api/` requests niet worden geblokkeerd. Daarna kun je dezelfde URL-structuur als lokaal aanhouden.
 
