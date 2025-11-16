@@ -14,25 +14,56 @@
   function patchTarget(target){
     if(!target || typeof target.addEventListener !== 'function' || target.__lvPatched){ return; }
     var _add = target.addEventListener;
-    var patched = function(type, listener, options){
-      if(type === 'touchleave' && fallbackLeave){
+    target.addEventListener = function(type, listener, options){
+      if(type === 'touchleave' && !supportsTouchleave){
+        if(!fallbackLeave){ return; }
         type = fallbackLeave;
       }
       try { return _add.call(this, type, listener, options); }
       catch(e){
-        if(type === 'touchleave' || (!supportsTouchleave && fallbackLeave)){
-          try { return _add.call(this, fallbackLeave || 'mouseleave', listener, options); }
+        if(type === 'touchleave' && fallbackLeave){
+          try { return _add.call(this, fallbackLeave, listener, options); }
           catch(_){ return; }
         }
         throw e;
       }
     };
-    patched.__lvPatched = true;
-    target.addEventListener = patched;
+    target.__lvPatched = true;
   }
-  if(window.EventTarget && window.EventTarget.prototype){ patchTarget(window.EventTarget.prototype); }
-  patchTarget(window);
-  patchTarget(document);
+  [
+    window.EventTarget && window.EventTarget.prototype,
+    window.Element && window.Element.prototype,
+    window.HTMLElement && window.HTMLElement.prototype,
+    window.Document && window.Document.prototype,
+    window,
+    document
+  ].forEach(function(target){ patchTarget(target); });
+})();
+
+(function(){
+  if(typeof MouseEvent === 'undefined'){ return; }
+  function define(name, getter){
+    try {
+      Object.defineProperty(MouseEvent.prototype, name, {
+        configurable:true,
+        get:getter,
+        set:function(){},
+      });
+    } catch(_){ /* ignore – browser may not allow overriding */ }
+  }
+  define('mozPressure', function(){
+    if(typeof this.pressure === 'number'){ return this.pressure; }
+    if(this.pointerType && typeof this.pointerType === 'string'){
+      return this.pointerType === 'touch' ? 0.5 : 0;
+    }
+    return 0;
+  });
+  define('mozInputSource', function(){
+    var map = {mouse:1, pen:2, touch:4};
+    if(this.pointerType && map[this.pointerType]){ return map[this.pointerType]; }
+    if(typeof this.button === 'number'){ return this.button === -1 ? 0 : 1; }
+    return 0;
+  });
 })();
 
 // --- Vroeg: no-ops zodat whenReady-callbacks nooit breken

@@ -20,6 +20,12 @@
   function setOverall(done,total){ var pct=Math.round((done/Math.max(1,total))*100); if(fImpCount) fImpCount.textContent=done+'/'+total; if(fImpPct) fImpPct.textContent=pct+'%'; if(fImpBar) fImpBar.style.width=pct+'%'; }
 
   if(!db.bathy) db.bathy={points:[],datasets:[]};
+  var persistToggle=document.getElementById('saveBathy');
+  if(persistToggle){
+    persistToggle.checked=true;
+    persistToggle.disabled=true;
+    persistToggle.title='Bathymetry is stored directly in MySQL now.';
+  }
   var datasetTable=document.getElementById('datasetTable');
   var datasetBody=datasetTable?datasetTable.querySelector('tbody'):null;
   function renderDatasets(){
@@ -205,10 +211,23 @@
     return {points:out, raw:rawPts, summary:summary};
   }
 
+  function persistBathy(message){
+    var fn=(typeof window.saveDBImmediate==='function')?window.saveDBImmediate:window.saveDB;
+    if(typeof fn!=='function'){ return; }
+    var res;
+    try{ res=fn(); }
+    catch(err){ console.error('Bathymetry save failed', err); S('Bathymetry save failed: '+err.message); return; }
+    if(res && typeof res.then==='function'){
+      res.then(function(){ if(message) S(message); })
+        .catch(function(err){ console.error('Bathymetry save failed', err); S('Bathymetry save failed: '+err.message); });
+    } else if(message){
+      S(message);
+    }
+  }
+
   function handleFiles(files){
     if(!files.length){ S('No files selected.'); return; }
     S('Preparing: unpacking ZIPs and gathering CSV files…');
-    var saveToDB = !!document.getElementById('saveBathy').checked;
     var rawAccumulator=[], seen=new Set(), tasks=[], q=[], done=0, total=0, pendingZips=0, datasetCounter=0;
 
     for(var i=0;i<files.length;i++){
@@ -267,7 +286,7 @@
       (function nextTask(idx){
         if(idx>=tasks.length){
           setOverall(total,total);
-          if(saveToDB && rawAccumulator.length){
+          if(rawAccumulator.length){
             ensureBathyStore();
             var seenDB=new Set();
             for(var i=0;i<(db.bathy.points||[]).length;i++){
@@ -280,8 +299,8 @@
             });
             setBathyTotal(db.bathy.points.length);
             renderDatasets();
-            saveDB();
-            S('Bathymetry saved to database.');
+            S('Saving bathymetry to database…');
+            persistBathy('Bathymetry saved to database.');
           }
           refreshHeatFromState();
           renderDatasets();
@@ -314,10 +333,10 @@
   document.getElementById('btn-clear-bathy').addEventListener('click', function(){
     if(!confirm('Erase all bathymetry from the database?')) return;
     db.bathy.points=[]; db.bathy.datasets=[];
-    saveDB();
     rawAll=[]; updateLiveBathyCache(); clearHeatLayer();
     currentPoints=[]; setBathyTotal(0);
-    S('Stored bathymetry removed.');
+    S('Saving bathymetry to database…');
+    persistBathy('Stored bathymetry removed.');
     renderDatasets();
   });
 

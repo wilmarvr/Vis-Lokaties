@@ -157,9 +157,18 @@
   }
 
   window.saveDB = function saveDB(){
-    if(saveTimer) clearTimeout(saveTimer);
-    saveTimer = setTimeout(function(){ pushDbToServer(); }, 400);
     cacheBrowserSnapshot();
+    if(saveTimer) clearTimeout(saveTimer);
+    saveTimer = setTimeout(function(){
+      saveTimer = null;
+      pushDbToServer();
+    }, 400);
+  };
+
+  window.saveDBImmediate = function saveDBImmediate(){
+    cacheBrowserSnapshot();
+    if(saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
+    return pushDbToServer();
   };
 
   window.syncFromServer = function syncFromServer(){

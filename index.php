@@ -79,7 +79,7 @@ try {
       <button id="btn-import-dir">📂 Import directory</button><br>
       <input id="fileDeeper" type="file" accept=".csv,.zip" multiple style="display:none">
       <input id="dirDeeper" type="file" webkitdirectory directory multiple style="display:none">
-      <label><input type="checkbox" id="saveBathy" checked> Persist bathymetry in DB</label><br>
+      <label class="muted" title="Bathymetry is stored in MySQL immediately now."><input type="checkbox" id="saveBathy" checked disabled> Bathymetry is saved directly in the DB</label><br>
       <div class="progress"><div id="impBarAll" class="bar"></div></div>
       <span id="impCount">0/0</span> | <span id="impPctAll">0%</span>
       <pre id="queue" style="font-size:11px;max-height:80px;overflow:auto;"></pre>
