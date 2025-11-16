@@ -341,64 +341,6 @@
     }).catch(function(){ wxOut.textContent='Weather request failed.'; });
   });
 
-  function scoreSpot(lat, lon, swim){
-    var pts=(db.bathy&&db.bathy.points)||[];
-    var depth = interpIDW(lat,lon,pts,80,16);
-    if(!isFinite(depth)) depth = 4;
-    var depthScore = (depth>=2 && depth<=8) ? 4 : Math.max(-6, 4-Math.abs(depth-5));
-    var grad = 0;
-    var offsets=[5,12,18];
-    offsets.forEach(function(off){
-      var dLat = lat + off/111320;
-      var dDepth = interpIDW(dLat,lon,pts,80,16);
-      if(isFinite(dDepth)) grad += Math.abs(dDepth-depth)/off;
-    });
-    var d = distM({lat:lat,lon:lon},{lat:swim.lat,lon:swim.lng});
-    var targetMin=20, targetMax=60;
-    var distScore = (d<targetMin)? (d-targetMin) : (d>targetMax? (targetMax-d) : 2.0);
-    var nearPenalty = 0;
-    (db.rigs||[]).forEach(function(r){ var dd=distM({lat:lat,lon:lon},{lat:r.lat,lon:r.lng}); if(dd<12) nearPenalty -= (12-dd)*0.2; });
-    return depthScore*1.8 + grad*2.2 + distScore*1.3 + nearPenalty;
-  }
-  document.getElementById('btnAutoRigs').addEventListener('click', function(){
-    var b=map.getBounds();
-    var added=0;
-    (db.steks||[]).forEach(function(s){
-      if(!b.contains([s.lat,s.lng])) return;
-      var candidates=[];
-      var radii=[22,36,52];
-      var bearings=[0,45,90,135,180,225,270,315];
-      radii.forEach(function(rm){
-        var deg=rm/111320;
-        bearings.forEach(function(br){
-          var rad=br*Math.PI/180;
-          var lat = s.lat + (Math.cos(rad)*deg);
-          var lon = s.lng + (Math.sin(rad)*deg)*Math.cos(s.lat*Math.PI/180);
-          var wid = nearestWaterIdForLatLng(lat, lon);
-          if(s.waterId && wid && wid!==s.waterId) return;
-          if(!b.contains([lat,lon])) return;
-          var sc = scoreSpot(lat,lon,s);
-          candidates.push({lat:lat,lng:lon,score:sc});
-        });
-      });
-      if(!candidates.length) return;
-      candidates.sort(function(a,b){return b.score-a.score;});
-      var picked=[];
-      for(var i=0;i<candidates.length && picked.length<2;i++){
-        var ok=true;
-        for(var j=0;j<picked.length;j++){
-          if(distM({lat:candidates[i].lat,lon:candidates[i].lng},{lat:picked[j].lat,lon:picked[j].lng})<18){ ok=false; break; }
-        }
-        if(ok) picked.push(candidates[i]);
-      }
-      picked.forEach(function(p,k){
-        db.rigs.push({id:uid('rig'),name:'Rig '+(k+1),lat:p.lat,lng:p.lng,stekId:s.id,waterId:s.waterId||nearestWaterIdForLatLng(p.lat,p.lng)||null});
-        added++;
-      });
-    });
-    if(added){ saveDB(); renderAll(); S('Auto-rigs placed: '+added+' new rig spots.'); } else { S('No candidates found. Zoom in or import more bathymetry.'); }
-  });
-
   (function dedupeIds(){ const seen=new Set(); document.querySelectorAll('[id]').forEach(function(el){ if(!el.id) return; if(seen.has(el.id)) el.remove(); else seen.add(el.id); }); })();
 
   S('Ready.');

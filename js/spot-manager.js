@@ -127,35 +127,6 @@
     return m;
   }
 
-  var clickAddMode=null;
-  var badge=document.getElementById('clickModeBadge');
-  function setClickMode(mode){
-    clickAddMode=mode;
-    map.getContainer().style.cursor = mode? 'crosshair' : '';
-    if(badge){ badge.style.display = mode ? 'inline-block' : 'none'; }
-    if(!mode){ S('Ready.'); return; }
-    if(mode==='stek'){ S('Click the map to add a swim. Press Esc to cancel.'); }
-    if(mode==='rig'){ S('Click the map to add a rig. Press Esc to cancel.'); }
-  }
-  window.setClickMode = setClickMode;
-  document.addEventListener('keydown', function(e){ if(e.key==='Escape' && clickAddMode){ setClickMode(null); }});
-  document.getElementById('btn-add-stek').addEventListener('click', function(){ setClickMode('stek'); });
-  document.getElementById('btn-add-rig').addEventListener('click', function(){ setClickMode('rig'); });
-  map.on('click', function(ev){
-    if(!clickAddMode) return;
-    var wId = nearestWaterIdForLatLng(ev.latlng.lat, ev.latlng.lng);
-    if(clickAddMode==='stek'){
-      db.steks.push({id:uid('stek'),name:'Swim',lat:ev.latlng.lat,lng:ev.latlng.lng,waterId:wId||null});
-      S('Swim added '+(wId?'and linked to water.':'(no water found yet).'));
-    }else{
-      db.rigs.push({id:uid('rig'),name:'Rig',lat:ev.latlng.lat,lng:ev.latlng.lng,stekId:null,waterId:wId||null});
-      S('Rig added '+(wId?'and linked to water.':'(no water found). Link it later via the overview.'));
-    }
-    saveDB();
-    rerender();
-    setClickMode(null);
-  });
-
   window.renderAll = function(){
     if(!map || !map._loaded) { map.whenReady(window.renderAll); return; }
     purgeAllMarkers();

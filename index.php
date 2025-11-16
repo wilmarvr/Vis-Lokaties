@@ -49,13 +49,9 @@ try {
   <details open>
     <summary>📍 Spots</summary>
     <div>
-      <button id="btn-add-stek">➕ New swim (click map)</button>
-      <button id="btn-add-rig">🎯 New rig (click map)</button>
-      <span id="clickModeBadge" class="badge" style="display:none">click mode active</span><br>
       <label><input type="checkbox" id="useCluster"> Enable clustering</label><br>
       <label><input type="checkbox" id="showDistances" checked> Show swim ↔ rig distances</label><br>
       <button id="btnForceDragFix">⚙️ Disable clustering now</button>
-      <button id="btnAutoRigs">🤖 Auto-place rigs for visible swims</button>
     </div>
   </details>
 
