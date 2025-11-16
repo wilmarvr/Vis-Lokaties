@@ -144,6 +144,10 @@ try {
       <button id="btn-gen-contours">Generate contours</button>
       <button id="btn-clear-contours">Clear contours</button>
       <div class="muted" style="margin-top:4px">Uses DB bathymetry inside the viewport</div>
+      <div id="contourProgressWrap" class="contour-progress" style="display:none">
+        <div class="progress"><div id="contourProgressBar" class="bar"></div></div>
+        <div id="contourProgressText" class="muted">Idle</div>
+      </div>
     </div>
   </details>
 

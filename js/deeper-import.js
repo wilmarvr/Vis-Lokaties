@@ -55,6 +55,21 @@
   window.renderDatasets = renderDatasets;
 
   var heatLayer=null, rawAll=(db.bathy && Array.isArray(db.bathy.points))? db.bathy.points.slice() : [], currentPoints=[];
+  function updateLiveBathyCache(){
+    window.liveBathyPoints = rawAll.map(function(p){
+      var lat = Number(p.lat!=null?p.lat:p.latitude);
+      var lon = Number(p.lon!=null?p.lon:p.lng);
+      var dep = Number(p.dep!=null?p.dep:p.depth);
+      if(!Number.isFinite(lat)||!Number.isFinite(lon)||!Number.isFinite(dep)) return null;
+      return {
+        lat:lat,
+        lon:lon,
+        dep:dep,
+        dataset_id:p.dataset_id||p.datasetId||null
+      };
+    }).filter(function(p){ return !!p; });
+  }
+  updateLiveBathyCache();
   function setBathyTotal(n){ var el=document.getElementById('bathyTotal'); if(el) el.textContent=String(n||0); }
   function setHeatCount(n){ var el=document.getElementById('heatCount'); if(el) el.textContent=String(n||0); }
 
@@ -251,6 +266,7 @@
             S('Bathymetry saved to database.');
           }
           rawAll = rawAccumulator.length ? rawAccumulator.slice() : rawAll;
+          updateLiveBathyCache();
           applyHeatFromRaw();
           return;
         }
@@ -282,7 +298,7 @@
     if(!confirm('Erase all bathymetry from the database?')) return;
     db.bathy.points=[]; db.bathy.datasets=[];
     saveDB();
-    rawAll=[]; if(heatLayer){ map.removeLayer(heatLayer); heatLayer=null; }
+    rawAll=[]; updateLiveBathyCache(); if(heatLayer){ map.removeLayer(heatLayer); heatLayer=null; }
     currentPoints=[]; setBathyTotal(0); setHeatCount(0);
     S('Stored bathymetry removed.');
     renderDatasets();
@@ -294,6 +310,7 @@
     setBathyTotal((db.bathy && Array.isArray(db.bathy.points)) ? db.bathy.points.length : 0);
     if(db.bathy && Array.isArray(db.bathy.points) && db.bathy.points.length){
       rawAll = db.bathy.points.slice();
+      updateLiveBathyCache();
       applyHeatFromRaw();
     }
     renderDatasets();

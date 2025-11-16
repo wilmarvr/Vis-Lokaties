@@ -32,6 +32,10 @@ th{ background:#0f1a22; position:sticky; top:0; z-index:1; }
 .table-mini tbody tr:nth-child(odd){ background:#0b121a; }
 .progress{ width:100%; background:#081018; border-radius:6px; overflow:hidden; height:6px; }
 .bar{ height:6px; background:var(--accent); width:0%; transition:width .2s; }
+.contour-progress{ margin-top:6px; font-size:12px; }
+.contour-progress .progress{ height:8px; margin-bottom:4px; }
+.contour-progress.busy #contourProgressText{ color:#9ee2ff; }
+.contour-progress.done #contourProgressText{ color:#7bf1a8; }
 .dist-label{ background:rgba(10,10,10,.7); color:#7bf1a8; border:none; box-shadow:none; font-size:11px; padding:0 2px; }
 .sel{ filter:drop-shadow(0 0 3px #00e5ff); }
 .legend{ width:100%; height:12px; background:linear-gradient(to right,blue,cyan,green,yellow,orange,red); margin-top:4px; }

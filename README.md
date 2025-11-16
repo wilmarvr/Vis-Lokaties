@@ -27,7 +27,7 @@ The Vis Lokaties toolkit now runs through a PHP entry point (`index.php`) that r
 | **Deeper import & heatmap** | Import CSV/ZIP files or whole directories (for example from Deeper sonar logs), persist bathymetry inside MySQL, monitor the queue/progress bars, tune the heatmap radius/blur/min-max/inversion/clipping, review the per-file dataset list (with counts, depth ranges and timestamps) and wipe the heatmap or stored bathy points. |
 | **Weather & wind** | Fetch live weather or a specific day/hour via Open-Meteo, display the result textually, render a compass overlay and optionally draw wind arrows whose density you control. |
 | **Manage everything** | Tabbed tables for waters, swims and rigs so you can rename, relink or delete entries. Clicking a row zooms the map to the corresponding geometry. |
-| **Contours** | Generate contour lines from the stored bathymetry inside the current viewport (clipped to the samples you see, with adaptive spacing) or clear existing contour layers. |
+| **Contours** | Generate contour lines directly from the Deeper bathymetry (even freshly imported data) inside the current viewport, monitor the live progress bar while isolines are built, or clear existing contour layers. |
 | **Clean-up & export** | Export all data, import GeoJSON, save/load/reset browser snapshots, and download standalone HTML bundles (with or without embedded JSON). |
 | **GPS & navigation** | Start or stop live GPS logging to show latitude, longitude, accuracy, speed and bearing in the floating info panel. |
 

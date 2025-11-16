@@ -8,6 +8,15 @@
     var suggestion = selection.bestWater ? (' • suggested: ' + (nameOfWater(selection.bestWater.id) || selection.bestWater.id)) : '';
     I('Selection: ' + n + ' points' + suggestion + '.');
   }
+  function clearSelectionForMarker(marker){
+    if(!selection.points.size) return;
+    var ll=marker.getLatLng();
+    var key=ll.lat.toFixed(7)+','+ll.lng.toFixed(7);
+    if(selection.points.delete(key)){
+      if(marker._icon && marker._icon.classList){ marker._icon.classList.remove('sel'); }
+      updateSelInfo();
+    }
+  }
 
   var selectMode=false;
   var useCluster=false;
@@ -32,6 +41,7 @@
       stopAll(ev);
       try{ map.dragging.disable(); }catch(_){ }
       if(useCluster && window.cluster){ try{ window.cluster.removeLayer(m);}catch(_){ } m.addTo(map); }
+      clearSelectionForMarker(m);
     });
     m.on('drag',function(){ window.drawDistances(); });
     m.on('dragend',function(ev){
