@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Vis Lokaties v1.1.4-d</title>
+<title>Vis Lokaties v1.1.4-c</title>
 
 <!-- ====== FIX BLOK (vroeg inladen) ====== -->
 <script>
@@ -66,7 +66,7 @@ th{ background:#0f1a22; position:sticky; top:0; z-index:1; }
 .legend.inv{ background:linear-gradient(to right,red,orange,yellow,green,cyan,blue); }
 #gpsPanel{ position:absolute; bottom:66px; left:340px; background:#0e151d; color:var(--txt); border:1px solid #233; padding:6px 10px; border-radius:8px; display:none; z-index:20000; }
 
-/* Overzicht: stabiele horizontale scrollbar (geen overlap laatste kolom) */
+/* stabiele horizontale scrollbar (geen overlap laatste kolom) */
 #tab-waters, #tab-steks, #tab-rigs{ overflow:auto; max-width:100%; padding-bottom:14px; scrollbar-gutter: stable both-edges; }
 #tab-waters table, #tab-steks table, #tab-rigs table{ min-width:980px; margin-right:18px; }
 
@@ -81,14 +81,13 @@ th{ background:#0f1a22; position:sticky; top:0; z-index:1; }
 .leaflet-pane.labelsPane { pointer-events: none !important; z-index: 750 !important; }
 .dist-label, .leaflet-tooltip { pointer-events: none !important; }
 
-/* markers boven labels en ontvankelijk voor events */
-.leaflet-pane.markerPane  { z-index: 800 !important; pointer-events: auto !important; }
-.leaflet-marker-icon, .leaflet-marker-shadow { pointer-events: auto !important; }
+/* markers boven labels */
+.leaflet-pane.markerPane { z-index: 800 !important; }
 </style>
 </head>
 <body>
 <div id="toolbar">
-  <h3>🎣 Vis Lokaties v1.1.4-d</h3>
+  <h3>🎣 Vis Lokaties v1.1.4-c</h3>
 
   <div style="margin:4px 0 8px">
     Basemap:
@@ -109,7 +108,6 @@ th{ background:#0f1a22; position:sticky; top:0; z-index:1; }
       <label><input type="checkbox" id="useCluster"> Clustering</label><br>
       <label><input type="checkbox" id="showDistances" checked> Afstanden tonen</label><br>
       <button id="btnForceDragFix">⚙️ Drag-fix</button>
-      <button id="btnAutoRigs">🤖 2 rigs per zichtbare stek</button>
     </div>
   </details>
 
@@ -202,7 +200,6 @@ th{ background:#0f1a22; position:sticky; top:0; z-index:1; }
       <button id="btnLocalLoad">📤 Laden uit browser</button>
       <button id="btnLocalReset" class="btn danger">Reset browser data</button><br>
       <button id="btnSaveHtml">📄 Download HTML</button>
-      <button id="btnSaveHtmlWithData">📄 Download HTML (met data)</button>
     </div>
   </details>
 
@@ -240,9 +237,6 @@ th{ background:#0f1a22; position:sticky; top:0; z-index:1; }
 <script src="https://unpkg.com/jszip@3.10.1/dist/jszip.min.js"></script>
 <script src="https://unpkg.com/@turf/turf@6.5.0/turf.min.js"></script>
 
-<!-- (optioneel) snapshot container: wordt bij 'Download HTML (met data)' gevuld -->
-<script type="application/json" id="lv_db_snapshot">{}</script>
-
 <script>
 // ===== helpers / status =====
 function S(m){var el=document.getElementById("statusLine"); if(el) el.textContent=String(m||'');}
@@ -252,37 +246,10 @@ function uid(p){ return p+"_"+Math.random().toString(36).slice(2,9); }
 function distM(a,b){ var lat=(a.lat+b.lat)/2, kx=111320*Math.cos(lat*Math.PI/180), ky=110540; var dx=(a.lon-b.lon)*kx, dy=(a.lat-b.lat)*ky; return Math.sqrt(dx*dx+dy*dy); }
 function nameOfWater(id){ var w=db.waters.find(function(x){return x.id===id;}); return w? (w.name||w.id) : null; }
 
-// ===== kleur per stek =====
-function colorForStekId(id){
-  var h=0; for(var i=0;i<id.length;i++) h=(h*31 + id.charCodeAt(i))>>>0;
-  h = h % 360;
-  return { stroke:`hsl(${h} 85% 60%)`, fill:`hsl(${h} 85% 45%)` };
-}
-function coloredIcon(hexOrHsl, glyph){
-  var fg = encodeURIComponent(hexOrHsl);
-  var txt = glyph ? `<text x='12' y='15' font-size='12' text-anchor='middle' fill='white' font-family='sans-serif'>${glyph}</text>` : '';
-  var svg = `<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'>
-    <path d='M12 2c-3.3 0-6 2.7-6 6 0 4.5 6 12 6 12s6-7.5 6-12c0-3.3-2.7-6-6-6z' fill='${fg}' stroke='rgba(0,0,0,.45)' stroke-width='1.2'/>
-    ${txt}
-  </svg>`;
-  return L.icon({ iconUrl:'data:image/svg+xml;utf8,'+svg, iconSize:[24,24], iconAnchor:[12,24], tooltipAnchor:[0,-22] });
-}
-
-// ===== DB (zelfde key) + snapshot loader =====
+// ===== DB (zelfde key als 1.1.3/1.1.4) =====
 var DB_KEY="lv_db_main"; // NIET wijzigen
 var db={waters:[],steks:[],rigs:[],bathy:{points:[],datasets:[]},settings:{waterColor:"#33a1ff"}};
-// 1) snapshot uit <script id="lv_db_snapshot"> (als niet leeg)
-// 2) anders localStorage
-(function(){
-  try{
-    var snapEl=document.getElementById('lv_db_snapshot');
-    if(snapEl && snapEl.textContent && snapEl.textContent.trim() && snapEl.textContent.trim()!=='{}'){
-      db = JSON.parse(snapEl.textContent);
-    }else{
-      var raw=localStorage.getItem(DB_KEY); if(raw) db=JSON.parse(raw);
-    }
-  }catch(e){}
-})();
+try{var raw=localStorage.getItem(DB_KEY); if(raw) db=JSON.parse(raw);}catch(e){}
 normalizeDB();
 function saveDB(){try{localStorage.setItem(DB_KEY,JSON.stringify(db));}catch(e){}}
 function normalizeDB(){
@@ -297,7 +264,7 @@ function normalizeDB(){
 var map;
 (function initMap(){
   var mapEl=document.getElementById('mapContainer');
-  if(window.__VIS_MAP){ map=window.__VIS_MAP; } 
+  if(window.__VIS_MAP){ map=window.__VIS_MAP; }
   else {
     map=L.map(mapEl,{zoomControl:true,preferCanvas:true});
     window.__VIS_MAP=map;
@@ -327,8 +294,8 @@ map.whenReady(function(){
   map.getPane('heatPane').style.zIndex=510;
   map.getPane('isobandPane').style.zIndex=520;
   map.getPane('contourPane').style.zIndex=530;
-  map.getPane('markerPane').style.zIndex=800;  // markers boven labels
-  map.getPane('labelsPane').style.zIndex=750;  // labels onder markers
+  map.getPane('markerPane').style.zIndex=800;
+  map.getPane('labelsPane').style.zIndex=750;
   map.getPane('measurePane').style.zIndex=840;
 
   waterGroup=L.featureGroup([], {pane:'waterPane'}).addTo(map);
@@ -375,30 +342,24 @@ document.getElementById('btnForceDragFix').addEventListener('click',function(){u
 // ===== markers / drag =====
 var stekMarkers=new Map(), rigMarkers=new Map();
 function purgeAllMarkers(){
-  stekMarkers.forEach(function(m){try{if(useCluster && cluster){ cluster.removeLayer(m);} map.removeLayer(m);}catch(_){}}); 
-  rigMarkers.forEach(function(m){try{if(useCluster && cluster){ cluster.removeLayer(m);} map.removeLayer(m);}catch(_){}}); 
-  stekMarkers.clear(); rigMarkers.clear(); 
-  try{if(cluster&&map.hasLayer(cluster)){cluster.clearLayers(); map.removeLayer(cluster);}}catch(_){} 
-}
+  stekMarkers.forEach(function(m){try{if(useCluster && cluster){ cluster.removeLayer(m);} map.removeLayer(m);}catch(_){}});
+  rigMarkers.forEach(function(m){try{if(useCluster && cluster){ cluster.removeLayer(m);} map.removeLayer(m);}catch(_){}});
+  stekMarkers.clear(); rigMarkers.clear();
+  try{if(cluster&&map.hasLayer(cluster)){cluster.clearLayers(); map.removeLayer(cluster);}}catch(_){}}
 
 function attachMarker(m,type,id){
-  // altijd drag activeren
   if(m.dragging && typeof m.dragging.enable === 'function') { m.dragging.enable(); }
 
-  // kaart niet pannen tijdens slepen / down
-  function stopAll(ev){ if(ev && ev.originalEvent){ ev.originalEvent.stopPropagation(); } }
-  m.on('mousedown touchstart pointerdown', function(ev){ stopAll(ev); try{ map.dragging.disable(); }catch(_){} });
-  m.on('mouseup touchend pointerup',     function(ev){ stopAll(ev); try{ map.dragging.enable();  }catch(_){} });
+  m.on('mousedown touchstart pointerdown', function(){ try{ map.dragging.disable(); }catch(_){ } });
+  m.on('mouseup touchend pointerup',     function(){ try{ map.dragging.enable();  }catch(_){ } });
 
-  m.on('dragstart',function(ev){
-    stopAll(ev);
-    try{ map.dragging.disable(); }catch(_){}
+  m.on('dragstart',function(){
+    try{ map.dragging.disable(); }catch(_){ }
     if(useCluster && cluster){ try{ cluster.removeLayer(m);}catch(_){ } m.addTo(map); }
   });
   m.on('drag',function(){ drawDistances(); });
   m.on('dragend',function(ev){
-    stopAll(ev);
-    try{ map.dragging.enable(); }catch(_){}
+    try{ map.dragging.enable(); }catch(_){ }
     if(useCluster && cluster){ try{ map.removeLayer(m);}catch(_){ } cluster.addLayer(m); }
     var ll=ev.target.getLatLng();
     if(type==='stek'){
@@ -411,8 +372,6 @@ function attachMarker(m,type,id){
     }
     saveDB(); renderAll(); S(type+' verplaatst & gekoppeld.');
   });
-
-  // selectie (ongewijzigd)
   m.on('click',function(ev){
     if(!selectMode) return;
     ev.originalEvent.preventDefault();ev.originalEvent.stopPropagation();
@@ -424,22 +383,12 @@ function attachMarker(m,type,id){
   });
 }
 function makeStekMarker(s){
-  var c = colorForStekId(s.id);
-  var m=L.marker([s.lat,s.lng],{
-    draggable:true, pane:'markerPane', autoPan:true, autoPanPadding:[60,60],
-    riseOnHover:true, bubblingMouseEvents:false,
-    icon: coloredIcon(c.fill, 'S')
-  });
+  var m=L.marker([s.lat,s.lng],{draggable:true,pane:'markerPane',autoPan:true,autoPanPadding:[60,60],riseOnHover:true,bubblingMouseEvents:false});
   attachMarker(m,'stek',s.id); m.bindTooltip((s.name||"Stek"),{direction:'top'}); stekMarkers.set(s.id,m); return m;
 }
 function makeRigMarker(r){
   var s=db.steks.find(function(x){return x.id===r.stekId;});
-  var c = s ? colorForStekId(s.id) : {fill:'#888'};
-  var m=L.marker([r.lat,r.lng],{
-    draggable:true, pane:'markerPane', autoPan:true, autoPanPadding:[60,60],
-    riseOnHover:true, bubblingMouseEvents:false,
-    icon: coloredIcon(c.fill, 'R')
-  });
+  var m=L.marker([r.lat,r.lng],{draggable:true,pane:'markerPane',autoPan:true,autoPanPadding:[60,60],riseOnHover:true,bubblingMouseEvents:false});
   attachMarker(m,'rig',r.id); m.bindTooltip((r.name||"Rig")+(s? " • "+(s.name||s.id):""),{direction:'top'}); rigMarkers.set(r.id,m); return m;
 }
 
@@ -456,7 +405,7 @@ function nearestWaterIdForLatLng(lat, lng, edgeMaxMeters){
     var inside=false;
     try{ inside = turf.booleanPointInPolygon(pt, f); }catch(_){ inside=false; }
     var d=Infinity;
-    try{ var line = turf.polygonToLine(f); d = turf.pointToLineDistance(pt, line, {units:'meters'});}catch(_){}
+    try{ var line = turf.polygonToLine(f); d = turf.pointToLineDistance(pt, line, {units:'meters'});}catch(_){ }
     var better=false;
     if(inside && !best.inside) better=true;
     else if(inside && best.inside) better = d < best.dist - 1e-9;
@@ -542,7 +491,6 @@ window.renderAll = function(){
   if(contourLayer){ contourLayer.clearLayers(); }
   if(measureLayer){ measureLayer.clearLayers(); }
 
-  // waters
   (db.waters||[]).forEach(function(w){
     var color=db.settings.waterColor||"#33a1ff";
     var gj=L.geoJSON(w.geojson,{pane:'waterPane',interactive:true,style:function(){return {color:color,weight:2,fillOpacity:0.25};}});
@@ -558,7 +506,6 @@ window.renderAll = function(){
   });
   waterGroup.addTo(map);
 
-  // markers
   (db.steks||[]).forEach(function(s){ var m=makeStekMarker(s); if(useCluster) cluster.addLayer(m); else m.addTo(map); });
   (db.rigs ||[]).forEach(function(r){ var m=makeRigMarker(r); if(useCluster) cluster.addLayer(m); else m.addTo(map); });
 
@@ -575,15 +522,14 @@ function selectWater(id){
   });
 }
 
-// ====== CONNECT-LIJNEN + LABELS (gekleurde lijnen per stek) ======
+// ====== CONNECT-LIJNEN + LABELS ======
 window.drawDistances = function(){
   if(!measureLayer || !document.getElementById("showDistances").checked) { if(measureLayer) measureLayer.clearLayers(); return; }
   measureLayer.clearLayers();
   (db.steks||[]).forEach(function(s){
-    var col = colorForStekId(s.id).stroke;
     (db.rigs||[]).filter(function(r){return r.stekId===s.id;}).forEach(function(r){
       var d=distM({lat:s.lat,lon:s.lng},{lat:r.lat,lon:r.lng});
-      L.polyline([[s.lat,s.lng],[r.lat,r.lng]],{color:col,weight:3,opacity:0.9,pane:'measurePane',interactive:false}).addTo(measureLayer);
+      L.polyline([[s.lat,s.lng],[r.lat,r.lng]],{color:"#7bf1a8",weight:3,opacity:0.8,pane:'measurePane',interactive:false}).addTo(measureLayer);
       var mid=L.latLng((s.lat+r.lat)/2,(s.lng+r.lng)/2);
       L.tooltip({permanent:true,direction:"center",className:"dist-label",pane:'labelsPane',interactive:false})
         .setContent(String(Math.round(d))+" m").setLatLng(mid).addTo(measureLayer);
@@ -653,7 +599,6 @@ function buildOverview(){
   });
   trc.appendChild(rTable);
 
-  // events
   tw.querySelectorAll(".btnRenWater").forEach(function(b){ b.onclick=function(ev){ renameWater(ev.target.dataset.id); }; });
   tw.querySelectorAll(".btnDelWater").forEach(function(b){ b.onclick=function(ev){ var id=ev.target.dataset.id; if(!confirm("Water verwijderen?")) return;
     db.waters=db.waters.filter(function(x){return x.id!==id;}); (db.steks||[]).forEach(function(s){ if(s.waterId===id) s.waterId=null; }); (db.rigs||[]).forEach(function(r){ if(r.waterId===id) r.waterId=null; }); saveDB(); renderAll(); }; });
@@ -670,8 +615,8 @@ function buildOverview(){
         var f=(w.geojson && w.geojson.features && w.geojson.features[0])?w.geojson.features[0]:null;
         var d=1e12,inside=false;
         if(f){
-          try{inside=turf.booleanPointInPolygon(pt,f);}catch(_){}
-          try{var line=turf.polygonToLine(f); d=turf.pointToLineDistance(pt,line,{units:'meters'});}catch(_){}
+          try{inside=turf.booleanPointInPolygon(pt,f);}catch(_){ }
+          try{var line=turf.polygonToLine(f); d=turf.pointToLineDistance(pt,line,{units:'meters'});}catch(_){ }
         }
         return {id:w.id, text:(w.name||w.id)+(inside?' (binnen)':'')+' • '+Math.round(d)+' m', d:d, inside:inside};
       }).sort(function(a,b){ return (a.inside===b.inside)?(a.d-b.d):(a.inside?-1:1); });
@@ -705,8 +650,8 @@ function buildOverview(){
         var f=(w.geojson && w.geojson.features && w.geojson.features[0])?w.geojson.features[0]:null;
         var d=1e12,inside=false;
         if(f){
-          try{inside=turf.booleanPointInPolygon(pt,f);}catch(_){}
-          try{var line=turf.polygonToLine(f); d=turf.pointToLineDistance(pt,line,{units:'meters'});}catch(_){}
+          try{inside=turf.booleanPointInPolygon(pt,f);}catch(_){ }
+          try{var line=turf.polygonToLine(f); d=turf.pointToLineDistance(pt,line,{units:'meters'});}catch(_){ }
         }
         return {id:w.id, text:(w.name||w.id)+(inside?' (binnen)':'')+' • '+Math.round(d)+' m', d:d, inside:inside};
       }).sort(function(a,b){ return (a.inside===b.inside)?(a.d-b.d):(a.inside?-1:1); });
@@ -716,14 +661,12 @@ function buildOverview(){
   });
 }
 
-// ====== rename/remove ======
 function renameWater(id){ var w=(db.waters||[]).find(function(x){return x.id===id;}); if(!w) return; var nv=prompt("Nieuwe waternaam:", w.name||""); if(nv==null) return; w.name=String(nv).trim(); if(w.geojson&&w.geojson.features){ w.geojson.features.forEach(function(f){if(!f.properties) f.properties={}; f.properties.name=w.name; f.properties.id=w.id; f.properties.kind='water';}); } saveDB(); renderAll(); S("Water hernoemd."); }
 function renameStek(id){ var s=(db.steks||[]).find(function(x){return x.id===id;}); if(!s) return; var nv=prompt("Nieuwe steknaam:", s.name||""); if(nv==null) return; s.name=String(nv).trim(); saveDB(); renderAll(); S("Stek hernoemd."); }
 function renameRig(id){ var r=(db.rigs||[]).find(function(x){return x.id===id;}); if(!r) return; var nv=prompt("Nieuwe rigspotnaam:", r.name||""); if(nv==null) return; r.name=String(nv).trim(); saveDB(); renderAll(); }
 function removeStek(id){ db.steks=(db.steks||[]).filter(function(s){return s.id!==id;}); (db.rigs||[]).forEach(function(r){ if(r.stekId===id) r.stekId=null; }); saveDB(); renderAll(); }
 function removeRig(id){ db.rigs=(db.rigs||[]).filter(function(r){return r.id!==id;}); saveDB(); renderAll(); }
 
-// ====== Detectie OSM ======
 var OVERPASS="https://overpass-api.de/api/interpreter";
 function featuresTouchOrOverlap(a,b){ try{ if(turf.booleanIntersects(a,b)) return true; var eps=0.00001; var ab=turf.buffer(a, eps, {units:'kilometers'}); return turf.booleanIntersects(ab,b); }catch(_){ return false; } }
 function mergeTouchingPolys(features){
@@ -736,7 +679,7 @@ function mergeTouchingPolys(features){
         var bbA=turf.bbox(A), bbB=turf.bbox(B);
         if(bbA[2]<bbB[0]||bbB[2]<bbA[0]||bbA[3]<bbB[1]||bbB[3]<bbA[1]) continue;
         if(featuresTouchOrOverlap(A,B)){
-          var U=null; try{ U=turf.union(A,B); }catch(_){}
+          var U=null; try{ U=turf.union(A,B); }catch(_){ }
           if(U){ U.properties=Object.assign({},A.properties||{},B.properties||{}, {merged:true}); list.splice(j,1); list.splice(i,1,U); }
           changed=true; break outer;
         }
@@ -750,28 +693,14 @@ function mergeTouchingPolys(features){
   function wayMap(elements){var m=new Map();for(var i=0;i<elements.length;i++){var el=elements[i];if(el.type==='way')m.set(el.id,{nodes:el.nodes||[],tags:el.tags||{}});}return m;}
   function getCoordsOfWay(way,nmap){var c=[];for(var i=0;i<way.nodes.length;i++){var nid=way.nodes[i];var p=nmap.get(nid);if(!p)return null;c.push(p);}return c;}
   function isClosed(c){if(!c||c.length<4)return false;var a=c[0],b=c[c.length-1];return a[0]===b[0]&&a[1]===b[1];}
+  function stitchRings(list){var rings=[];var segs=list.map(function(a){return a.slice();});while(segs.length){var ring=segs.shift(),loop=true;while(loop){loop=false;for(var i=0;i<segs.length;i++){var s=segs[i],h=ring[0],t=ring[ring length???}
   function stitchRings(list){var rings=[];var segs=list.map(function(a){return a.slice();});while(segs.length){var ring=segs.shift(),loop=true;while(loop){loop=false;for(var i=0;i<segs.length;i++){var s=segs[i],h=ring[0],t=ring[ring.length-1],sh=s[0],st=s[s.length-1];if(t[0]===sh[0]&&t[1]===sh[1]){ring=ring.concat(s.slice(1));segs.splice(i,1);loop=true;break;}if(t[0]===st[0]&&t[1]===st[1]){ring=ring.concat(s.slice(0,-1).reverse());segs.splice(i,1);loop=true;break;}if(h[0]===st[0]&&h[1]===st[1]){ring=s.concat(ring.slice(1));segs.splice(i,1);loop=true;break;}if(h[0]===sh[0]&&h[1]===sh[1]){ring=s.slice(0,-1).reverse().concat(ring);segs.splice(i,1);loop=true;break;}}}if(ring.length&&(ring[0][0]!==ring[ring.length-1][0]||ring[0][1]!==ring[ring.length-1][1]))ring.push(ring[0]);if(ring.length>=4)rings.push(ring);}return rings;}
-  function relationToMP(rel,wmap,nmap){var outerWays=[],innerWays=[];for(var i=0;i<rel.members.length;i++){var m=rel.members[i];if(m.type!=='way')continue;var w=wmap.get(m.ref);if(!w)continue;var coords=getCoordsOfWay(w,nmap);if(!coords)continue;(m.role==='inner'?innerWays:outerWays).push(coords);}var outers=stitchRings(outerWays),inners=stitchRings(innerWays);if(!outers.length)return null;
-    var polys=outers.map(function(o){return[o];});
-    inners.forEach(function(inner){
-      var attached=false;
-      for(var k=0;k<polys.length;k++){
-        // simpele bbox-in bbox-check is niet voldoende; gebruik turf.booleanPointInPolygon op één inner-vertex:
-        try{
-          if(inner.length && inner[0]){
-            var inside = turf.booleanPointInPolygon(turf.point(inner[0]), {type:'Polygon',coordinates:polys[k]});
-            if(inside){ polys[k].push(inner); attached=true; break; }
-          }
-        }catch(_){}
-      }
-      if(!attached){ polys.push([inner]); } // fallback
-    });
+  function relationToMP(rel,wmap,nmap){var outerWays=[],innerWays=[];for(var i=0;i<rel.members.length;i++){var m=rel.members[i];if(m.type!=='way')continue;var w=wmap.get(m.ref);if(!w)continue;var coords=getCoordsOfWay(w,nmap);if(!coords)continue;(m.role==='inner'?innerWays:outerWays).push(coords);}var outers=stitchRings(outerWays),inners=stitchRings(innerWays);if(!outers.length)return null;function bbox(r){var minx=Infinity,miny=Infinity,maxx=-Infinity,maxy=Infinity*-1;for(var i=0;i<r.length;i++){var c=r[i];if(c[0]<minx)minx=c[0];if(c[0]>maxx)maxx=c[0];if(c[1]<miny)miny=c[1];if(c[1]>maxy)maxy=c[1];}return[minx,miny,maxx,maxy]}function inside(bi,bo){return bi[0]>=bo[0]-1e-10&&bi[2]<=bo[2]+1e-10&&bi[1]>=bo[1]-1e-10&&bi[3]<=bo[3]+1e-10}
+    var ouB=outers.map(bbox);var polys=outers.map(function(o){return[o];});
+    for(var j=0;j<inners.length;j++){var inner=inners[j];var bi=bbox(inner);var idx=-1;for(var k=0;k<outers.length;k++){if(inside(bi,ouB[k])){idx=k;break;}}if(idx>=0)polys[idx].push(inner);}
     return polys.length===1?{type:'Polygon',coordinates:polys[0]}:{type:'MultiPolygon',coordinates:polys.map(function(p){return[p];})};
   }
-  function overpassToGeoJSON(data){var elements=data.elements||[],nmap=nodeMap(elements),wmap=wayMap(elements),features=[];
-    for(var i=0;i<elements.length;i++){var el=elements[i];if(el.type==='way'){var way=wmap.get(el.id),coords=getCoordsOfWay(way,nmap);if(coords&&isClosed(coords)){features.push({type:'Feature',properties:{id:el.id,kind:'way',tags:el.tags||{}},geometry:{type:'Polygon',coordinates:[coords]}});}}}
-    for(var j=0;j<elements.length;j++){var el2=elements[j];if(el2.type==='relation'&&el2.tags&&(el2.tags.type==='multipolygon'||el2.tags.type==='boundary')){var geom=relationToMP(el2,wmap,nmap);if(geom){features.push({type:'Feature',properties:{id:el2.id,kind:'relation',tags:el2.tags||{}},geometry:geom});}}}
-    return{type:'FeatureCollection',features:features};}
+  function overpassToGeoJSON(data){var elements=data.elements||[],nmap=nodeMap(elements),wmap=wayMap(elements),features=[];for(var i=0;i<elements.length;i++){var el=elements[i];if(el.type==='way'){var way=wmap.get(el.id),coords=getCoordsOfWay(way,nmap);if(coords&&isClosed(coords)){features.push({type:'Feature',properties:{id:el.id,kind:'way',tags:el.tags||{}},geometry:{type:'Polygon',coordinates:[coords]}});}}}for(var j=0;j<elements.length;j++){var el2=elements[j];if(el2.type==='relation'&&el2.tags&&(el2.tags.type==='multipolygon'||el2.tags.type==='boundary')){var geom=relationToMP(el2,wmap,nmap);if(geom){features.push({type:'Feature',properties:{id:el2.id,kind:'relation',tags:el2.tags||{}},geometry:geom});}}}return{type:'FeatureCollection',features:features};}
   window.__overpassToGeoJSON=overpassToGeoJSON;
 })(window);
 
@@ -791,7 +720,7 @@ document.getElementById("btnDetectOSM").addEventListener('click', function(){
     (gj.features||[]).forEach(function(f){
       if(!f.geometry) return;
       if(f.geometry.type==="Polygon"||f.geometry.type==="MultiPolygon"){
-        try{ var c=turf.bboxClip(f,bb); if(c && c.geometry && c.geometry.coordinates && c.geometry.coordinates.length){ polys.push(c); } }catch(_){}
+        try{ var c=turf.bboxClip(f,bb); if(c && c.geometry && c.geometry.coordinates && c.geometry.coordinates.length){ polys.push(c); } }catch(_){ }
       }
     });
     if(!polys.length){ S("Geen OSM-water in beeld."); I("0 polygonen"); return; }
@@ -806,7 +735,6 @@ document.getElementById("btnDetectOSM").addEventListener('click', function(){
   }).catch(function(){ S("OSM: netwerkfout / rate-limit."); });
 });
 
-// Opslaan naar water
 document.getElementById("btnSaveAsWater").addEventListener('click', function(){
   var gj=null;
   if(selection.preview){ selection.preview.eachLayer(function(l){ try{ gj=l.toGeoJSON(); }catch(_){ } }); }
@@ -818,7 +746,7 @@ document.getElementById("btnSaveAsWater").addEventListener('click', function(){
   var name=(document.getElementById("detName").value||("Water "+new Date().toISOString().slice(0,16).replace('T',' '))).trim();
   saveWaterFeature(gj,name);
   if(selection.preview){ map.removeLayer(selection.preview); selection.preview=null; }
-  selection.points.clear(); selection.bestWater=null; 
+  selection.points.clear(); selection.bestWater=null;
 });
 function saveWaterFeature(feat,name){
   var id=uid("water"); var f=JSON.parse(JSON.stringify(feat));
@@ -828,7 +756,6 @@ function saveWaterFeature(feat,name){
   db.waters.push({id:id,name:name,geojson:fc}); saveDB(); renderAll(); S("Water aangemaakt: "+name);
 }
 
-// ====== Heatmap / Deeper import ======
 var hmRadius = document.getElementById("hmRadius"),
     hmBlur   = document.getElementById("hmBlur"),
     hmMin    = document.getElementById("hmMin"),
@@ -861,7 +788,7 @@ function scaleDepth(val,min,max,inv){
 }
 function buildHeat(points){
   if (!window.L || !L.heatLayer || !map || !map._loaded) { return; }
-  if(heatLayer){ try{ map.removeLayer(heatLayer); }catch(_){} }
+  if(heatLayer){ try{ map.removeLayer(heatLayer); }catch(_){ } }
   heatLayer = L.heatLayer(points, {radius: Number(hmRadius.value), blur: Number(hmBlur.value), pane:'heatPane'});
   map.addLayer(heatLayer);
   window.heatLayer = heatLayer;
@@ -894,19 +821,17 @@ function applyHeatFromRaw(){
   buildHeat(currentPoints);
 }
 
-// Import UI
 var btnFiles = document.getElementById("btn-import-files"),
     btnDir   = document.getElementById("btn-import-dir"),
     fileInp  = document.getElementById("fileDeeper"),
     dirInp   = document.getElementById("dirDeeper");
-btnFiles.addEventListener("click", function(){ try{ fileInp.value=null; }catch(_){} fileInp.click(); });
-btnDir  .addEventListener("click", function(){ try{ dirInp.value=null; }catch(_){} dirInp.click(); });
+btnFiles.addEventListener("click", function(){ try{ fileInp.value=null; }catch(_){ } fileInp.click(); });
+btnDir  .addEventListener("click", function(){ try{ dirInp.value=null; }catch(_){ } dirInp.click(); });
 fileInp.addEventListener("change", function(e){ handleFiles([].slice.call(e.target.files||[])); });
 dirInp .addEventListener("change", function(e){ handleFiles([].slice.call(e.target.files||[])); });
 
 var queueDiv=document.getElementById("queue"); function setQueue(names){ if(queueDiv) queueDiv.textContent = names.join("\n"); }
 
-// CSV parse + ZIP handling
 function parseCSV(text, seen){
   var lines = text.replace(/\r\n?/g,"\n").split("\n").filter(function(x){return x.trim().length>0;});
   if(lines.length<1) return {points:[], raw:[]};
@@ -973,7 +898,7 @@ function handleFiles(files){
               tasks.push({label:name+"::"+k, fetchText:function(){ return zf.async("text"); }});
             }
           });
-        }).catch(function(){ /* ignore */ })
+        }).catch(function(){})
           .finally(function(){ pendingZips--; if(pendingZips===0) afterEnumerate(); });
       }
     })(files[i]);
@@ -1041,7 +966,6 @@ function handleFiles(files){
   }
 }
 
-// Wis knoppen
 document.getElementById("btn-clear-heat").addEventListener("click", function(){
   if(heatLayer){ map.removeLayer(heatLayer); heatLayer=null; currentPoints=[]; setHeatCount(0); S("Heatmap gewist."); }
 });
@@ -1054,10 +978,8 @@ document.getElementById("btn-clear-bathy").addEventListener("click", function(){
   S("Bathymetrie uit DB gewist.");
 });
 
-// Auto-update bij kaartbeweging indien clip aan
 map.on("moveend", function(){ if(document.getElementById("hmClip").checked){ applyHeatFromRaw(); } });
 
-// Init heatmap indien DB data
 map.whenReady(function(){
   setBathyTotal((db.bathy && Array.isArray(db.bathy.points)) ? db.bathy.points.length : 0);
   if(db.bathy && Array.isArray(db.bathy.points) && db.bathy.points.length){
@@ -1066,7 +988,6 @@ map.whenReady(function(){
   }
 });
 
-// ====== Detectie eigen punten ======
 function pointsInViewport(maxTake){
   var b=map.getBounds(), pts=[];
   (db.steks||[]).forEach(function(s){ if(b.contains([s.lat,s.lng])) pts.push([s.lng,s.lat]); });
@@ -1081,8 +1002,8 @@ function polygonFromPtsLngLat(pts){
   var fc=turf.featureCollection(pts.map(function(c){return turf.point(c);}));
   var maxEdge=parseFloat(document.getElementById("detMaxEdge").value)||250;
   var poly=null;
-  try{ poly=turf.concave(fc,{maxEdge:maxEdge,units:'meters'});}catch(_){}
-  if(!poly){ try{ poly=turf.convex(fc);}catch(_){} }
+  try{ poly=turf.concave(fc,{maxEdge:maxEdge,units:'meters'});}catch(_){ }
+  if(!poly){ try{ poly=turf.convex(fc);}catch(_){ } }
   return poly;
 }
 document.getElementById("btnDetectViewport").addEventListener("click", function(){
@@ -1104,7 +1025,6 @@ document.getElementById("btnDetectFromPoints").addEventListener("click", functio
   I("Voorbeeld (selectie) klaar — klik ‘Opslaan’.");
 });
 
-// ====== Contouren ======
 function generateContours(){
   var pts=(db.bathy&&db.bathy.points)||[]; if(pts.length<5){ S("Te weinig dieptepunten voor contouren."); return; }
   var b=map.getBounds();
@@ -1116,7 +1036,7 @@ function generateContours(){
     var uMin=parseFloat(document.getElementById("hmMin").value), uMax=parseFloat(document.getElementById("hmMax").value);
     if(document.getElementById("hmFixed").checked){ vmin=0; vmax=20; }
     else { if(!isNaN(uMin)) vmin=uMin; if(!isNaN(uMax)) vmax=uMax; }
-  }catch(_){}
+  }catch(_){ }
   var levels=[]; for(var v=vmin; v<=vmax+1e-9; v+=step) levels.push(parseFloat(v.toFixed(3)));
 
   var degPerM=1/111320; var cellM=14; var cellDeg=cellM*degPerM;
@@ -1133,7 +1053,6 @@ function generateContours(){
 document.getElementById('btn-gen-contours').addEventListener('click', generateContours);
 document.getElementById('btn-clear-contours').addEventListener('click', function(){ contourLayer.clearLayers(); isobandLayer.clearLayers(); S("Contouren gewist."); });
 
-// ====== GPS ======
 var gpsWatchId = null;
 function startGPS(){
   if (!navigator.geolocation) { S("GPS niet beschikbaar."); return; }
@@ -1149,39 +1068,25 @@ function startGPS(){
     document.getElementById('gpsStatus').textContent = 'aan';
   }, function(){ stopGPS(); S("GPS: geen fix."); }, opts);
 }
-function stopGPS(){ if (gpsWatchId != null) { try{ navigator.geolocation.clearWatch(gpsWatchId); }catch(_){} gpsWatchId = null; } document.getElementById('gpsStatus').textContent = 'uit'; }
+function stopGPS(){ if (gpsWatchId != null) { try{ navigator.geolocation.clearWatch(gpsWatchId); }catch(_){ } gpsWatchId = null; } document.getElementById('gpsStatus').textContent = 'uit'; }
 document.getElementById('btnGps').addEventListener('click', function(){ if(gpsWatchId==null) startGPS(); else stopGPS(); });
 
-// ====== Local save/export ======
 document.getElementById('btnLocalSave').addEventListener('click', function(){ saveDB(); S('Data opgeslagen in browser.'); });
 document.getElementById('btnLocalLoad').addEventListener('click', function(){
   try{ var raw=localStorage.getItem(DB_KEY); if(raw){ db=JSON.parse(raw); normalizeDB(); renderAll(); S('Data geladen uit browser.'); } else { S('Geen data gevonden in browser.'); } }catch(e){ S('Laden mislukt.'); }
 });
 document.getElementById('btnLocalReset').addEventListener('click', function(){
   if(!confirm('Alle lokale data wissen?')) return;
-  try{ localStorage.removeItem(DB_KEY); }catch(_){}
+  try{ localStorage.removeItem(DB_KEY); }catch(_){ }
   db={waters:[],steks:[],rigs:[],bathy:{points:[],datasets:[]},settings:{waterColor:"#33a1ff"}};
   renderAll(); S('Lokale data gewist.');
 });
 document.getElementById('btnSaveHtml').addEventListener('click', function(){
   var src = document.documentElement.outerHTML;
   var blob = new Blob([src],{type:'text/html;charset=utf-8'});
-  var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='Vis Lokaties v1.1.4-d.html'; a.click(); setTimeout(function(){URL.revokeObjectURL(a.href)},1000);
-});
-// 🔥 Download inclusief data-snapshot
-document.getElementById('btnSaveHtmlWithData').addEventListener('click', function(){
-  try{
-    var snapEl = document.getElementById('lv_db_snapshot');
-    if(snapEl){ snapEl.textContent = JSON.stringify(db); }
-    var src = document.documentElement.outerHTML;
-    var blob = new Blob([src],{type:'text/html;charset=utf-8'});
-    var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='Vis Lokaties v1.1.4-d (met data).html'; a.click();
-    setTimeout(function(){URL.revokeObjectURL(a.href)},1000);
-    S('HTML met data gedownload.');
-  }catch(e){ S('Kon snapshot niet insluiten.'); }
+  var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='Vis Lokaties v1.1.4-c.html'; a.click(); setTimeout(function(){URL.revokeObjectURL(a.href)},1000);
 });
 
-// ====== Weer integratie + wind overlay ======
 var wxDate = document.getElementById('wxDate');
 var wxHour = document.getElementById('wxHour');
 var wxOut  = document.getElementById('wxOut');
@@ -1213,7 +1118,6 @@ function updateCompass(deg, wspd){
   if(info){ info.textContent = (deg!=null? (deg|0)+'°' : '—') + ' @ '+ fmt(wspd,'m/s',1); }
 }
 
-// Kompas
 var compCtrl = L.control({position:'topright'});
 compCtrl.onAdd=function(){
   var div = L.DomUtil.create('div','leaflet-control windCompass');
@@ -1223,7 +1127,6 @@ compCtrl.onAdd=function(){
 };
 compCtrl.addTo(map);
 
-// pijlen tekenen
 function drawWind(sel){
   windLayer.clearLayers();
   if(!wxDraw.checked || !sel) return;
@@ -1281,68 +1184,6 @@ document.getElementById('btnWeatherLoad').addEventListener('click', function(){
 wxDraw.addEventListener('change', function(){ if(lastWx) drawWind(lastWx.sel); });
 map.on('moveend zoomend', function(){ if(wxDraw.checked && lastWx){ drawWind(lastWx.sel); } });
 
-// ====== Auto-rigs (2 per zichtbare stek) ======
-function scoreSpot(lat, lon, sekitar){
-  var dep = interpIDW(lat,lon, (db.bathy&&db.bathy.points)||[], 70, 16);
-  if(!isFinite(dep)) return -1e9;
-  var depthPrefMin=2, depthPrefMax=6;
-  var depthScore = (dep<depthPrefMin)? (dep-depthPrefMin) : (dep>depthPrefMax? (depthPrefMax-dep) : 2.5);
-
-  var eps=0.00025;
-  var depE = interpIDW(lat, lon+eps*Math.cos(lat*Math.PI/180), (db.bathy&&db.bathy.points)||[], 70, 16);
-  var depN = interpIDW(lat+eps, lon, (db.bathy&&db.bathy.points)||[], 70, 16);
-  var grad = 0;
-  if(isFinite(depE)&&isFinite(depN)) grad = Math.abs(depE-dep)+Math.abs(depN-dep);
-
-  var d = distM({lat:lat,lon:lon},{lat:sekitar.lat,lon:sekitar.lng});
-  var targetMin=20, targetMax=60;
-  var distScore = (d<targetMin)? (d-targetMin) : (d>targetMax? (targetMax-d) : 2.0);
-
-  var nearPenalty = 0;
-  (db.rigs||[]).forEach(function(r){ var dd=distM({lat:lat,lon:lon},{lat:r.lat,lon:r.lng}); if(dd<12) nearPenalty -= (12-dd)*0.2; });
-
-  return depthScore*1.8 + grad*2.2 + distScore*1.3 + nearPenalty;
-}
-document.getElementById('btnAutoRigs').addEventListener('click', function(){
-  var b=map.getBounds();
-  var added=0;
-  (db.steks||[]).forEach(function(s){
-    if(!b.contains([s.lat,s.lng])) return;
-    var candidates=[];
-    var radii=[22,36,52];
-    var bearings=[0,45,90,135,180,225,270,315];
-    radii.forEach(function(rm){
-      var deg=rm/111320;
-      bearings.forEach(function(br){
-        var rad=br*Math.PI/180;
-        var lat = s.lat + (Math.cos(rad)*deg);
-        var lon = s.lng + (Math.sin(rad)*deg)*Math.cos(s.lat*Math.PI/180);
-        var wid = nearestWaterIdForLatLng(lat, lon);
-        if(s.waterId && wid && wid!==s.waterId) return;
-        if(!b.contains([lat,lon])) return;
-        var sc = scoreSpot(lat,lon,s);
-        candidates.push({lat:lat,lng:lon,score:sc});
-      });
-    });
-    if(!candidates.length) return;
-    candidates.sort(function(a,b){return b.score-a.score;});
-    var picked=[];
-    for(var i=0;i<candidates.length && picked.length<2;i++){
-      var ok=true;
-      for(var j=0;j<picked.length;j++){
-        if(distM({lat:candidates[i].lat,lon:candidates[i].lng},{lat:picked[j].lat,lon:picked[j].lng})<18){ ok=false; break; }
-      }
-      if(ok) picked.push(candidates[i]);
-    }
-    picked.forEach(function(p,k){
-      db.rigs.push({id:uid('rig'),name:'Rig '+(k+1),lat:p.lat,lng:p.lng,stekId:s.id,waterId:s.waterId||nearestWaterIdForLatLng(p.lat,p.lng)||null});
-      added++;
-    });
-  });
-  if(added){ saveDB(); renderAll(); S('Auto-rigs: '+added+' rigspots toegevoegd.'); } else { S('Geen kandidaten gevonden. Zoom in / importeer meer bathy.'); }
-});
-
-// ====== eenmalig UI dedupe ======
 (function(){
   const seen=new Set();
   document.querySelectorAll('[id]').forEach(function(el){ if(!el.id) return; if(seen.has(el.id)) el.remove(); else seen.add(el.id); });
