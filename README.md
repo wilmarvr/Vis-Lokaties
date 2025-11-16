@@ -79,4 +79,17 @@ If your host prefers environment variables you can define the following (via `.h
 - `DB_PASSWORD`
 - `DB_NAME`
 
+## Pulling files from GitHub
+When you need to refresh this working tree with the exact contents of the public GitHub repository (for example to copy `Vis lokaties 1.1.4-c.html` from the `main` branch), run the helper script that now lives inside `scripts/`:
+
+```bash
+# pull the whole repository
+scripts/pull_from_github.sh
+
+# or pull a single file from the default repo/branch
+scripts/pull_from_github.sh https://github.com/wilmarvr/vis-lokaties.git main "Vis lokaties 1.1.4-c.html"
+```
+
+The script clones the GitHub repository into a temporary directory and copies the requested file(s) into the current workspace. If your environment sits behind a restrictive proxy you may need to allow outbound HTTPS before the script can talk to GitHub.
+
 When these are present the bootstrapper will use them and ignore `config.php`.
