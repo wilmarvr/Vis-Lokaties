@@ -172,6 +172,8 @@ function normalizePayload(array $payload, array $defaults): array
         $datasets[] = ['id' => $identifier, 'payload' => $dataset];
     }
 
+    [$points, $datasets] = ensureBathyDatasetIntegrity($points, $datasets);
+
     $normalized['bathy'] = [
         'points' => $points,
         'datasets' => $datasets,
@@ -184,6 +186,68 @@ function normalizePayload(array $payload, array $defaults): array
     }
 
     return $normalized;
+}
+
+function ensureBathyDatasetIntegrity(array $points, array $datasets): array
+{
+    $now = (new DateTimeImmutable('now'))->format('c');
+    $datasetMap = [];
+    $generateDatasetId = static function () {
+        try {
+            return 'dataset_' . substr(bin2hex(random_bytes(6)), 0, 12);
+        } catch (Throwable $e) {
+            return 'dataset_' . substr(hash('sha256', (string) microtime(true)), 0, 12);
+        }
+    };
+    foreach ($datasets as &$dataset) {
+        if (!isset($dataset['payload']) || !is_array($dataset['payload'])) {
+            $dataset['payload'] = [];
+        }
+        if (!isset($dataset['payload']['id']) || $dataset['payload']['id'] === '') {
+            $dataset['payload']['id'] = $dataset['id'];
+        }
+        if (empty($dataset['payload']['importedAt'])) {
+            $dataset['payload']['importedAt'] = $now;
+        }
+        $datasetMap[$dataset['id']] = &$dataset;
+    }
+    unset($dataset);
+
+    $counts = [];
+    $fallbackId = null;
+    foreach ($points as &$point) {
+        $datasetId = isset($point['dataset_id']) ? trim((string) $point['dataset_id']) : '';
+        if ($datasetId === '') {
+            if ($fallbackId === null) {
+                $fallbackId = $generateDatasetId();
+            }
+            $datasetId = $fallbackId;
+            $point['dataset_id'] = $datasetId;
+        }
+        $counts[$datasetId] = ($counts[$datasetId] ?? 0) + 1;
+    }
+    unset($point);
+
+    foreach ($counts as $datasetId => $count) {
+        if (isset($datasetMap[$datasetId])) {
+            if (!isset($datasetMap[$datasetId]['payload']['pointCount'])) {
+                $datasetMap[$datasetId]['payload']['pointCount'] = $count;
+            }
+            continue;
+        }
+        $datasets[] = [
+            'id' => $datasetId,
+            'payload' => [
+                'id' => $datasetId,
+                'label' => 'Dataset ' . $datasetId,
+                'pointCount' => $count,
+                'generated' => true,
+                'importedAt' => $now,
+            ],
+        ];
+    }
+
+    return [$points, $datasets];
 }
 
 function fetchWaters(mysqli $db): array

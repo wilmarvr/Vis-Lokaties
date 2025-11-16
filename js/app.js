@@ -12,29 +12,69 @@
   });
 
   function generateContours(){
-    var pts=(db.bathy&&db.bathy.points)||[]; if(pts.length<5){ S('Not enough depth samples for contours.'); return; }
-    var b=map.getBounds();
-    var bb=[b.getWest(),b.getSouth(),b.getEast(),b.getNorth()];
-    var min=Infinity,max=-Infinity; pts.forEach(function(p){ if(isFinite(p.dep)){ if(p.dep<min)min=p.dep; if(p.dep>max)max=p.dep; } });
-    if(!isFinite(min)||!isFinite(max)||max===min){ S('Depth range is zero — contours skipped.'); return; }
-    var step=0.5, vmin=min, vmax=max;
-    try{
-      var uMin=parseFloat(document.getElementById('hmMin').value), uMax=parseFloat(document.getElementById('hmMax').value);
-      if(document.getElementById('hmFixed').checked){ vmin=0; vmax=20; }
-      else { if(!isNaN(uMin)) vmin=uMin; if(!isNaN(uMax)) vmax=uMax; }
-    }catch(_){ }
-    var levels=[]; for(var v=vmin; v<=vmax+1e-9; v+=step) levels.push(parseFloat(v.toFixed(3)));
+    var pts=(db.bathy&&db.bathy.points)||[];
+    if(!pts.length){ S('No bathymetry available.'); return; }
+    var bounds=map.getBounds();
+    var inView=pts.filter(function(p){ return p.lat>=bounds.getSouth() && p.lat<=bounds.getNorth() && p.lon>=bounds.getWest() && p.lon<=bounds.getEast(); });
+    if(inView.length<5){ S('Zoom to an area with at least 5 bathy samples.'); return; }
 
-    var degPerM=1/111320; var cellM=14; var cellDeg=cellM*degPerM;
-    var grid=[]; for(var y=bb[1]; y<=bb[3]; y+=cellDeg){ var row=[]; for(var x=bb[0]; x<=bb[2]; x+=cellDeg){ row.push(interpIDW(y,x, pts, 60, 12)); } grid.push(row); }
-    var fcs=[]; var yy=bb[1];
-    for(var i=0;i<grid.length;i++){ var xx=bb[0]; for(var j=0;j<grid[i].length;j++){ var val=grid[i][j]; if(isFinite(val)) fcs.push(turf.point([xx,yy],{value:val})); xx+=cellDeg; } yy+=cellDeg; }
-    var ptsFC=turf.featureCollection(fcs);
-    var lines=null; try{ lines=turf.isolines(ptsFC, levels, {zProperty:'value'});}catch(e){ console.error(e); S('Isoline generation failed.'); return; }
+    var latMin=Infinity,latMax=-Infinity,lonMin=Infinity,lonMax=-Infinity;
+    var depMin=Infinity,depMax=-Infinity;
+    inView.forEach(function(p){
+      if(p.lat<latMin) latMin=p.lat; if(p.lat>latMax) latMax=p.lat;
+      if(p.lon<lonMin) lonMin=p.lon; if(p.lon>lonMax) lonMax=p.lon;
+      if(p.dep<depMin) depMin=p.dep; if(p.dep>depMax) depMax=p.dep;
+    });
+    if(!isFinite(depMin)||!isFinite(depMax)||depMin===depMax){ S('Depth range is zero — contours skipped.'); return; }
+
+    var padLat=Math.max(0.0003,(latMax-latMin)*0.05);
+    var padLon=Math.max(0.0003,(lonMax-lonMin)*0.05);
+    var south=latMin-padLat, north=latMax+padLat, west=lonMin-padLon, east=lonMax+padLon;
+    var centerLat=(south+north)/2;
+    var latMeters=distM({lat:south,lon:(west+east)/2},{lat:north,lon:(west+east)/2});
+    var lonMeters=distM({lat:centerLat,lon:west},{lat:centerLat,lon:east});
+    var longest=Math.max(latMeters, lonMeters);
+    var cellM=Math.max(8, Math.min(35, longest/80));
+    var degPerLat=1/110540;
+    var degPerLon=(Math.abs(Math.cos(centerLat*Math.PI/180))>1e-3)?(1/(111320*Math.cos(centerLat*Math.PI/180))):(1/111320);
+    var stepLat=cellM*degPerLat;
+    var stepLon=cellM*degPerLon;
+
+    var samples=[];
+    for(var y=south; y<=north+1e-9; y+=stepLat){
+      for(var x=west; x<=east+1e-9; x+=stepLon){
+        var val=interpIDW(y,x,inView,60,12);
+        if(Number.isFinite(val)) samples.push(turf.point([x,y],{value:val}));
+      }
+    }
+    if(!samples.length){ S('Interpolation failed inside viewport.'); return; }
+
+    var vmin=depMin, vmax=depMax;
+    try{
+      var uMin=parseFloat(document.getElementById('hmMin').value);
+      var uMax=parseFloat(document.getElementById('hmMax').value);
+      if(document.getElementById('hmFixed').checked){ vmin=0; vmax=20; }
+      else {
+        if(!isNaN(uMin)) vmin=Math.max(depMin,uMin);
+        if(!isNaN(uMax)) vmax=Math.min(depMax,uMax);
+      }
+    }catch(_){ }
+    if(vmax<=vmin){ S('Contour bounds collapsed.'); return; }
+    var range=vmax-vmin;
+    var desired=20;
+    var step=Math.max(0.2, range/desired);
+    var levels=[];
+    for(var lvl=vmin; lvl<=vmax+1e-6; lvl+=step){ levels.push(parseFloat(lvl.toFixed(2))); }
+
+    var ptsFC=turf.featureCollection(samples);
+    var lines=null;
+    try{
+      lines=turf.isolines(ptsFC, levels, {zProperty:'value'});
+    }catch(e){ console.error(e); S('Isoline generation failed.'); return; }
 
     contourLayer.clearLayers(); isobandLayer.clearLayers();
     L.geoJSON(lines,{style:{color:'#44f1c6',weight:1.5,opacity:0.9},pane:'contourPane'}).addTo(contourLayer);
-    S('Contours ready: '+((lines.features||[]).length)+' lines.');
+    S('Contours ready: '+((lines.features||[]).length)+' isolines.');
   }
   document.getElementById('btn-gen-contours').addEventListener('click', generateContours);
   document.getElementById('btn-clear-contours').addEventListener('click', function(){ contourLayer.clearLayers(); isobandLayer.clearLayers(); S('Contours cleared.'); });

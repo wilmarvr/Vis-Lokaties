@@ -97,6 +97,15 @@ try {
       <button id="btn-clear-heat">🔥 Clear heatmap</button>
       <button id="btn-clear-bathy">💧 Clear DB bathy</button>
       <div>Total points: <span id="bathyTotal">0</span> | Heatmap: <span id="heatCount">0</span></div>
+      <div class="muted" style="margin-top:6px">Stored datasets</div>
+      <table id="datasetTable" class="table-mini">
+        <thead>
+          <tr><th>Name</th><th>Points</th><th>Depth range</th><th>Imported</th></tr>
+        </thead>
+        <tbody>
+          <tr><td colspan="4" class="muted">No datasets yet.</td></tr>
+        </tbody>
+      </table>
     </div>
   </details>
 

@@ -27,6 +27,9 @@ legend{ font-weight:bold; }
 table{ width:100%; border-collapse:collapse; margin-top:4px; font-size:13px; }
 th,td{ padding:3px 4px; border-bottom:1px solid #233; }
 th{ background:#0f1a22; position:sticky; top:0; z-index:1; }
+.table-mini{ font-size:11px; margin-top:6px; }
+.table-mini th, .table-mini td{ padding:2px 4px; }
+.table-mini tbody tr:nth-child(odd){ background:#0b121a; }
 .progress{ width:100%; background:#081018; border-radius:6px; overflow:hidden; height:6px; }
 .bar{ height:6px; background:var(--accent); width:0%; transition:width .2s; }
 .dist-label{ background:rgba(10,10,10,.7); color:#7bf1a8; border:none; box-shadow:none; font-size:11px; padding:0 2px; }

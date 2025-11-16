@@ -23,3 +23,4 @@
 // --- Vroeg: no-ops zodat whenReady-callbacks nooit breken
 window.renderAll = window.renderAll || function(){};
 window.drawDistances = window.drawDistances || function(){};
+window.renderDatasets = window.renderDatasets || function(){};

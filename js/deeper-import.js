@@ -19,6 +19,41 @@
   var fImpBar=document.getElementById('impBarAll'), fImpPct=document.getElementById('impPctAll'), fImpCount=document.getElementById('impCount');
   function setOverall(done,total){ var pct=Math.round((done/Math.max(1,total))*100); if(fImpCount) fImpCount.textContent=done+'/'+total; if(fImpPct) fImpPct.textContent=pct+'%'; if(fImpBar) fImpBar.style.width=pct+'%'; }
 
+  if(!db.bathy) db.bathy={points:[],datasets:[]};
+  var datasetTable=document.getElementById('datasetTable');
+  var datasetBody=datasetTable?datasetTable.querySelector('tbody'):null;
+  function renderDatasets(){
+    if(!datasetBody) return;
+    datasetBody.innerHTML='';
+    var rows=(db.bathy && Array.isArray(db.bathy.datasets))? db.bathy.datasets.slice():[];
+    if(!rows.length){
+      var empty=document.createElement('tr');
+      empty.innerHTML='<td colspan="4" class="muted">No datasets yet.</td>';
+      datasetBody.appendChild(empty);
+      return;
+    }
+    rows.sort(function(a,b){
+      var ta=a && a.importedAt ? a.importedAt : '';
+      var tb=b && b.importedAt ? b.importedAt : '';
+      if(ta===tb) return (b.pointCount||0)-(a.pointCount||0);
+      return ta<tb?1:-1;
+    });
+    rows.forEach(function(ds){
+      var tr=document.createElement('tr');
+      var depth='—';
+      if(ds.depthRange && Number.isFinite(ds.depthRange.min) && Number.isFinite(ds.depthRange.max)){
+        depth = ds.depthRange.min.toFixed(1)+'–'+ds.depthRange.max.toFixed(1)+' m';
+      }
+      var ts = ds.importedAt ? new Date(ds.importedAt).toLocaleString() : '—';
+      tr.innerHTML='<td>'+esc((ds.label||ds.name||ds.id||'dataset'))+'</td>'+
+        '<td>'+(ds.pointCount||0)+'</td>'+
+        '<td>'+depth+'</td>'+
+        '<td>'+esc(ts)+'</td>';
+      datasetBody.appendChild(tr);
+    });
+  }
+  window.renderDatasets = renderDatasets;
+
   var heatLayer=null, rawAll=(db.bathy && Array.isArray(db.bathy.points))? db.bathy.points.slice() : [], currentPoints=[];
   function setBathyTotal(n){ var el=document.getElementById('bathyTotal'); if(el) el.textContent=String(n||0); }
   function setHeatCount(n){ var el=document.getElementById('heatCount'); if(el) el.textContent=String(n||0); }
@@ -95,7 +130,7 @@
 
     function toNum(v){ if(v==null) return NaN; v=String(v).trim().replace(/^"(.*)"$/,'$1'); v=v.replace(',', '.'); var n=parseFloat(v); return (Number.isFinite(n)?n:NaN); }
 
-    var rawPts=[], dmin=Infinity, dmax=-Infinity;
+    var rawPts=[], dmin=Infinity, dmax=-Infinity, latMin=Infinity, latMax=-Infinity, lonMin=Infinity, lonMax=-Infinity;
     for(var i=startIdx;i<lines.length;i++){
       var cols=lines[i].split(delim);
       var lat=toNum(cols[iLat]), lon=toNum(cols[iLon]), dep=toNum(cols[iDep]);
@@ -103,6 +138,10 @@
         if(!(Math.abs(lat)<1e-9 && Math.abs(lon)<1e-9)){
           var k=lat.toFixed(6)+','+lon.toFixed(6)+','+dep.toFixed(2);
           if(!seen.has(k)){ seen.add(k); rawPts.push({lat:lat,lon:lon,dep:dep}); dmin=Math.min(dmin,dep); dmax=Math.max(dmax,dep); }
+          if(lat<latMin) latMin=lat;
+          if(lat>latMax) latMax=lat;
+          if(lon<lonMin) lonMin=lon;
+          if(lon>lonMax) lonMax=lon;
         }
       }
     }
@@ -121,14 +160,23 @@
       out.push([p.lat,p.lon,w]);
     }
     updateLegend(isNaN(minV)?null:minV, isNaN(maxV)?null:maxV, inv);
-    return {points:out, raw:rawPts};
+    var summary={
+      count:rawPts.length,
+      minDepth:Number.isFinite(dmin)?dmin:null,
+      maxDepth:Number.isFinite(dmax)?dmax:null,
+      minLat:Number.isFinite(latMin)?latMin:null,
+      maxLat:Number.isFinite(latMax)?latMax:null,
+      minLon:Number.isFinite(lonMin)?lonMin:null,
+      maxLon:Number.isFinite(lonMax)?lonMax:null
+    };
+    return {points:out, raw:rawPts, summary:summary};
   }
 
   function handleFiles(files){
     if(!files.length){ S('No files selected.'); return; }
     S('Preparing: unpacking ZIPs and gathering CSV files…');
     var saveToDB = !!document.getElementById('saveBathy').checked;
-    var rawAccumulator=[], seen=new Set(), tasks=[], q=[], done=0, total=0, pendingZips=0;
+    var rawAccumulator=[], seen=new Set(), tasks=[], q=[], done=0, total=0, pendingZips=0, datasetCounter=0;
 
     for(var i=0;i<files.length;i++){
       (function(f){
@@ -152,6 +200,30 @@
     }
     if(pendingZips===0) afterEnumerate();
 
+    function createDatasetMeta(label, summary, rawPts){
+      if(!rawPts.length) return null;
+      var clean=(label||'dataset').split(/\\|\//).pop();
+      var dsId='ds_'+Date.now().toString(36)+'_'+(datasetCounter++).toString(36);
+      var meta={
+        id:dsId,
+        label:clean,
+        source:'deeper',
+        importedAt:new Date().toISOString(),
+        pointCount:rawPts.length
+      };
+      if(summary){
+        meta.depthRange={min:summary.minDepth,max:summary.maxDepth};
+        meta.bbox={minLat:summary.minLat,maxLat:summary.maxLat,minLon:summary.minLon,maxLon:summary.maxLon};
+      }
+      rawPts.forEach(function(p){ p.dataset_id = dsId; });
+      return meta;
+    }
+
+    function ensureBathyStore(){
+      if(!db.bathy) db.bathy={points:[],datasets:[]};
+      if(!Array.isArray(db.bathy.datasets)) db.bathy.datasets=[];
+    }
+
     function afterEnumerate(){
       q = tasks.map(function(t){ return t.label; });
       total = tasks.length;
@@ -163,7 +235,7 @@
         if(idx>=tasks.length){
           setOverall(total,total);
           if(saveToDB && rawAccumulator.length){
-            if(!db.bathy) db.bathy={points:[],datasets:[]};
+            ensureBathyStore();
             var seenDB=new Set();
             for(var i=0;i<(db.bathy.points||[]).length;i++){
               var p=db.bathy.points[i];
@@ -174,6 +246,7 @@
               if(!seenDB.has(key)){ db.bathy.points.push(p); seenDB.add(key); }
             });
             setBathyTotal(db.bathy.points.length);
+            renderDatasets();
             saveDB();
             S('Bathymetry saved to database.');
           }
@@ -185,11 +258,17 @@
         setQueue(q.slice(idx));
         task.fetchText().then(function(text){
           var parsed=parseCSV(text, seen);
+          var meta=createDatasetMeta(task.label, parsed.summary, parsed.raw);
+          if(meta){
+            ensureBathyStore();
+            db.bathy.datasets.push(meta);
+          }
           rawAccumulator = rawAccumulator.concat(parsed.raw);
           var pts = parsed.points;
           done++;
           setOverall(done,total);
           if(pts.length){ currentPoints = currentPoints.concat(pts); buildHeat(currentPoints); }
+          renderDatasets();
         }).catch(function(){ /* ignore */ done++; setOverall(done,total); })
           .finally(function(){ nextTask(idx+1); });
       })(0);
@@ -206,6 +285,7 @@
     rawAll=[]; if(heatLayer){ map.removeLayer(heatLayer); heatLayer=null; }
     currentPoints=[]; setBathyTotal(0); setHeatCount(0);
     S('Stored bathymetry removed.');
+    renderDatasets();
   });
 
   map.on('moveend', function(){ if(document.getElementById('hmClip').checked){ applyHeatFromRaw(); } });
@@ -216,5 +296,6 @@
       rawAll = db.bathy.points.slice();
       applyHeatFromRaw();
     }
+    renderDatasets();
   });
 })(window);

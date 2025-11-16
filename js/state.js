@@ -48,11 +48,59 @@
     });
     if(!window.db.waters) window.db.waters = [];
     if(!window.db.bathy) window.db.bathy = {points:[],datasets:[]};
-    else {
-      window.db.bathy.points = (window.db.bathy.points||[]).map(function(p){
-        return {lat:num(p.lat),lon:num(p.lon),dep:num(p.dep)};
+
+    var bathy = window.db.bathy;
+    var normalizedDatasets = [];
+    var seen = new Set();
+    if(Array.isArray(bathy.datasets)){
+      bathy.datasets.forEach(function(ds){
+        if(!ds || typeof ds !== 'object') return;
+        var id = (ds.id && String(ds.id).trim()) || uid('dataset');
+        while(seen.has(id)) id = uid('dataset');
+        seen.add(id);
+        normalizedDatasets.push({
+          id:id,
+          label:ds.label || ds.name || ds.title || id,
+          source:ds.source || ds.origin || 'deeper',
+          importedAt:ds.importedAt || ds.createdAt || null,
+          pointCount:Number(ds.pointCount || ds.count || 0),
+          depthRange:ds.depthRange || ds.depth || null,
+          bbox:ds.bbox || ds.bounds || null,
+          generated:!!ds.generated
+        });
       });
     }
+
+    var fallbackId = normalizedDatasets.length ? normalizedDatasets[0].id : null;
+    var nowIso = (new Date()).toISOString();
+    bathy.points = (bathy.points||[]).map(function(p){
+      var dsId = (p && p.dataset_id && String(p.dataset_id).trim()) || fallbackId;
+      if(!dsId){
+        dsId = uid('dataset');
+        fallbackId = dsId;
+        normalizedDatasets.push({
+          id:dsId,
+          label:'Migrated bathymetry',
+          source:'unknown',
+          importedAt:nowIso,
+          pointCount:0,
+          depthRange:null,
+          bbox:null,
+          generated:true
+        });
+      }
+      return {lat:num(p.lat),lon:num(p.lon),dep:num(p.dep),dataset_id:dsId};
+    });
+
+    var counts = {};
+    bathy.points.forEach(function(p){ counts[p.dataset_id] = (counts[p.dataset_id]||0)+1; });
+    normalizedDatasets = normalizedDatasets.map(function(ds){
+      ds.pointCount = counts[ds.id] || ds.pointCount || 0;
+      if(!ds.importedAt) ds.importedAt = nowIso;
+      return ds;
+    });
+    bathy.datasets = normalizedDatasets;
+    window.db.bathy = bathy;
   };
 
   function pushDbToServer(){

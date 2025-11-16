@@ -118,6 +118,7 @@
     (db.rigs||[]).forEach(function(r){ var m=makeRigMarker(r); if(useCluster && window.cluster) window.cluster.addLayer(m); else m.addTo(map); });
     window.drawDistances();
     buildOverview();
+    if(typeof window.renderDatasets === 'function'){ window.renderDatasets(); }
   };
 
   window.drawDistances = function(){
