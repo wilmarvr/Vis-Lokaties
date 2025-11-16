@@ -5,6 +5,65 @@
   var selection = {points:new Set(),preview:null,bestWater:null};
   var clickAddMode = null;
   var clickBadge = document.getElementById('clickModeBadge');
+  var markerInfoBox = document.getElementById('markerInfo');
+  var markerInfoPlaceholder = '<div class="marker-info__placeholder">Click a swim or rig to see every stored detail.</div>';
+
+  function setMarkerInfo(html){
+    if(markerInfoBox){ markerInfoBox.innerHTML = html || markerInfoPlaceholder; }
+  }
+
+  function formatLatLng(lat, lng){
+    if(!Number.isFinite(lat) || !Number.isFinite(lng)) return '—';
+    return lat.toFixed(5) + ', ' + lng.toFixed(5);
+  }
+
+  function depthAt(lat, lng){
+    if(!db || !db.bathy || !Array.isArray(db.bathy.points) || !db.bathy.points.length) return null;
+    var d = interpIDW(lat, lng, db.bathy.points, 60, 12);
+    return Number.isFinite(d) ? d : null;
+  }
+
+  function showStekInfoById(id){
+    var s = (db.steks||[]).find(function(x){ return x.id === id; });
+    if(!s){ setMarkerInfo(); return; }
+    var rigs = (db.rigs||[]).filter(function(r){ return r.stekId === id; });
+    var depth = depthAt(s.lat, s.lng);
+    var html = '<div class="marker-info__title">Swim: ' + esc(s.name || '(swim)') + '</div>' +
+               '<dl class="marker-info__grid">' +
+               '<dt>ID</dt><dd>' + esc(s.id) + '</dd>' +
+               '<dt>Water</dt><dd>' + esc(nameOfWater(s.waterId) || '—') + '</dd>' +
+               '<dt>Coordinates</dt><dd>' + esc(formatLatLng(s.lat, s.lng)) + '</dd>' +
+               '<dt>Linked rigs</dt><dd>' + rigs.length + '</dd>';
+    if(depth !== null){ html += '<dt>Depth</dt><dd>' + depth.toFixed(1) + ' m</dd>'; }
+    html += '</dl>';
+    if(s.note){ html += '<div class="marker-info__note">' + esc(s.note) + '</div>'; }
+    setMarkerInfo(html);
+    S('Swim “' + (s.name || s.id) + '” selected.');
+  }
+
+  function showRigInfoById(id){
+    var r = (db.rigs||[]).find(function(x){ return x.id === id; });
+    if(!r){ setMarkerInfo(); return; }
+    var swim = r.stekId ? (db.steks||[]).find(function(x){ return x.id === r.stekId; }) : null;
+    var depth = depthAt(r.lat, r.lng);
+    var dist = (swim && Number.isFinite(swim.lat) && Number.isFinite(swim.lng))
+      ? distM({lat:r.lat, lon:r.lng}, {lat:swim.lat, lon:swim.lng})
+      : null;
+    var html = '<div class="marker-info__title">Rig: ' + esc(r.name || '(rig)') + '</div>' +
+               '<dl class="marker-info__grid">' +
+               '<dt>ID</dt><dd>' + esc(r.id) + '</dd>' +
+               '<dt>Swim</dt><dd>' + esc(swim ? (swim.name || swim.id) : '(unlinked)') + '</dd>' +
+               '<dt>Water</dt><dd>' + esc(nameOfWater(r.waterId) || '—') + '</dd>' +
+               '<dt>Coordinates</dt><dd>' + esc(formatLatLng(r.lat, r.lng)) + '</dd>';
+    if(dist !== null){ html += '<dt>Distance to swim</dt><dd>' + Math.round(dist) + ' m</dd>'; }
+    if(depth !== null){ html += '<dt>Depth</dt><dd>' + depth.toFixed(1) + ' m</dd>'; }
+    html += '</dl>';
+    if(r.note){ html += '<div class="marker-info__note">' + esc(r.note) + '</div>'; }
+    setMarkerInfo(html);
+    S('Rig “' + (r.name || r.id) + '” selected.');
+  }
+
+  setMarkerInfo();
 
   function nearestStekId(lat, lng){
     var best = {id:null, dist:Infinity, stek:null};
@@ -37,16 +96,18 @@
       if(!db.waters || !db.waters.length){ S('Add at least one water polygon before creating swims.'); setClickMode(null); return; }
       var wId = nearestWaterIdForLatLng(ev.latlng.lat, ev.latlng.lng, 1000);
       if(!wId){ S('No nearby water polygon found for this swim. Zoom closer to an existing water.'); return; }
-      db.steks.push({
+      var newStek = {
         id:uid('stek'),
         name:'Swim ' + (db.steks.length + 1),
         lat:ev.latlng.lat,
         lng:ev.latlng.lng,
         waterId:wId
-      });
+      };
+      db.steks.push(newStek);
       saveDB();
       rerender();
       S('Swim created and linked to ' + (nameOfWater(wId) || 'water ' + wId) + '.');
+      showStekInfoById(newStek.id);
       setClickMode(null);
       return;
     }
@@ -55,18 +116,20 @@
       var nearest = nearestStekId(ev.latlng.lat, ev.latlng.lng);
       if(!nearest){ S('No swim found to attach this rig.'); return; }
       var waterId = nearest.stek.waterId || nearestWaterIdForLatLng(ev.latlng.lat, ev.latlng.lng, 1000);
-      db.rigs.push({
+      var newRig = {
         id:uid('rig'),
         name:'Rig',
         lat:ev.latlng.lat,
         lng:ev.latlng.lng,
         stekId:nearest.id,
         waterId:waterId || null
-      });
+      };
+      db.rigs.push(newRig);
       saveDB();
       rerender();
       var swimName = nearest.stek.name || 'swim';
       S('Rig created and linked to ' + swimName + '.');
+      showRigInfoById(newRig.id);
       setClickMode(null);
     }
   }
@@ -128,6 +191,8 @@
   function attachMarker(m,type,id){
     if(m.dragging && typeof m.dragging.enable === 'function'){ m.dragging.enable(); }
     m.__skipNextClick = false;
+    m.on('mousedown touchstart pointerdown', function(){ if(map && map.dragging){ try{ map.dragging.disable(); }catch(_){ } } });
+    m.on('mouseup touchend pointerup', function(){ if(map && map.dragging){ try{ map.dragging.enable(); }catch(_){ } } });
     m.on('dragstart',function(){
       if(map && map.dragging){ try{ map.dragging.disable(); }catch(_){ } }
       clearSelectionForMarker(m);
@@ -181,26 +246,32 @@
         m.__skipNextClick = false;
         return;
       }
-      if(!selectMode) return;
-      ev.originalEvent.preventDefault();
-      ev.originalEvent.stopPropagation();
-      var ll=m.getLatLng();
-      var key=String(ll.lat.toFixed(7)+','+ll.lng.toFixed(7));
-      var icon=ev.target._icon;
-      if(selection.points.has(key)){ selection.points.delete(key); if(icon&&icon.classList) icon.classList.remove('sel'); }
-      else { selection.points.add(key); if(icon&&icon.classList) icon.classList.add('sel'); }
-      updateSelInfo();
+      if(selectMode){
+        ev.originalEvent.preventDefault();
+        ev.originalEvent.stopPropagation();
+        var ll=m.getLatLng();
+        var key=String(ll.lat.toFixed(7)+','+ll.lng.toFixed(7));
+        var icon=ev.target._icon;
+        if(selection.points.has(key)){ selection.points.delete(key); if(icon&&icon.classList) icon.classList.remove('sel'); }
+        else { selection.points.add(key); if(icon&&icon.classList) icon.classList.add('sel'); }
+        updateSelInfo();
+        return;
+      }
+      if(type==='stek'){ showStekInfoById(id); }
+      if(type==='rig'){ showRigInfoById(id); }
     });
   }
 
   function makeStekMarker(s){
+    var colors=colorForStekId(String(s.id||''));
     var m=L.marker([s.lat,s.lng],{
       draggable:true,
       pane:'markerPane',
       autoPan:true,
       autoPanPadding:[60,60],
       riseOnHover:true,
-      bubblingMouseEvents:false
+      bubblingMouseEvents:false,
+      icon:coloredIcon(colors.fill,'S')
     });
     attachMarker(m,'stek',s.id);
     m.bindTooltip((s.name||'Swim'),{direction:'top'});
@@ -209,13 +280,15 @@
   }
   function makeRigMarker(r){
     var s=db.steks.find(function(x){return x.id===r.stekId;});
+    var colors=colorForStekId(String(r.stekId||r.id||''));
     var m=L.marker([r.lat,r.lng],{
       draggable:true,
       pane:'markerPane',
       autoPan:true,
       autoPanPadding:[60,60],
       riseOnHover:true,
-      bubblingMouseEvents:false
+      bubblingMouseEvents:false,
+      icon:coloredIcon(colors.fill,'R')
     });
     attachMarker(m,'rig',r.id);
     m.bindTooltip((r.name||'Rig')+(s? ' • '+(s.name||s.id):''),{direction:'top'});

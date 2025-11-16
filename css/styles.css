@@ -27,6 +27,13 @@ legend{ font-weight:bold; }
 table{ width:100%; border-collapse:collapse; margin-top:4px; font-size:13px; }
 th,td{ padding:3px 4px; border-bottom:1px solid #233; }
 th{ background:#0f1a22; position:sticky; top:0; z-index:1; }
+.marker-info{background:#0c1520;border:1px solid #1f2b3a;border-radius:8px;padding:8px 10px;margin:8px 2px;font-size:12px;line-height:1.4;}
+.marker-info__title{font-weight:600;margin-bottom:4px;font-size:13px;}
+.marker-info__grid{display:grid;grid-template-columns:auto 1fr;gap:2px 8px;margin:0;}
+.marker-info__grid dt{color:#9bbad6;font-weight:500;}
+.marker-info__grid dd{margin:0;color:#e8f4ff;}
+.marker-info__placeholder{color:#90a4bc;font-style:italic;}
+.marker-info__note{margin-top:4px;color:#c7f5ff;}
 .table-mini{ font-size:11px; margin-top:6px; }
 .table-mini th, .table-mini td{ padding:2px 4px; }
 .table-mini tbody tr:nth-child(odd){ background:#0b121a; }

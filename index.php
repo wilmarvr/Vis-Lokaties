@@ -55,6 +55,9 @@ try {
       <label><input type="checkbox" id="useCluster"> Enable clustering</label><br>
       <label><input type="checkbox" id="showDistances" checked> Show swim ↔ rig distances</label><br>
       <button id="btnForceDragFix">⚙️ Disable clustering now</button>
+      <div id="markerInfo" class="marker-info">
+        <div class="marker-info__placeholder">Click a swim or rig to see every stored detail.</div>
+      </div>
     </div>
   </details>
 
