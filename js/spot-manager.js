@@ -50,6 +50,7 @@
       try{ map.dragging.disable(); }catch(_){ }
       if(useCluster && window.cluster){ try{ window.cluster.removeLayer(m);}catch(_){ } m.addTo(map); }
       clearSelectionForMarker(m);
+      m.__skipNextClick = true;
       clearEntireSelection();
     });
     m.on('drag',function(){ window.drawDistances(); });
@@ -67,9 +68,11 @@
         if(r){ r.lat=ll.lat; r.lng=ll.lng; r.waterId = nearestWaterIdForLatLng(ll.lat,ll.lng) || r.waterId || null; }
       }
       clearEntireSelection();
+      setTimeout(function(){ m.__skipNextClick = false; }, 0);
       saveDB(); renderAll(); S(type==='stek'?'Swim moved.':'Rig moved.');
     });
     m.on('click',function(ev){
+      if(m.__skipNextClick){ m.__skipNextClick=false; return; }
       if(!selectMode) return;
       ev.originalEvent.preventDefault(); ev.originalEvent.stopPropagation();
       var ll=m.getLatLng(); var key=String(ll.lat.toFixed(7)+','+ll.lng.toFixed(7));
