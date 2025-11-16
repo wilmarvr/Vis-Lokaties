@@ -3,6 +3,83 @@
 
   var map = window.map;
   var selection = {points:new Set(),preview:null,bestWater:null};
+  var clickAddMode = null;
+  var clickBadge = document.getElementById('clickModeBadge');
+
+  function nearestStekId(lat, lng){
+    var best = {id:null, dist:Infinity, stek:null};
+    (db.steks||[]).forEach(function(s){
+      if(!Number.isFinite(s.lat) || !Number.isFinite(s.lng)) return;
+      var d = distM({lat:lat, lon:lng}, {lat:s.lat, lon:s.lng});
+      if(d < best.dist){ best = {id:s.id, dist:d, stek:s}; }
+    });
+    return best.id ? best : null;
+  }
+
+  function setClickMode(mode){
+    clickAddMode = mode;
+    if(clickBadge){
+      clickBadge.style.display = mode ? 'inline-block' : 'none';
+      if(mode === 'stek'){ clickBadge.textContent = 'Click map to add a swim'; }
+      else if(mode === 'rig'){ clickBadge.textContent = 'Click map to add a rig'; }
+      else { clickBadge.textContent = 'Placement mode active'; }
+    }
+    if(map && map.getContainer()){
+      map.getContainer().classList.toggle('click-placement', !!mode);
+      map.getContainer().style.cursor = mode ? 'crosshair' : '';
+    }
+    S(mode ? ('Click anywhere on the map to drop a ' + (mode==='stek' ? 'swim' : 'rig') + '. Press Esc to cancel.') : 'Ready.');
+  }
+
+  function handleMapPlacement(ev){
+    if(!clickAddMode) return;
+    if(clickAddMode === 'stek'){
+      if(!db.waters || !db.waters.length){ S('Add at least one water polygon before creating swims.'); setClickMode(null); return; }
+      var wId = nearestWaterIdForLatLng(ev.latlng.lat, ev.latlng.lng, 1000);
+      if(!wId){ S('No nearby water polygon found for this swim. Zoom closer to an existing water.'); return; }
+      db.steks.push({
+        id:uid('stek'),
+        name:'Swim ' + (db.steks.length + 1),
+        lat:ev.latlng.lat,
+        lng:ev.latlng.lng,
+        waterId:wId
+      });
+      saveDB();
+      rerender();
+      S('Swim created and linked to ' + (nameOfWater(wId) || 'water ' + wId) + '.');
+      setClickMode(null);
+      return;
+    }
+    if(clickAddMode === 'rig'){
+      if(!db.steks || !db.steks.length){ S('Create a swim first before adding rig spots.'); setClickMode(null); return; }
+      var nearest = nearestStekId(ev.latlng.lat, ev.latlng.lng);
+      if(!nearest){ S('No swim found to attach this rig.'); return; }
+      var waterId = nearest.stek.waterId || nearestWaterIdForLatLng(ev.latlng.lat, ev.latlng.lng, 1000);
+      db.rigs.push({
+        id:uid('rig'),
+        name:'Rig',
+        lat:ev.latlng.lat,
+        lng:ev.latlng.lng,
+        stekId:nearest.id,
+        waterId:waterId || null
+      });
+      saveDB();
+      rerender();
+      var swimName = nearest.stek.name || 'swim';
+      S('Rig created and linked to ' + swimName + '.');
+      setClickMode(null);
+    }
+  }
+
+  if(map){
+    map.on('click', handleMapPlacement);
+  }
+  document.addEventListener('keydown', function(ev){ if(ev.key === 'Escape' && clickAddMode){ setClickMode(null); } });
+
+  var btnAddStek = document.getElementById('btnAddStek');
+  if(btnAddStek){ btnAddStek.addEventListener('click', function(){ setClickMode('stek'); }); }
+  var btnAddRig = document.getElementById('btnAddRig');
+  if(btnAddRig){ btnAddRig.addEventListener('click', function(){ setClickMode('rig'); }); }
 
   function rerender(){
     if(typeof window.renderAll === 'function'){ window.renderAll(); }
@@ -60,7 +137,24 @@
       if(m._icon && m._icon.classList){ m._icon.classList.remove('sel'); }
       if(useCluster && cluster){ try{ cluster.removeLayer(m);}catch(_){ } m.addTo(map); }
     });
-    m.on('drag',function(){ window.drawDistances(); });
+    m.on('drag',function(ev){
+      window.drawDistances();
+      if(type === 'rig'){
+        var ll = ev.target.getLatLng();
+        var rig = db.rigs.find(function(x){ return x.id === id; });
+        var swim = rig && rig.stekId ? db.steks.find(function(x){ return x.id === rig.stekId; }) : null;
+        var depth = (db.bathy && Array.isArray(db.bathy.points) && db.bathy.points.length)
+          ? interpIDW(ll.lat, ll.lng, db.bathy.points, 60, 12)
+          : NaN;
+        var msg = 'Dragging rig';
+        if(Number.isFinite(depth)){ msg += ' • depth ' + depth.toFixed(1) + ' m'; }
+        if(swim){
+          var dist = distM({lat:ll.lat, lon:ll.lng}, {lat:swim.lat, lon:swim.lng});
+          msg += ' • ' + Math.round(dist) + ' m from ' + (swim.name || 'swim');
+        }
+        S(msg);
+      }
+    });
     m.on('dragend',function(ev){
       stopAll(ev);
       try{ map.dragging.enable(); }catch(_){ }
