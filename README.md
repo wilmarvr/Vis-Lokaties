@@ -1,9 +1,9 @@
 # Vis Lokaties
 
-The Vis Lokaties toolkit now runs as a static HTML/CSS/JS front-end plus a lightweight PHP API so it works on XAMPP and on almost any external hosting plan that offers PHP + MySQL. The installer provisions the database, grants permissions, seeds all domain tables (`waters`, `steks`, `spots`, `bathy_points`, `bathy_datasets`, `settings`, legacy `kv`) and writes `api/config.php`, so every deployment can repair itself as long as you can temporarily supply MySQL admin credentials.
+The Vis Lokaties toolkit now runs through a PHP entry point (`index.php`) that renders the HTML/CSS/JS interface and refuses to load when MySQL is unavailable. A lightweight PHP API powers data persistence so the project works on XAMPP and on almost any external hosting plan that offers PHP + MySQL. The installer provisions the database, grants permissions, seeds all domain tables (`waters`, `steks`, `spots`, `bathy_points`, `bathy_datasets`, `settings`, legacy `kv`) and writes `api/config.php`, so every deployment can repair itself as long as you can temporarily supply MySQL admin credentials.
 
 ## Repository layout
-- `index.html` – user interface and Leaflet map
+- `index.php` – user interface, version banner and database readiness check
 - `css/` – stylesheets (including the modal styles that power the pickers)
 - `js/` – split JavaScript modules (`utils`, `state`, `map-core`, `water-manager`, `spot-manager`, `deeper-import`, `app`)
 - `api/` – PHP bootstrapper, database API and installer (`db.php`, `install.php`, `bootstrap.php`, `config*.php`)
@@ -17,7 +17,7 @@ The Vis Lokaties toolkit now runs as a static HTML/CSS/JS front-end plus a light
 - A browser that supports modern ES6 syntax (Chrome, Edge, Firefox, Safari)
 
 ## Feature overview
-`index.html` exposes every tool in one sidebar. Each panel is now fully English:
+`index.php` exposes every tool in one sidebar. Each panel is now fully English:
 
 | Panel | What it does |
 | --- | --- |
@@ -33,6 +33,8 @@ The Vis Lokaties toolkit now runs as a static HTML/CSS/JS front-end plus a light
 
 Status updates land in the footer, together with the mouse lat/lon, zoom level and app version (from `version.json`). Every edit (waters, swims, rigs, bathy, settings) is pushed to MySQL through `api/db.php` so the database always stays authoritative. On each page load the API confirms that the database and all tables exist and silently re-creates them when something is missing.
 
+If the configured database cannot be reached, `index.php` surfaces a blocking error overlay with the connection details so you can launch `install.php` or fix `api/config.php` before any JavaScript tries to fetch data.
+
 ## Installing on XAMPP
 1. Start **Apache** and **MySQL** inside the XAMPP Control Panel.
 2. Clone or copy the repository into `C:\xampp\htdocs\vis-lokaties`.
@@ -47,7 +49,7 @@ Status updates land in the footer, together with the mouse lat/lon, zoom level a
 Always open the site via `http://localhost/...` on XAMPP so every `fetch` call to `api/db.php` resolves correctly.
 
 ## Deploying to external hosting
-1. Upload the entire repository (including `api/`, `css/`, `js/`, `install.php`, `index.html`, `version.json`) to your document root using FTP/SFTP/git.
+1. Upload the entire repository (including `api/`, `css/`, `js/`, `install.php`, `index.php`, `version.json`) to your document root using FTP/SFTP/git.
 2. Run `install.php` (or `api/install.php`) in the browser. On managed hosting you typically have phpMyAdmin credentials you can temporarily supply; the installer provisions the rest.
 3. If the host does not allow temporary admin credentials, create the database + user manually in the hosting control panel and copy those values into `api/config.php`. Set the "Application host" field in the installer to exactly the same host mask you configured in MySQL (for example `%`, `localhost` or the server hostname) so MySQL grants align with runtime connections.
 4. Some hosts let you expose credentials through environment variables (`DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`). When those are present `config.php` is optional.
