@@ -26,6 +26,22 @@ function coloredIcon(hexOrHsl, glyph){
 var DB_KEY="lv_db_main"; // NIET wijzigen
 var API_DB_URL='api/db.php';
 var db={waters:[],steks:[],rigs:[],bathy:{points:[],datasets:[]},settings:{waterColor:"#33a1ff"}};
+(function syncVersionLabel(){
+  var versionMeta=document.querySelector('meta[name="app-version"]');
+  var fallback=versionMeta?versionMeta.content:'';
+  var el=document.getElementById('appVersion');
+  if(el && fallback){ el.textContent=fallback; }
+  try{
+    fetch('version.json',{cache:'no-store'})
+      .then(function(res){ return res.ok ? res.json() : null; })
+      .then(function(data){
+        if(!data || !data.version) return;
+        if(el){ el.textContent=data.version; }
+        document.title='Vis Lokaties '+data.version;
+      })
+      .catch(function(){});
+  }catch(_){ }
+})();
 // 1) snapshot uit <script id="lv_db_snapshot"> (als niet leeg)
 // 2) anders localStorage (fallback / handmatige import)
 (function(){
