@@ -182,6 +182,14 @@
     if(m.dragging && typeof m.dragging.enable === 'function'){ m.dragging.enable(); }
     m.__skipNextClick = false;
 
+    function disableMapPan(){ try{ if(map && map.dragging){ map.dragging.disable(); } }catch(_){ }
+    }
+    function enableMapPan(){ try{ if(map && map.dragging){ map.dragging.enable(); } }catch(_){ }
+    }
+
+    m.on('mousedown touchstart pointerdown', disableMapPan);
+    m.on('mouseup touchend pointerup', enableMapPan);
+
     m.on('dragstart',function(){
       m.__skipNextClick = true;
       if(useCluster && cluster){ try{ cluster.removeLayer(m);}catch(_){ } m.addTo(map); }
@@ -205,6 +213,7 @@
       }
     });
     m.on('dragend',function(ev){
+      enableMapPan();
       if(useCluster && cluster){ try{ map.removeLayer(m);}catch(_){ } cluster.addLayer(m); }
       var ll=ev.target.getLatLng();
       if(type==='stek'){
