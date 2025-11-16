@@ -9,6 +9,7 @@ en schrijft een `config.php`, zodat nieuwe omgevingen zichzelf herstellen zolang
 - `public/css/` – styles
 - `public/js/` – functionaliteit
 - `public/api/` – PHP installer/API (`db.php`, `install.php`, `bootstrap.php`, `config*.php`)
+- `public/install.php` – alias die automatisch `api/install.php` laadt voor het geval je rechtstreeks naar `/install.php` navigeert
 - `public/version.json` – metadata die de UI toont
 
 ## Vereisten
@@ -36,7 +37,7 @@ mutaties (wateren, stekken, rigs, bathy, settings) worden direct naar MySQL gepu
 ## Installeren op XAMPP
 1. Start **Apache** en **MySQL** via het XAMPP Control Panel.
 2. Kopieer de map `public` uit deze repository naar `C:\xampp\htdocs\vis-lokaties` (of gebruik een `git clone` direct in `htdocs`).
-3. Surf naar [http://localhost/vis-lokaties/api/install.php](http://localhost/vis-lokaties/api/install.php). De wizard vraagt:
+3. Surf naar [http://localhost/vis-lokaties/install.php](http://localhost/vis-lokaties/install.php) (deze file vereist automatisch `api/install.php`). De wizard vraagt:
    - Een MySQL admin (bijv. `root` + leeg wachtwoord op een standaardinstallatie).
    - De gewenste applicatie-database (standaard `vislokaties`).
    - Een nieuw gebruikersaccount + wachtwoord dat de app gaat gebruiken.
@@ -47,7 +48,7 @@ Start altijd via `http://localhost/...` zodat fetches naar `api/db.php` correct 
 
 ## Externe hosting
 1. Upload de volledige `public` map naar de document-root van je host (FTP/SFTP/git deploy).
-2. Voer `api/install.php` uit via de browser. Op managed hosting heb je vaak phpMyAdmin-gegevens waarmee je tijdelijk als admin kunt inloggen; de installer doet de rest (database, gebruiker, `kv`-tabel, config-bestand).
+2. Voer `install.php` (of direct `api/install.php`) uit via de browser. Op managed hosting heb je vaak phpMyAdmin-gegevens waarmee je tijdelijk als admin kunt inloggen; de installer doet de rest (database, gebruiker, `kv`-tabel, config-bestand).
 3. Kun je geen admin-credentials krijgen? Maak dan handmatig een database en gebruiker in het hostingpaneel en vul die in `public/api/config.php`. De app zorgt zelf dat de tabellen correct blijven.
 4. Eventueel kun je environment-variabelen (`DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`) gebruiken als jouw host dat ondersteunt; `config.php` is dan optioneel.
 5. Zorg dat PHP 8 + `mysqli` draait en dat `api/` requests niet worden geblokkeerd. Daarna kun je dezelfde URL-structuur als lokaal aanhouden.
