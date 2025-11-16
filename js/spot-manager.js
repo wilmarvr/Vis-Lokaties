@@ -182,23 +182,13 @@
     if(m.dragging && typeof m.dragging.enable === 'function'){ m.dragging.enable(); }
     m.__skipNextClick = false;
 
-    function disableMapPan(ev){
-      try{
-        if(ev && ev.originalEvent){
-          ev.originalEvent.preventDefault();
-          ev.originalEvent.stopPropagation();
-        }
-        if(map && map.dragging){ map.dragging.disable(); }
-      }catch(_){ }
+    function disableMapPan(){
+      try{ if(map && map.dragging){ map.dragging.disable(); } }
+      catch(_){ }
     }
-    function enableMapPan(ev){
-      try{
-        if(ev && ev.originalEvent){
-          ev.originalEvent.preventDefault();
-          ev.originalEvent.stopPropagation();
-        }
-        if(map && map.dragging){ map.dragging.enable(); }
-      }catch(_){ }
+    function enableMapPan(){
+      try{ if(map && map.dragging){ map.dragging.enable(); } }
+      catch(_){ }
     }
 
     m.on('mousedown touchstart pointerdown', disableMapPan);

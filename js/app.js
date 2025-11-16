@@ -4,6 +4,42 @@
   var map = window.map;
   var selection = window.selectionState;
 
+  var profileInput = document.getElementById('profileId');
+  var profileApply = document.getElementById('btnProfileApply');
+  var profileLabel = document.getElementById('activeProfileLabel');
+
+  function refreshProfileUI(explicitId){
+    var current = explicitId || window.currentUserId || 'default';
+    if(profileInput && document.activeElement !== profileInput){
+      profileInput.value = current;
+    }
+    if(profileLabel){ profileLabel.textContent = current; }
+  }
+
+  refreshProfileUI();
+
+  if(profileApply){
+    profileApply.addEventListener('click', function(){
+      var target = profileInput ? profileInput.value : '';
+      window.setActiveUser(target).catch(function(err){
+        console.error('Profile switch failed', err);
+        S('Profile switch failed: ' + err.message);
+      });
+    });
+  }
+  if(profileInput){
+    profileInput.addEventListener('keydown', function(ev){
+      if(ev.key === 'Enter'){
+        ev.preventDefault();
+        if(profileApply){ profileApply.click(); }
+      }
+    });
+  }
+
+  window.addEventListener('lv:user-changed', function(ev){
+    refreshProfileUI(ev && ev.detail ? ev.detail.userId : undefined);
+  });
+
   document.getElementById('btnSelClear').addEventListener('click', function(){
     selection.points.clear();
     if(selection.preview){ map.removeLayer(selection.preview); selection.preview=null; }

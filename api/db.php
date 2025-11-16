@@ -21,6 +21,7 @@ mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 
 $config = loadAppConfig();
 $action = isset($_GET['action']) ? trim((string) $_GET['action']) : '';
+$userId = resolveUserId();
 
 const DB_KEY = 'lv_db_main';
 $DEFAULT_DB = [
@@ -30,6 +31,27 @@ $DEFAULT_DB = [
     'bathy' => ['points' => [], 'datasets' => []],
     'settings' => ['waterColor' => '#33a1ff'],
 ];
+
+function resolveUserId(): string
+{
+    $raw = $_GET['user'] ?? '';
+    if ($raw === '' && isset($_POST['user'])) {
+        $raw = (string) $_POST['user'];
+    }
+    $raw = strtolower(trim((string) $raw));
+    if ($raw === '') {
+        $raw = 'default';
+    }
+    $clean = preg_replace('/[^a-z0-9_-]+/i', '-', $raw);
+    $clean = trim((string) $clean, '-_');
+    if ($clean === '') {
+        $clean = 'default';
+    }
+    if (strlen($clean) > 64) {
+        $clean = substr($clean, 0, 64);
+    }
+    return $clean;
+}
 
 function sanitize_id(?string $value): string
 {
@@ -51,7 +73,7 @@ function sanitize_nullable_id($value): ?string
 
 try {
     $db = connectAppDatabase($config);
-    maybeHydrateFromLegacy($db, DB_KEY, $DEFAULT_DB);
+    maybeHydrateFromLegacy($db, DB_KEY, $DEFAULT_DB, $userId);
 } catch (mysqli_sql_exception $e) {
     http_response_code(500);
     echo json_encode(['error' => 'Kon geen verbinding maken met MySQL', 'details' => $e->getMessage()]);
@@ -60,7 +82,7 @@ try {
 
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     try {
-        $payload = fetchCurrentState($db, $DEFAULT_DB);
+        $payload = fetchCurrentState($db, $DEFAULT_DB, $userId);
         echo json_encode($payload, JSON_UNESCAPED_UNICODE);
     } catch (mysqli_sql_exception $e) {
         http_response_code(500);
@@ -79,45 +101,45 @@ if (!is_array($decoded)) {
 
 try {
     if ($action === 'bathy_append') {
-        $stats = appendBathy($db, $decoded);
+        $stats = appendBathy($db, $decoded, $userId);
         echo json_encode(['ok' => true, 'points' => $stats['points'], 'datasets' => $stats['datasets']]);
         exit;
     }
     if ($action === 'bathy_clear') {
-        clearBathy($db);
+        clearBathy($db, $userId);
         echo json_encode(['ok' => true]);
         exit;
     }
 
-    persistState($db, $decoded, $DEFAULT_DB);
+    persistState($db, $decoded, $DEFAULT_DB, $userId);
     echo json_encode(['ok' => true]);
 } catch (mysqli_sql_exception $e) {
     http_response_code(500);
     echo json_encode(['error' => 'Kon data niet opslaan', 'details' => $e->getMessage()]);
 }
 
-function fetchCurrentState(mysqli $db, array $defaults): array
+function fetchCurrentState(mysqli $db, array $defaults, string $userId): array
 {
     return [
-        'waters' => fetchWaters($db),
-        'steks' => fetchSteks($db),
-        'rigs' => fetchSpots($db),
-        'bathy' => fetchBathy($db),
-        'settings' => fetchSettings($db, $defaults['settings']),
+        'waters' => fetchWaters($db, $userId),
+        'steks' => fetchSteks($db, $userId),
+        'rigs' => fetchSpots($db, $userId),
+        'bathy' => fetchBathy($db, $userId),
+        'settings' => fetchSettings($db, $defaults['settings'], $userId),
     ];
 }
 
-function persistState(mysqli $db, array $payload, array $defaults): void
+function persistState(mysqli $db, array $payload, array $defaults, string $userId): void
 {
     $normalized = normalizePayload($payload, $defaults);
 
     $db->begin_transaction();
     try {
-        replaceWaters($db, $normalized['waters']);
-        replaceSteks($db, $normalized['steks']);
-        replaceSpots($db, $normalized['rigs']);
-        replaceBathy($db, $normalized['bathy']);
-        storeSettings($db, $normalized['settings']);
+        replaceWaters($db, $normalized['waters'], $userId);
+        replaceSteks($db, $normalized['steks'], $userId);
+        replaceSpots($db, $normalized['rigs'], $userId);
+        replaceBathy($db, $normalized['bathy'], $userId);
+        storeSettings($db, $normalized['settings'], $userId);
         $db->commit();
     } catch (Throwable $e) {
         $db->rollback();
@@ -286,10 +308,13 @@ function ensureBathyDatasetIntegrity(array $points, array $datasets): array
     return [$points, $datasets];
 }
 
-function fetchWaters(mysqli $db): array
+function fetchWaters(mysqli $db, string $userId): array
 {
     $waters = [];
-    $result = $db->query('SELECT id, name, geojson FROM waters ORDER BY name');
+    $stmt = $db->prepare('SELECT id, name, geojson FROM waters WHERE user_id = ? ORDER BY name');
+    $stmt->bind_param('s', $userId);
+    $stmt->execute();
+    $result = $stmt->get_result();
     while ($row = $result->fetch_assoc()) {
         $geojson = json_decode((string) $row['geojson'], true);
         $waters[] = [
@@ -298,13 +323,17 @@ function fetchWaters(mysqli $db): array
             'geojson' => $geojson,
         ];
     }
+    $stmt->close();
     return $waters;
 }
 
-function fetchSteks(mysqli $db): array
+function fetchSteks(mysqli $db, string $userId): array
 {
     $list = [];
-    $result = $db->query('SELECT id, name, note, lat, lng, water_id FROM steks ORDER BY name');
+    $stmt = $db->prepare('SELECT id, name, note, lat, lng, water_id FROM steks WHERE user_id = ? ORDER BY name');
+    $stmt->bind_param('s', $userId);
+    $stmt->execute();
+    $result = $stmt->get_result();
     while ($row = $result->fetch_assoc()) {
         $list[] = [
             'id' => $row['id'],
@@ -315,13 +344,17 @@ function fetchSteks(mysqli $db): array
             'waterId' => $row['water_id'] ?? null,
         ];
     }
+    $stmt->close();
     return $list;
 }
 
-function fetchSpots(mysqli $db): array
+function fetchSpots(mysqli $db, string $userId): array
 {
     $list = [];
-    $result = $db->query('SELECT id, name, note, lat, lng, water_id, stek_id FROM spots ORDER BY name');
+    $stmt = $db->prepare('SELECT id, name, note, lat, lng, water_id, stek_id FROM spots WHERE user_id = ? ORDER BY name');
+    $stmt->bind_param('s', $userId);
+    $stmt->execute();
+    $result = $stmt->get_result();
     while ($row = $result->fetch_assoc()) {
         $list[] = [
             'id' => $row['id'],
@@ -333,13 +366,17 @@ function fetchSpots(mysqli $db): array
             'stekId' => $row['stek_id'] ?? null,
         ];
     }
+    $stmt->close();
     return $list;
 }
 
-function fetchBathy(mysqli $db): array
+function fetchBathy(mysqli $db, string $userId): array
 {
     $points = [];
-    $result = $db->query('SELECT dataset_id, lat, lon, dep FROM bathy_points ORDER BY id');
+    $stmt = $db->prepare('SELECT dataset_id, lat, lon, dep FROM bathy_points WHERE user_id = ? ORDER BY id');
+    $stmt->bind_param('s', $userId);
+    $stmt->execute();
+    $result = $stmt->get_result();
     while ($row = $result->fetch_assoc()) {
         $points[] = [
             'lat' => (float) $row['lat'],
@@ -348,9 +385,13 @@ function fetchBathy(mysqli $db): array
             'dataset_id' => $row['dataset_id'] ?? null,
         ];
     }
+    $stmt->close();
 
     $datasets = [];
-    $dsResult = $db->query('SELECT id, payload FROM bathy_datasets ORDER BY id');
+    $dsStmt = $db->prepare('SELECT id, payload FROM bathy_datasets WHERE user_id = ? ORDER BY id');
+    $dsStmt->bind_param('s', $userId);
+    $dsStmt->execute();
+    $dsResult = $dsStmt->get_result();
     while ($row = $dsResult->fetch_assoc()) {
         $decoded = json_decode((string) $row['payload'], true);
         if (is_array($decoded)) {
@@ -360,65 +401,84 @@ function fetchBathy(mysqli $db): array
             $datasets[] = $decoded;
         }
     }
+    $dsStmt->close();
 
     return ['points' => $points, 'datasets' => $datasets];
 }
 
-function fetchSettings(mysqli $db, array $defaults): array
+function fetchSettings(mysqli $db, array $defaults, string $userId): array
 {
     $settings = $defaults;
-    $result = $db->query('SELECT name, value FROM settings');
+    $stmt = $db->prepare('SELECT name, value FROM settings WHERE user_id = ?');
+    $stmt->bind_param('s', $userId);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $found = false;
     while ($row = $result->fetch_assoc()) {
+        $found = true;
         $settings[$row['name']] = $row['value'];
+    }
+    $stmt->close();
+    if (!$found) {
+        return $defaults;
     }
     return $settings;
 }
 
-function replaceWaters(mysqli $db, array $waters): void
+function replaceWaters(mysqli $db, array $waters, string $userId): void
 {
-    $db->query('DELETE FROM waters');
+    $stmt = $db->prepare('DELETE FROM waters WHERE user_id = ?');
+    $stmt->bind_param('s', $userId);
+    $stmt->execute();
+    $stmt->close();
     if (!$waters) {
         return;
     }
-    $stmt = $db->prepare('INSERT INTO waters (id, name, geojson) VALUES (?, ?, ?)');
+    $stmt = $db->prepare('INSERT INTO waters (user_id, id, name, geojson) VALUES (?, ?, ?, ?)');
     foreach ($waters as $water) {
         $geojsonData = $water['geojson'];
         if ($geojsonData === null) {
             $geojsonData = ['type' => 'FeatureCollection', 'features' => []];
         }
         $geojson = json_encode($geojsonData, JSON_UNESCAPED_UNICODE);
-        $stmt->bind_param('sss', $water['id'], $water['name'], $geojson);
+        $stmt->bind_param('ssss', $userId, $water['id'], $water['name'], $geojson);
         $stmt->execute();
     }
     $stmt->close();
 }
 
-function replaceSteks(mysqli $db, array $steks): void
+function replaceSteks(mysqli $db, array $steks, string $userId): void
 {
-    $db->query('DELETE FROM steks');
+    $stmt = $db->prepare('DELETE FROM steks WHERE user_id = ?');
+    $stmt->bind_param('s', $userId);
+    $stmt->execute();
+    $stmt->close();
     if (!$steks) {
         return;
     }
-    $stmt = $db->prepare('INSERT INTO steks (id, name, note, lat, lng, water_id) VALUES (?, ?, ?, ?, ?, ?)');
+    $stmt = $db->prepare('INSERT INTO steks (user_id, id, name, note, lat, lng, water_id) VALUES (?, ?, ?, ?, ?, ?, ?)');
     foreach ($steks as $stek) {
         $waterId = $stek['water_id'] ?? null;
-        $stmt->bind_param('sssdds', $stek['id'], $stek['name'], $stek['note'], $stek['lat'], $stek['lng'], $waterId);
+        $stmt->bind_param('ssssdds', $userId, $stek['id'], $stek['name'], $stek['note'], $stek['lat'], $stek['lng'], $waterId);
         $stmt->execute();
     }
     $stmt->close();
 }
 
-function replaceSpots(mysqli $db, array $spots): void
+function replaceSpots(mysqli $db, array $spots, string $userId): void
 {
-    $db->query('DELETE FROM spots');
+    $stmt = $db->prepare('DELETE FROM spots WHERE user_id = ?');
+    $stmt->bind_param('s', $userId);
+    $stmt->execute();
+    $stmt->close();
     if (!$spots) {
         return;
     }
-    $stmt = $db->prepare('INSERT INTO spots (id, name, note, lat, lng, water_id, stek_id) VALUES (?, ?, ?, ?, ?, ?, ?)');
+    $stmt = $db->prepare('INSERT INTO spots (user_id, id, name, note, lat, lng, water_id, stek_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
     foreach ($spots as $spot) {
         $waterId = $spot['water_id'] ?? null;
         $stekId = $spot['stek_id'] ?? null;
-        $stmt->bind_param('sssddss', $spot['id'], $spot['name'], $spot['note'], $spot['lat'], $spot['lng'], $waterId, $stekId);
+        $stmt->bind_param('ssssddss', $userId, $spot['id'], $spot['name'], $spot['note'], $spot['lat'], $spot['lng'], $waterId, $stekId);
         $stmt->execute();
     }
     $stmt->close();
@@ -471,17 +531,23 @@ function normalizeBathyDatasets(array $datasets): array
     return $normalized;
 }
 
-function replaceBathy(mysqli $db, array $bathy): void
+function replaceBathy(mysqli $db, array $bathy, string $userId): void
 {
-    $db->query('DELETE FROM bathy_points');
-    $db->query('DELETE FROM bathy_datasets');
+    $stmt = $db->prepare('DELETE FROM bathy_points WHERE user_id = ?');
+    $stmt->bind_param('s', $userId);
+    $stmt->execute();
+    $stmt->close();
+    $stmt = $db->prepare('DELETE FROM bathy_datasets WHERE user_id = ?');
+    $stmt->bind_param('s', $userId);
+    $stmt->execute();
+    $stmt->close();
 
     $points = $bathy['points'] ?? [];
     if ($points) {
-        $stmt = $db->prepare("INSERT INTO bathy_points (dataset_id, lat, lon, dep) VALUES (NULLIF(?, ''), ?, ?, ?)");
+        $stmt = $db->prepare("INSERT INTO bathy_points (user_id, dataset_id, lat, lon, dep) VALUES (?, NULLIF(?, ''), ?, ?, ?)");
         foreach ($points as $point) {
             $datasetId = $point['dataset_id'] ?? '';
-            $stmt->bind_param('sddd', $datasetId, $point['lat'], $point['lon'], $point['dep']);
+            $stmt->bind_param('ssddd', $userId, $datasetId, $point['lat'], $point['lon'], $point['dep']);
             $stmt->execute();
         }
         $stmt->close();
@@ -489,18 +555,18 @@ function replaceBathy(mysqli $db, array $bathy): void
 
     $datasets = $bathy['datasets'] ?? [];
     if ($datasets) {
-        $stmt = $db->prepare('INSERT INTO bathy_datasets (id, payload) VALUES (?, ?)');
+        $stmt = $db->prepare('INSERT INTO bathy_datasets (user_id, id, payload) VALUES (?, ?, ?)');
         foreach ($datasets as $dataset) {
             $payload = $dataset['payload'] ?? [];
             $json = json_encode($payload, JSON_UNESCAPED_UNICODE);
-            $stmt->bind_param('ss', $dataset['id'], $json);
+            $stmt->bind_param('sss', $userId, $dataset['id'], $json);
             $stmt->execute();
         }
         $stmt->close();
     }
 }
 
-function appendBathy(mysqli $db, array $payload): array
+function appendBathy(mysqli $db, array $payload, string $userId): array
 {
     $points = normalizeBathyPoints($payload['points'] ?? []);
     $datasets = normalizeBathyDatasets($payload['datasets'] ?? []);
@@ -511,20 +577,20 @@ function appendBathy(mysqli $db, array $payload): array
     $db->begin_transaction();
     try {
         if ($datasets) {
-            $stmt = $db->prepare('INSERT INTO bathy_datasets (id, payload) VALUES (?, ?) ON DUPLICATE KEY UPDATE payload = VALUES(payload)');
+            $stmt = $db->prepare('INSERT INTO bathy_datasets (user_id, id, payload) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE payload = VALUES(payload)');
             foreach ($datasets as $dataset) {
                 $json = json_encode($dataset['payload'], JSON_UNESCAPED_UNICODE);
-                $stmt->bind_param('ss', $dataset['id'], $json);
+                $stmt->bind_param('sss', $userId, $dataset['id'], $json);
                 $stmt->execute();
             }
             $stmt->close();
         }
 
         if ($points) {
-            $stmt = $db->prepare("INSERT INTO bathy_points (dataset_id, lat, lon, dep) VALUES (NULLIF(?, ''), ?, ?, ?)");
+            $stmt = $db->prepare("INSERT INTO bathy_points (user_id, dataset_id, lat, lon, dep) VALUES (?, NULLIF(?, ''), ?, ?, ?)");
             foreach ($points as $point) {
                 $datasetId = $point['dataset_id'] ?? '';
-                $stmt->bind_param('sddd', $datasetId, $point['lat'], $point['lon'], $point['dep']);
+                $stmt->bind_param('ssddd', $userId, $datasetId, $point['lat'], $point['lon'], $point['dep']);
                 $stmt->execute();
             }
             $stmt->close();
@@ -539,12 +605,18 @@ function appendBathy(mysqli $db, array $payload): array
     return ['points' => count($points), 'datasets' => count($datasets)];
 }
 
-function clearBathy(mysqli $db): void
+function clearBathy(mysqli $db, string $userId): void
 {
     $db->begin_transaction();
     try {
-        $db->query('DELETE FROM bathy_points');
-        $db->query('DELETE FROM bathy_datasets');
+        $stmt = $db->prepare('DELETE FROM bathy_points WHERE user_id = ?');
+        $stmt->bind_param('s', $userId);
+        $stmt->execute();
+        $stmt->close();
+        $stmt = $db->prepare('DELETE FROM bathy_datasets WHERE user_id = ?');
+        $stmt->bind_param('s', $userId);
+        $stmt->execute();
+        $stmt->close();
         $db->commit();
     } catch (Throwable $e) {
         $db->rollback();
@@ -552,33 +624,38 @@ function clearBathy(mysqli $db): void
     }
 }
 
-function storeSettings(mysqli $db, array $settings): void
+function storeSettings(mysqli $db, array $settings, string $userId): void
 {
-    $db->query('DELETE FROM settings');
+    $stmt = $db->prepare('DELETE FROM settings WHERE user_id = ?');
+    $stmt->bind_param('s', $userId);
+    $stmt->execute();
+    $stmt->close();
     if (!$settings) {
         return;
     }
-    $stmt = $db->prepare('INSERT INTO settings (name, value) VALUES (?, ?)');
+    $stmt = $db->prepare('INSERT INTO settings (user_id, name, value) VALUES (?, ?, ?)');
     foreach ($settings as $name => $value) {
-        $stmt->bind_param('ss', $name, $value);
+        $stmt->bind_param('sss', $userId, $name, $value);
         $stmt->execute();
     }
     $stmt->close();
 }
 
-function maybeHydrateFromLegacy(mysqli $db, string $legacyKey, array $defaults): void
+function maybeHydrateFromLegacy(mysqli $db, string $legacyKey, array $defaults, string $userId): void
 {
-    if (!schemaIsEmpty($db)) {
+    if (userHasData($db, $userId)) {
         return;
     }
 
-    $legacy = readLegacySnapshot($db, $legacyKey);
-    if (is_array($legacy)) {
-        persistState($db, $legacy, $defaults);
-        return;
+    if (schemaIsEmpty($db)) {
+        $legacy = readLegacySnapshot($db, $legacyKey);
+        if (is_array($legacy)) {
+            persistState($db, $legacy, $defaults, $userId);
+            return;
+        }
     }
 
-    persistState($db, $defaults, $defaults);
+    persistState($db, $defaults, $defaults, $userId);
 }
 
 function schemaIsEmpty(mysqli $db): bool
@@ -590,6 +667,22 @@ function schemaIsEmpty(mysqli $db): bool
         }
     }
     return true;
+}
+
+function userHasData(mysqli $db, string $userId): bool
+{
+    foreach (['waters', 'steks', 'spots', 'bathy_points'] as $table) {
+        $stmt = $db->prepare("SELECT 1 FROM {$table} WHERE user_id = ? LIMIT 1");
+        $stmt->bind_param('s', $userId);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $has = $result && $result->num_rows > 0;
+        $stmt->close();
+        if ($has) {
+            return true;
+        }
+    }
+    return false;
 }
 
 function readLegacySnapshot(mysqli $db, string $key): ?array

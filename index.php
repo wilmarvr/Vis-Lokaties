@@ -36,6 +36,15 @@ try {
 <div id="toolbar">
   <h3>🎣 Vis Lokaties <span id="appVersion"><?= htmlspecialchars($version, ENT_QUOTES) ?></span></h3>
 
+  <div class="profile-switcher">
+    <label for="profileId">Profile</label>
+    <div class="profile-switcher__controls">
+      <input type="text" id="profileId" maxlength="32" placeholder="e.g. team-alpha">
+      <button id="btnProfileApply">Switch</button>
+    </div>
+    <div class="profile-switcher__hint">Currently viewing <strong id="activeProfileLabel">default</strong>. Every profile keeps its own waters, swims, rigs and Deeper imports.</div>
+  </div>
+
   <div style="margin:4px 0 8px">
     Basemap:
     <select id="basemap">

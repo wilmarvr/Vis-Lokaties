@@ -2,13 +2,55 @@
   'use strict';
 
   var DB_KEY = 'lv_db_main';
+  var USER_PREF_KEY = 'lv_current_user';
   var API_DB_URL = 'api/db.php';
+  var DEFAULT_USER = 'default';
   window.API_DB_URL = API_DB_URL;
   window.DB_KEY = DB_KEY;
   var saveTimer = null;
-
-  window.db = {waters:[],steks:[],rigs:[],bathy:{points:[],datasets:[]},settings:{waterColor:'#33a1ff'}};
   var usedLocalFallback = false;
+
+  function sanitizeUserId(value){
+    var str = (value == null ? '' : String(value)).toLowerCase();
+    str = str.replace(/[^a-z0-9_-]+/g, '-');
+    str = str.replace(/^-+|-+$/g, '');
+    if(!str){ str = DEFAULT_USER; }
+    if(str.length > 32){ str = str.slice(0, 32); }
+    return str;
+  }
+
+  function loadStoredUser(){
+    var stored = '';
+    try{ stored = localStorage.getItem(USER_PREF_KEY) || ''; }
+    catch(_){ stored = ''; }
+    return sanitizeUserId(stored || DEFAULT_USER);
+  }
+
+  function freshState(){
+    return {waters:[],steks:[],rigs:[],bathy:{points:[],datasets:[]},settings:{waterColor:'#33a1ff'}};
+  }
+
+  var currentUserId = loadStoredUser();
+  window.currentUserId = currentUserId;
+  window.sanitizeUserId = sanitizeUserId;
+  window.db = freshState();
+
+  function storageKey(){
+    return DB_KEY + '__' + (window.currentUserId || DEFAULT_USER);
+  }
+
+  function buildApiUrl(action){
+    var parts = [];
+    if(action){ parts.push('action=' + encodeURIComponent(action)); }
+    if(window.currentUserId){ parts.push('user=' + encodeURIComponent(window.currentUserId)); }
+    return API_DB_URL + (parts.length ? ('?' + parts.join('&')) : '');
+  }
+
+  function emitUserChange(){
+    try {
+      window.dispatchEvent(new CustomEvent('lv:user-changed', {detail:{userId:window.currentUserId || DEFAULT_USER}}));
+    } catch(_){ }
+  }
 
   function buildErrorMessage(body, fallback){
     var msg = fallback || 'Server rejected payload.';
@@ -34,13 +76,13 @@
   }
 
   function cacheBrowserSnapshot(){
-    try{ localStorage.setItem(DB_KEY, JSON.stringify(window.db)); }
+    try{ localStorage.setItem(storageKey(), JSON.stringify(window.db)); }
     catch(_){ }
   }
 
   function tryLoadBrowserSnapshot(){
     try{
-      var raw = localStorage.getItem(DB_KEY);
+      var raw = localStorage.getItem(storageKey());
       if(raw){
         window.db = JSON.parse(raw);
         usedLocalFallback = true;
@@ -72,13 +114,29 @@
       var snapEl = document.getElementById('lv_db_snapshot');
       if(snapEl && snapEl.textContent && snapEl.textContent.trim() && snapEl.textContent.trim() !== '{}'){
         window.db = JSON.parse(snapEl.textContent);
-        return;
-      }
-      if(window.APP_DB_READY === false){
-        tryLoadBrowserSnapshot();
+        return true;
       }
     }catch(_){ }
+    return tryLoadBrowserSnapshot();
   }
+
+  window.setActiveUser = function setActiveUser(userId){
+    var target = sanitizeUserId(userId);
+    if(!target){ target = DEFAULT_USER; }
+    if(target === window.currentUserId){
+      emitUserChange();
+      return window.syncFromServer();
+    }
+    window.currentUserId = target;
+    usedLocalFallback = false;
+    try{ localStorage.setItem(USER_PREF_KEY, target); }
+    catch(_){ }
+    window.db = freshState();
+    cacheBrowserSnapshot();
+    emitUserChange();
+    if(typeof window.renderAll === 'function'){ window.renderAll(); }
+    return window.syncFromServer();
+  };
 
   window.normalizeDB = function normalizeDB(){
     function num(v){ return (typeof v === 'string') ? parseFloat(v) : v; }
@@ -153,7 +211,7 @@
       return Promise.reject(offlineErr);
     }
 
-    return postJson(API_DB_URL, window.db).then(function(body){
+    return postJson(buildApiUrl(), window.db).then(function(body){
       if(body && body.ok){
         S('Saved to server.');
         return body;
@@ -187,7 +245,7 @@
       return Promise.reject(new Error('Database not configured yet.'));
     }
     payload = payload || {};
-    return postJson(API_DB_URL + '?action=bathy_append', payload).then(function(body){
+    return postJson(buildApiUrl('bathy_append'), payload).then(function(body){
       if(body && body.ok){ return body; }
       throw new Error(buildErrorMessage(body, 'Server rejected payload.'));
     });
@@ -197,7 +255,7 @@
     if(window.APP_DB_READY === false){
       return Promise.reject(new Error('Database not configured yet.'));
     }
-    return postJson(API_DB_URL + '?action=bathy_clear', {}).then(function(body){
+    return postJson(buildApiUrl('bathy_clear'), {}).then(function(body){
       if(body && body.ok){ return body; }
       throw new Error(buildErrorMessage(body, 'Server rejected payload.'));
     });
@@ -208,7 +266,7 @@
       S('Server offline – using browser data.');
       return Promise.resolve();
     }
-    return fetch(API_DB_URL, {cache:'no-store'})
+    return fetch(buildApiUrl(), {cache:'no-store'})
       .then(function(res){ if(!res.ok) throw new Error('Bad status ' + res.status); return res.json(); })
       .then(function(remote){
         if(remote && typeof remote === 'object'){
@@ -233,5 +291,6 @@
   loadSnapshot();
   window.normalizeDB();
   syncVersionLabel();
+  emitUserChange();
   window.syncFromServer();
 })(window);
