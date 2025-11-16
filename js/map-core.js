@@ -6,11 +6,12 @@
   window.__VIS_MAP = map;
   if(!map._loaded){ map.setView([52.4033055556,5.2391111111],17); }
 
+  function tileUrl(layer){ return 'api/tile.php?layer='+layer+'&z={z}&x={x}&y={y}'; }
   var bases = {
-    osm:L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:20}),
-    toner:L.tileLayer('https://stamen-tiles.a.ssl.fastly.net/toner/{z}/{x}/{y}.png',{maxZoom:20}),
-    terrain:L.tileLayer('https://stamen-tiles.a.ssl.fastly.net/terrain/{z}/{x}/{y}.jpg',{maxZoom:18}),
-    dark:L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{maxZoom:20})
+    osm:L.tileLayer(tileUrl('osm'),{maxZoom:20, crossOrigin:true}),
+    toner:L.tileLayer(tileUrl('toner'),{maxZoom:20, crossOrigin:true}),
+    terrain:L.tileLayer(tileUrl('terrain'),{maxZoom:18, crossOrigin:true}),
+    dark:L.tileLayer(tileUrl('dark')+'&r={r}',{maxZoom:20, crossOrigin:true})
   };
   bases.osm.addTo(map);
   document.getElementById('basemap').addEventListener('change',function(e){

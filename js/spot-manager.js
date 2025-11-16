@@ -8,6 +8,14 @@
     var suggestion = selection.bestWater ? (' • suggested: ' + (nameOfWater(selection.bestWater.id) || selection.bestWater.id)) : '';
     I('Selection: ' + n + ' points' + suggestion + '.');
   }
+  function clearEntireSelection(){
+    if(selection.points.size){ selection.points.clear(); }
+    selection.bestWater=null;
+    try {
+      document.querySelectorAll('.leaflet-marker-icon.sel').forEach(function(icon){ icon.classList.remove('sel'); });
+    } catch(_){ }
+    updateSelInfo();
+  }
   function clearSelectionForMarker(marker){
     if(!selection.points.size) return;
     var ll=marker.getLatLng();
@@ -42,6 +50,7 @@
       try{ map.dragging.disable(); }catch(_){ }
       if(useCluster && window.cluster){ try{ window.cluster.removeLayer(m);}catch(_){ } m.addTo(map); }
       clearSelectionForMarker(m);
+      clearEntireSelection();
     });
     m.on('drag',function(){ window.drawDistances(); });
     m.on('dragend',function(ev){
@@ -57,6 +66,7 @@
         var r=db.rigs.find(function(x){return x.id===id;});
         if(r){ r.lat=ll.lat; r.lng=ll.lng; r.waterId = nearestWaterIdForLatLng(ll.lat,ll.lng) || r.waterId || null; }
       }
+      clearEntireSelection();
       saveDB(); renderAll(); S(type==='stek'?'Swim moved.':'Rig moved.');
     });
     m.on('click',function(ev){
@@ -123,6 +133,7 @@
     if(window.isobandLayer){ window.isobandLayer.clearLayers(); }
     if(window.contourLayer){ window.contourLayer.clearLayers(); }
     if(window.measureLayer){ window.measureLayer.clearLayers(); }
+    if(typeof window.refreshHeatFromState === 'function'){ window.refreshHeatFromState(); }
     if(typeof window.renderWaters === 'function'){ window.renderWaters(); }
     (db.steks||[]).forEach(function(s){ var m=makeStekMarker(s); if(useCluster && window.cluster) window.cluster.addLayer(m); else m.addTo(map); });
     (db.rigs||[]).forEach(function(r){ var m=makeRigMarker(r); if(useCluster && window.cluster) window.cluster.addLayer(m); else m.addTo(map); });

@@ -391,7 +391,6 @@ function replaceSpots(mysqli $db, array $spots): void
 function replaceBathy(mysqli $db, array $bathy): void
 {
     $db->query('DELETE FROM bathy_points');
-    $db->query('ALTER TABLE bathy_points AUTO_INCREMENT = 1');
     $db->query('DELETE FROM bathy_datasets');
 
     $points = $bathy['points'] ?? [];

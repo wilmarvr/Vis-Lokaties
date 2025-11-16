@@ -6,7 +6,7 @@ The Vis Lokaties toolkit now runs through a PHP entry point (`index.php`) that r
 - `index.php` – user interface, version banner and database readiness check
 - `css/` – stylesheets (including the modal styles that power the pickers)
 - `js/` – split JavaScript modules (`utils`, `state`, `map-core`, `water-manager`, `spot-manager`, `deeper-import`, `app`)
-- `api/` – PHP bootstrapper, database API and installer (`db.php`, `install.php`, `bootstrap.php`, `config*.php`)
+- `api/` – PHP bootstrapper, database API, installer (`db.php`, `install.php`, `bootstrap.php`, `config*.php`) and the tile proxy (`tile.php`)
 - `install.php` – convenience alias that forwards to `api/install.php`
 - `version.json` – metadata surfaced inside the UI and `<title>`
 - `VERSION` – repository level version string (currently `v0.0.0`)
@@ -21,10 +21,10 @@ The Vis Lokaties toolkit now runs through a PHP entry point (`index.php`) that r
 
 | Panel | What it does |
 | --- | --- |
-| **Basemap** | Switch between OSM, Toner, Terrain and Carto Dark tiles. Shows a scale bar, mouse position, zoom level and a live depth tooltip interpolated from your bathymetry. |
-| **Spots** | Place swims (stekken) or rigs by clicking the map, toggle clustering, display swim–rig distances, disable clustering when dragging misbehaves and auto-place two rigs for each visible swim. |
+| **Basemap** | Switch between OSM, Toner, Terrain and Carto Dark tiles. Tiles are proxied through `api/tile.php`, so browsers that apply OpaqueResponseBlocking no longer block the PNG/JPG requests. The panel also shows a scale bar, mouse position, zoom level and a live depth tooltip interpolated from your bathymetry. |
+| **Spots** | Place swims (stekken) or rigs by clicking the map, toggle clustering, display swim–rig distances, disable clustering when dragging misbehaves and auto-place two rigs for each visible swim. Dragging a marker now clears the current selection and the icon stays wherever you release the mouse/finger. |
 | **Detection** | Build new waters from the viewport, a manual selection or OpenStreetMap water polygons. Set the maximum edge length, enter a name and store the polygon. Quickly clear the current selection. |
-| **Deeper import & heatmap** | Import CSV/ZIP files or whole directories (for example from Deeper sonar logs), persist bathymetry inside MySQL, monitor the queue/progress bars, tune the heatmap radius/blur/min-max/inversion/clipping, review the per-file dataset list (with counts, depth ranges and timestamps) and wipe the heatmap or stored bathy points. |
+| **Deeper import & heatmap** | Import CSV/ZIP files or whole directories (for example from Deeper sonar logs), persist bathymetry inside MySQL, monitor the queue/progress bars, tune the heatmap radius/blur/min-max/inversion/clipping, review the per-file dataset list (with counts, depth ranges and timestamps) and wipe the heatmap or stored bathy points. The heatmap now disappears automatically whenever the database holds zero bathymetry rows, so a fresh install or a cleared table never shows stale overlays. |
 | **Weather & wind** | Fetch live weather or a specific day/hour via Open-Meteo, display the result textually, render a compass overlay and optionally draw wind arrows whose density you control. |
 | **Manage everything** | Tabbed tables for waters, swims and rigs so you can rename, relink or delete entries. Clicking a row zooms the map to the corresponding geometry. |
 | **Contours** | Generate contour lines directly from the Deeper bathymetry (even freshly imported data) inside the current viewport, monitor the live progress bar while isolines are built, or clear existing contour layers. |
@@ -60,6 +60,7 @@ Always open the site via `http://localhost/...` on XAMPP so every `fetch` call t
 - `api/install.php` uses the same bootstrapper as `db.php` but adds database/user provisioning plus `config.php` creation when needed.
 - `api/bootstrap.php` reads `config.php` (or environment variables), opens the MySQL connection, creates the database if it is missing and verifies every table that the UI depends on (including the Deeper import storage and the legacy `kv` table for migrations).
 - On the first run the bootstrapper seeds the default payload (either from the new tables or by migrating the legacy `kv` snapshot). Every interaction in the UI triggers `saveDB()` → `pushDbToServer()`, so MySQL stays synced.
+- Basemap tiles are requested through `api/tile.php`, a small PHP proxy that caches OSM/Stamen/Carto tiles for 24 hours. Keeping these requests same-origin bypasses browsers that block cross-origin PNGs/JPGs via OpaqueResponseBlocking, so you no longer see tile errors in the console.
 
 ## Versioning
 - `VERSION` and `version.json` contain the current release (`v0.0.0`). Always update both when you bump the version.

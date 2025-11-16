@@ -72,9 +72,22 @@
   updateLiveBathyCache();
   function setBathyTotal(n){ var el=document.getElementById('bathyTotal'); if(el) el.textContent=String(n||0); }
   function setHeatCount(n){ var el=document.getElementById('heatCount'); if(el) el.textContent=String(n||0); }
+  function resetHeatStats(){ var st=document.getElementById('hmStats'); if(st) st.textContent='Min: – • Max: –'; }
+  function clearHeatLayer(){ if(heatLayer){ map.removeLayer(heatLayer); heatLayer=null; } currentPoints=[]; setHeatCount(0); resetHeatStats(); var lg=document.getElementById('legend'); if(lg) lg.classList.remove('inv'); }
 
   var autoMin=0, autoMax=0;
-  function updateLegend(min,max,inv){ var st=document.getElementById('hmStats'); if(st) st.textContent = 'Min: ' + (min==null?'auto':min) + ' m • Max: ' + (max==null?'auto':max) + ' m'; var lg=document.getElementById('legend'); if(lg){ lg.classList.toggle('inv', !!inv); } }
+  function updateLegend(min,max,inv){
+    var st=document.getElementById('hmStats');
+    if(st){
+      if(!rawAll.length){ st.textContent='Min: – • Max: –'; }
+      else {
+        var minLbl=(min==null||isNaN(min))?'auto':Number(min).toFixed(1);
+        var maxLbl=(max==null||isNaN(max))?'auto':Number(max).toFixed(1);
+        st.textContent='Min: '+minLbl+' m • Max: '+maxLbl+' m';
+      }
+    }
+    var lg=document.getElementById('legend'); if(lg){ lg.classList.toggle('inv', !!inv); }
+  }
   function scaleDepth(val,min,max,inv){
     if(min==null||max==null||isNaN(min)||isNaN(max)){
       return 1 - Math.max(0,Math.min(1,(val - autoMin)/((autoMax - autoMin)||1)));
@@ -93,10 +106,7 @@
   function applyHeatFromRaw(){
     if(!map || !map._loaded){ map.whenReady(applyHeatFromRaw); return; }
     currentPoints = [];
-    if(!rawAll.length){
-      if(heatLayer){ map.removeLayer(heatLayer); heatLayer=null; setHeatCount(0); }
-      return;
-    }
+    if(!rawAll.length){ clearHeatLayer(); return; }
     var minV = (hmFixed.checked ? 0 : parseFloat(hmMin.value));
     var maxV = (hmFixed.checked ? 20 : parseFloat(hmMax.value));
     var inv  = !!hmInvert.checked;
@@ -117,6 +127,14 @@
     buildHeat(currentPoints);
   }
   window.applyHeatFromRaw = applyHeatFromRaw;
+  function refreshHeatFromState(){
+    rawAll=(db.bathy && Array.isArray(db.bathy.points))? db.bathy.points.slice():[];
+    updateLiveBathyCache();
+    setBathyTotal(rawAll.length);
+    if(!rawAll.length){ clearHeatLayer(); return; }
+    applyHeatFromRaw();
+  }
+  window.refreshHeatFromState = refreshHeatFromState;
 
   var btnFiles = document.getElementById('btn-import-files'),
       btnDir   = document.getElementById('btn-import-dir'),
@@ -265,9 +283,8 @@
             saveDB();
             S('Bathymetry saved to database.');
           }
-          rawAll = rawAccumulator.length ? rawAccumulator.slice() : rawAll;
-          updateLiveBathyCache();
-          applyHeatFromRaw();
+          refreshHeatFromState();
+          renderDatasets();
           return;
         }
         var task = tasks[idx];
@@ -298,8 +315,8 @@
     if(!confirm('Erase all bathymetry from the database?')) return;
     db.bathy.points=[]; db.bathy.datasets=[];
     saveDB();
-    rawAll=[]; updateLiveBathyCache(); if(heatLayer){ map.removeLayer(heatLayer); heatLayer=null; }
-    currentPoints=[]; setBathyTotal(0); setHeatCount(0);
+    rawAll=[]; updateLiveBathyCache(); clearHeatLayer();
+    currentPoints=[]; setBathyTotal(0);
     S('Stored bathymetry removed.');
     renderDatasets();
   });
@@ -307,12 +324,7 @@
   map.on('moveend', function(){ if(document.getElementById('hmClip').checked){ applyHeatFromRaw(); } });
 
   map.whenReady(function(){
-    setBathyTotal((db.bathy && Array.isArray(db.bathy.points)) ? db.bathy.points.length : 0);
-    if(db.bathy && Array.isArray(db.bathy.points) && db.bathy.points.length){
-      rawAll = db.bathy.points.slice();
-      updateLiveBathyCache();
-      applyHeatFromRaw();
-    }
+    refreshHeatFromState();
     renderDatasets();
   });
 })(window);
