@@ -276,7 +276,7 @@ function fetchSettings(mysqli $db, array $defaults): array
 
 function replaceWaters(mysqli $db, array $waters): void
 {
-    $db->query('TRUNCATE TABLE waters');
+    $db->query('DELETE FROM waters');
     if (!$waters) {
         return;
     }
@@ -295,7 +295,7 @@ function replaceWaters(mysqli $db, array $waters): void
 
 function replaceSteks(mysqli $db, array $steks): void
 {
-    $db->query('TRUNCATE TABLE steks');
+    $db->query('DELETE FROM steks');
     if (!$steks) {
         return;
     }
@@ -310,7 +310,7 @@ function replaceSteks(mysqli $db, array $steks): void
 
 function replaceSpots(mysqli $db, array $spots): void
 {
-    $db->query('TRUNCATE TABLE spots');
+    $db->query('DELETE FROM spots');
     if (!$spots) {
         return;
     }
@@ -326,8 +326,9 @@ function replaceSpots(mysqli $db, array $spots): void
 
 function replaceBathy(mysqli $db, array $bathy): void
 {
-    $db->query('TRUNCATE TABLE bathy_points');
-    $db->query('TRUNCATE TABLE bathy_datasets');
+    $db->query('DELETE FROM bathy_points');
+    $db->query('ALTER TABLE bathy_points AUTO_INCREMENT = 1');
+    $db->query('DELETE FROM bathy_datasets');
 
     $points = $bathy['points'] ?? [];
     if ($points) {
@@ -355,7 +356,7 @@ function replaceBathy(mysqli $db, array $bathy): void
 
 function storeSettings(mysqli $db, array $settings): void
 {
-    $db->query('TRUNCATE TABLE settings');
+    $db->query('DELETE FROM settings');
     if (!$settings) {
         return;
     }
