@@ -20,6 +20,12 @@
   function setOverall(done,total){ var pct=Math.round((done/Math.max(1,total))*100); if(fImpCount) fImpCount.textContent=done+'/'+total; if(fImpPct) fImpPct.textContent=pct+'%'; if(fImpBar) fImpBar.style.width=pct+'%'; }
 
   if(!db.bathy) db.bathy={points:[],datasets:[]};
+  function ensureBathyStore(){
+    if(!db.bathy) db.bathy={points:[],datasets:[]};
+    if(!Array.isArray(db.bathy.points)) db.bathy.points=[];
+    if(!Array.isArray(db.bathy.datasets)) db.bathy.datasets=[];
+  }
+
   var persistToggle=document.getElementById('saveBathy');
   if(persistToggle){
     persistToggle.checked=true;
@@ -61,6 +67,22 @@
   window.renderDatasets = renderDatasets;
 
   var heatLayer=null, rawAll=(db.bathy && Array.isArray(db.bathy.points))? db.bathy.points.slice() : [], currentPoints=[];
+  var existingKeys = new Set();
+  function pointKey(lat, lon, dep){
+    return lat.toFixed(6)+'|'+lon.toFixed(6)+'|'+dep.toFixed(2);
+  }
+  function seedExistingKeys(){
+    existingKeys.clear();
+    (rawAll||[]).forEach(function(p){
+      var lat=Number(p.lat!=null?p.lat:p.latitude);
+      var lon=Number(p.lon!=null?p.lon:p.lng);
+      var dep=Number(p.dep!=null?p.dep:p.depth);
+      if(Number.isFinite(lat)&&Number.isFinite(lon)&&Number.isFinite(dep)){
+        existingKeys.add(pointKey(lat,lon,dep));
+      }
+    });
+  }
+  seedExistingKeys();
   function updateLiveBathyCache(){
     window.liveBathyPoints = rawAll.map(function(p){
       var lat = Number(p.lat!=null?p.lat:p.latitude);
@@ -80,6 +102,38 @@
   function setHeatCount(n){ var el=document.getElementById('heatCount'); if(el) el.textContent=String(n||0); }
   function resetHeatStats(){ var st=document.getElementById('hmStats'); if(st) st.textContent='Min: – • Max: –'; }
   function clearHeatLayer(){ if(heatLayer){ map.removeLayer(heatLayer); heatLayer=null; } currentPoints=[]; setHeatCount(0); resetHeatStats(); var lg=document.getElementById('legend'); if(lg) lg.classList.remove('inv'); }
+
+  function cacheLocalDb(){
+    if(!window.DB_KEY){ return; }
+    try { localStorage.setItem(window.DB_KEY, JSON.stringify(window.db)); }
+    catch(_){ }
+  }
+
+  function upsertDataset(meta){
+    if(!meta || !meta.id){ return; }
+    ensureBathyStore();
+    var idx = db.bathy.datasets.findIndex(function(ds){ return ds && ds.id === meta.id; });
+    if(idx >= 0){
+      db.bathy.datasets[idx] = Object.assign({}, db.bathy.datasets[idx], meta);
+    } else {
+      db.bathy.datasets.push(meta);
+    }
+  }
+
+  function integrateBathy(points, meta, keys){
+    ensureBathyStore();
+    if(meta){ upsertDataset(meta); }
+    if(Array.isArray(points) && points.length){
+      points.forEach(function(p){ db.bathy.points.push(p); rawAll.push(p); });
+      if(Array.isArray(keys)){ keys.forEach(function(k){ existingKeys.add(k); }); }
+      updateLiveBathyCache();
+      setBathyTotal(db.bathy.points.length);
+      cacheLocalDb();
+      applyHeatFromRaw();
+    } else {
+      cacheLocalDb();
+    }
+  }
 
   var autoMin=0, autoMax=0;
   function updateLegend(min,max,inv){
@@ -135,6 +189,7 @@
   window.applyHeatFromRaw = applyHeatFromRaw;
   function refreshHeatFromState(){
     rawAll=(db.bathy && Array.isArray(db.bathy.points))? db.bathy.points.slice():[];
+    seedExistingKeys();
     updateLiveBathyCache();
     setBathyTotal(rawAll.length);
     if(!rawAll.length){ clearHeatLayer(); return; }
@@ -184,21 +239,6 @@
         }
       }
     }
-    autoMin=dmin; autoMax=dmax;
-
-    var minV = (hmFixed && hmFixed.checked) ? 0 : parseFloat(hmMin.value);
-    var maxV = (hmFixed && hmFixed.checked) ? 20 : parseFloat(hmMax.value);
-    var inv  = !!hmInvert.checked, clip=!!hmClip.checked;
-    var b=map.getBounds();
-
-    var out=[];
-    for(var t=0;t<rawPts.length;t++){
-      var p=rawPts[t];
-      if(clip && !(p.lat>=b.getSouth()&&p.lat<=b.getNorth()&&p.lon>=b.getWest()&&p.lon<=b.getEast())) continue;
-      var w=scaleDepth(p.dep, isNaN(minV)?null:minV, isNaN(maxV)?null:maxV, inv);
-      out.push([p.lat,p.lon,w]);
-    }
-    updateLegend(isNaN(minV)?null:minV, isNaN(maxV)?null:maxV, inv);
     var summary={
       count:rawPts.length,
       minDepth:Number.isFinite(dmin)?dmin:null,
@@ -208,27 +248,13 @@
       minLon:Number.isFinite(lonMin)?lonMin:null,
       maxLon:Number.isFinite(lonMax)?lonMax:null
     };
-    return {points:out, raw:rawPts, summary:summary};
-  }
-
-  function persistBathy(message){
-    var fn=(typeof window.saveDBImmediate==='function')?window.saveDBImmediate:window.saveDB;
-    if(typeof fn!=='function'){ return; }
-    var res;
-    try{ res=fn(); }
-    catch(err){ console.error('Bathymetry save failed', err); S('Bathymetry save failed: '+err.message); return; }
-    if(res && typeof res.then==='function'){
-      res.then(function(){ if(message) S(message); })
-        .catch(function(err){ console.error('Bathymetry save failed', err); S('Bathymetry save failed: '+err.message); });
-    } else if(message){
-      S(message);
-    }
+    return {raw:rawPts, summary:summary};
   }
 
   function handleFiles(files){
     if(!files.length){ S('No files selected.'); return; }
     S('Preparing: unpacking ZIPs and gathering CSV files…');
-    var rawAccumulator=[], seen=new Set(), tasks=[], q=[], done=0, total=0, pendingZips=0, datasetCounter=0;
+    var seen=new Set(), tasks=[], q=[], done=0, total=0, pendingZips=0, datasetCounter=0;
 
     for(var i=0;i<files.length;i++){
       (function(f){
@@ -271,58 +297,82 @@
       return meta;
     }
 
-    function ensureBathyStore(){
-      if(!db.bathy) db.bathy={points:[],datasets:[]};
-      if(!Array.isArray(db.bathy.datasets)) db.bathy.datasets=[];
+    function filterNewPoints(rawPts){
+      var fresh=[], keys=[];
+      rawPts.forEach(function(p){
+        var lat=Number(p.lat), lon=Number(p.lon), dep=Number(p.dep);
+        if(!Number.isFinite(lat)||!Number.isFinite(lon)||!Number.isFinite(dep)) return;
+        var key=pointKey(lat,lon,dep);
+        if(existingKeys.has(key)) return;
+        p.lat=lat; p.lon=lon; p.dep=dep;
+        fresh.push(p);
+        keys.push(key);
+      });
+      return {points:fresh, keys:keys};
+    }
+
+    function appendChunk(points, datasetMeta, label){
+      var dsList = datasetMeta ? [datasetMeta] : [];
+      if((!points || !points.length) && !dsList.length){ return Promise.resolve(); }
+      if(typeof window.appendBathyToServer !== 'function'){
+        var fallback=(typeof window.saveDBImmediate==='function')?window.saveDBImmediate:window.saveDB;
+        return (typeof fallback==='function') ? fallback() : Promise.resolve();
+      }
+      var payload={
+        points:(points||[]).map(function(p){
+          return {lat:p.lat, lon:p.lon, dep:p.dep, dataset_id:p.dataset_id||null};
+        }),
+        datasets:dsList.map(function(ds){ return {id:ds.id, payload:ds}; })
+      };
+      return window.appendBathyToServer(payload).then(function(res){
+        if(label){ S('Stored '+(points?points.length:0)+' points from '+label); }
+        return res;
+      }).catch(function(err){
+        console.error('Bathymetry save failed', err);
+        S('Bathymetry save failed: '+err.message);
+        throw err;
+      });
     }
 
     function afterEnumerate(){
       q = tasks.map(function(t){ return t.label; });
       total = tasks.length;
-      setQueue(q); setOverall(0, Math.max(1,total));
+      setQueue(q);
+      setOverall(0, Math.max(1,total));
       if(!total){ S('No CSV files found.'); return; }
       S('Import started… ('+total+' CSV files)');
 
       (function nextTask(idx){
         if(idx>=tasks.length){
           setOverall(total,total);
-          if(rawAccumulator.length){
-            ensureBathyStore();
-            var seenDB=new Set();
-            for(var i=0;i<(db.bathy.points||[]).length;i++){
-              var p=db.bathy.points[i];
-              seenDB.add(p.lat.toFixed(6)+','+p.lon.toFixed(6)+','+p.dep.toFixed(2));
-            }
-            rawAccumulator.forEach(function(p){
-              var key=p.lat.toFixed(6)+','+p.lon.toFixed(6)+','+p.dep.toFixed(2);
-              if(!seenDB.has(key)){ db.bathy.points.push(p); seenDB.add(key); }
-            });
-            setBathyTotal(db.bathy.points.length);
-            renderDatasets();
-            S('Saving bathymetry to database…');
-            persistBathy('Bathymetry saved to database.');
-          }
-          refreshHeatFromState();
           renderDatasets();
+          S('Import finished.');
           return;
         }
         var task = tasks[idx];
         setQueue(q.slice(idx));
         task.fetchText().then(function(text){
           var parsed=parseCSV(text, seen);
-          var meta=createDatasetMeta(task.label, parsed.summary, parsed.raw);
-          if(meta){
-            ensureBathyStore();
-            db.bathy.datasets.push(meta);
+          var filtered=filterNewPoints(parsed.raw);
+          if(!filtered.points.length){
+            done++;
+            setOverall(done,total);
+            return Promise.resolve();
           }
-          rawAccumulator = rawAccumulator.concat(parsed.raw);
-          var pts = parsed.points;
+          var meta=createDatasetMeta(task.label, parsed.summary, filtered.points);
+          if(meta){ meta.pointCount = filtered.points.length; }
+          return appendChunk(filtered.points, meta, task.label).then(function(){
+            integrateBathy(filtered.points, meta, filtered.keys);
+            done++;
+            setOverall(done,total);
+            renderDatasets();
+          });
+        }).catch(function(err){
+          console.error('Import failed', err);
+          S('Import failed: '+err.message);
           done++;
           setOverall(done,total);
-          if(pts.length){ currentPoints = currentPoints.concat(pts); buildHeat(currentPoints); }
-          renderDatasets();
-        }).catch(function(){ /* ignore */ done++; setOverall(done,total); })
-          .finally(function(){ nextTask(idx+1); });
+        }).finally(function(){ nextTask(idx+1); });
       })(0);
     }
   }
@@ -332,12 +382,22 @@
   });
   document.getElementById('btn-clear-bathy').addEventListener('click', function(){
     if(!confirm('Erase all bathymetry from the database?')) return;
+    ensureBathyStore();
     db.bathy.points=[]; db.bathy.datasets=[];
-    rawAll=[]; updateLiveBathyCache(); clearHeatLayer();
+    rawAll=[]; existingKeys.clear();
+    updateLiveBathyCache(); clearHeatLayer();
     currentPoints=[]; setBathyTotal(0);
-    S('Saving bathymetry to database…');
-    persistBathy('Stored bathymetry removed.');
+    cacheLocalDb();
     renderDatasets();
+    var promise;
+    if(typeof window.clearBathyOnServer === 'function'){
+      promise = window.clearBathyOnServer();
+    } else {
+      var fallback=(typeof window.saveDBImmediate==='function')?window.saveDBImmediate:window.saveDB;
+      promise = (typeof fallback==='function') ? fallback() : Promise.resolve();
+    }
+    promise.then(function(){ S('Stored bathymetry removed.'); })
+      .catch(function(err){ console.error('Bathymetry save failed', err); S('Bathymetry save failed: '+err.message); });
   });
 
   map.on('moveend', function(){ if(document.getElementById('hmClip').checked){ applyHeatFromRaw(); } });

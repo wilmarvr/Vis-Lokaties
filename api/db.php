@@ -20,6 +20,7 @@ if (!in_array($_SERVER['REQUEST_METHOD'], ['GET', 'POST'], true)) {
 mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 
 $config = loadAppConfig();
+$action = isset($_GET['action']) ? trim((string) $_GET['action']) : '';
 
 const DB_KEY = 'lv_db_main';
 $DEFAULT_DB = [
@@ -77,6 +78,17 @@ if (!is_array($decoded)) {
 }
 
 try {
+    if ($action === 'bathy_append') {
+        $stats = appendBathy($db, $decoded);
+        echo json_encode(['ok' => true, 'points' => $stats['points'], 'datasets' => $stats['datasets']]);
+        exit;
+    }
+    if ($action === 'bathy_clear') {
+        clearBathy($db);
+        echo json_encode(['ok' => true]);
+        exit;
+    }
+
     persistState($db, $decoded, $DEFAULT_DB);
     echo json_encode(['ok' => true]);
 } catch (mysqli_sql_exception $e) {
@@ -412,6 +424,53 @@ function replaceSpots(mysqli $db, array $spots): void
     $stmt->close();
 }
 
+function normalizeBathyPoints(array $points): array
+{
+    $normalized = [];
+    foreach ($points as $point) {
+        if (!is_array($point)) {
+            continue;
+        }
+        $lat = $point['lat'] ?? ($point['latitude'] ?? null);
+        $lon = $point['lon'] ?? ($point['lng'] ?? null);
+        $dep = $point['dep'] ?? ($point['depth'] ?? null);
+        if (!is_numeric($lat) || !is_numeric($lon) || !is_numeric($dep)) {
+            continue;
+        }
+        $datasetId = sanitize_nullable_id($point['dataset_id'] ?? ($point['datasetId'] ?? null));
+        $normalized[] = [
+            'dataset_id' => $datasetId ?? '',
+            'lat' => (float) $lat,
+            'lon' => (float) $lon,
+            'dep' => (float) $dep,
+        ];
+    }
+    return $normalized;
+}
+
+function normalizeBathyDatasets(array $datasets): array
+{
+    $normalized = [];
+    foreach ($datasets as $dataset) {
+        if (!is_array($dataset)) {
+            continue;
+        }
+        $payload = $dataset['payload'] ?? $dataset;
+        if (!is_array($payload)) {
+            $payload = [];
+        }
+        $id = sanitize_id($dataset['id'] ?? ($payload['id'] ?? ''));
+        if ($id === '') {
+            continue;
+        }
+        if (!isset($payload['id'])) {
+            $payload['id'] = $id;
+        }
+        $normalized[] = ['id' => $id, 'payload' => $payload];
+    }
+    return $normalized;
+}
+
 function replaceBathy(mysqli $db, array $bathy): void
 {
     $db->query('DELETE FROM bathy_points');
@@ -438,6 +497,58 @@ function replaceBathy(mysqli $db, array $bathy): void
             $stmt->execute();
         }
         $stmt->close();
+    }
+}
+
+function appendBathy(mysqli $db, array $payload): array
+{
+    $points = normalizeBathyPoints($payload['points'] ?? []);
+    $datasets = normalizeBathyDatasets($payload['datasets'] ?? []);
+    if (!$points && !$datasets) {
+        return ['points' => 0, 'datasets' => 0];
+    }
+
+    $db->begin_transaction();
+    try {
+        if ($datasets) {
+            $stmt = $db->prepare('INSERT INTO bathy_datasets (id, payload) VALUES (?, ?) ON DUPLICATE KEY UPDATE payload = VALUES(payload)');
+            foreach ($datasets as $dataset) {
+                $json = json_encode($dataset['payload'], JSON_UNESCAPED_UNICODE);
+                $stmt->bind_param('ss', $dataset['id'], $json);
+                $stmt->execute();
+            }
+            $stmt->close();
+        }
+
+        if ($points) {
+            $stmt = $db->prepare("INSERT INTO bathy_points (dataset_id, lat, lon, dep) VALUES (NULLIF(?, ''), ?, ?, ?)");
+            foreach ($points as $point) {
+                $datasetId = $point['dataset_id'] ?? '';
+                $stmt->bind_param('sddd', $datasetId, $point['lat'], $point['lon'], $point['dep']);
+                $stmt->execute();
+            }
+            $stmt->close();
+        }
+
+        $db->commit();
+    } catch (Throwable $e) {
+        $db->rollback();
+        throw $e;
+    }
+
+    return ['points' => count($points), 'datasets' => count($datasets)];
+}
+
+function clearBathy(mysqli $db): void
+{
+    $db->begin_transaction();
+    try {
+        $db->query('DELETE FROM bathy_points');
+        $db->query('DELETE FROM bathy_datasets');
+        $db->commit();
+    } catch (Throwable $e) {
+        $db->rollback();
+        throw $e;
     }
 }
 

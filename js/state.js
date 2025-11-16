@@ -10,6 +10,29 @@
   window.db = {waters:[],steks:[],rigs:[],bathy:{points:[],datasets:[]},settings:{waterColor:'#33a1ff'}};
   var usedLocalFallback = false;
 
+  function buildErrorMessage(body, fallback){
+    var msg = fallback || 'Server rejected payload.';
+    if(body && body.error){ msg = body.error; }
+    if(body && body.details){ msg += ' (' + body.details + ')'; }
+    return msg;
+  }
+
+  function postJson(url, payload){
+    return fetch(url, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(payload || {})
+    }).then(function(res){
+      if(!res.ok){
+        return res.json().catch(function(){ return {}; }).then(function(body){
+          var msg = buildErrorMessage(body, 'HTTP ' + res.status);
+          throw new Error(msg);
+        });
+      }
+      return res.json().catch(function(){ return {}; });
+    });
+  }
+
   function cacheBrowserSnapshot(){
     try{ localStorage.setItem(DB_KEY, JSON.stringify(window.db)); }
     catch(_){ }
@@ -130,24 +153,12 @@
       return Promise.reject(offlineErr);
     }
 
-    return fetch(API_DB_URL, {
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify(window.db)
-    }).then(function(res){
-      if(!res.ok){
-        return res.json().catch(function(){ return {}; }).then(function(body){
-          var msg = body && body.error ? body.error : ('HTTP ' + res.status);
-          throw new Error(msg);
-        });
-      }
-      return res.json().catch(function(){ return {}; });
-    }).then(function(body){
+    return postJson(API_DB_URL, window.db).then(function(body){
       if(body && body.ok){
         S('Saved to server.');
         return body;
       }
-      var errMsg = body && body.error ? body.error : 'Server rejected payload.';
+      var errMsg = buildErrorMessage(body, 'Server rejected payload.');
       throw new Error(errMsg);
     }).catch(function(err){
       console.error('Server save failed', err);
@@ -169,6 +180,27 @@
     cacheBrowserSnapshot();
     if(saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
     return pushDbToServer();
+  };
+
+  window.appendBathyToServer = function appendBathyToServer(payload){
+    if(window.APP_DB_READY === false){
+      return Promise.reject(new Error('Database not configured yet.'));
+    }
+    payload = payload || {};
+    return postJson(API_DB_URL + '?action=bathy_append', payload).then(function(body){
+      if(body && body.ok){ return body; }
+      throw new Error(buildErrorMessage(body, 'Server rejected payload.'));
+    });
+  };
+
+  window.clearBathyOnServer = function clearBathyOnServer(){
+    if(window.APP_DB_READY === false){
+      return Promise.reject(new Error('Database not configured yet.'));
+    }
+    return postJson(API_DB_URL + '?action=bathy_clear', {}).then(function(body){
+      if(body && body.ok){ return body; }
+      throw new Error(buildErrorMessage(body, 'Server rejected payload.'));
+    });
   };
 
   window.syncFromServer = function syncFromServer(){

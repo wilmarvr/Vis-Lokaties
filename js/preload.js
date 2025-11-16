@@ -1,22 +1,16 @@
 // --- FIX: 'touchleave' veilig mappen + fallback (voorkomt "wrong event specified: touchleave")
 (function(){
   var hasTouch = ((navigator.maxTouchPoints || 0) > 0) || ('ontouchstart' in window);
-  var supportsTouchleave = 'ontouchleave' in window;
-  var docEl = (typeof document !== 'undefined') ? document.documentElement : null;
-  if (!supportsTouchleave && docEl) {
-    supportsTouchleave = ('ontouchleave' in docEl);
-  }
   if (typeof window.L_NO_TOUCH === 'undefined') {
-    window.L_NO_TOUCH = !(hasTouch && supportsTouchleave);
+    window.L_NO_TOUCH = !hasTouch;
   }
   var supportsPointer = 'PointerEvent' in window;
-  var fallbackLeave = supportsTouchleave ? null : (supportsPointer ? 'pointerleave' : 'mouseleave');
+  var fallbackLeave = supportsPointer ? 'pointerleave' : 'mouseleave';
   function patchTarget(target){
     if(!target || typeof target.addEventListener !== 'function' || target.__lvPatched){ return; }
     var _add = target.addEventListener;
     target.addEventListener = function(type, listener, options){
-      if(type === 'touchleave' && !supportsTouchleave){
-        if(!fallbackLeave){ return; }
+      if(type === 'touchleave'){
         type = fallbackLeave;
       }
       try { return _add.call(this, type, listener, options); }
