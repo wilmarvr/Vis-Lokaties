@@ -181,6 +181,14 @@
   function attachMarker(m,type,id){
     if(m.dragging && typeof m.dragging.enable === 'function'){ m.dragging.enable(); }
     m.__skipNextClick = false;
+
+    m.on('mousedown touchstart pointerdown', function(){
+      if(map && map.dragging){ try{ map.dragging.disable(); }catch(_){ } }
+    });
+    m.on('mouseup touchend pointerup', function(){
+      if(map && map.dragging){ try{ map.dragging.enable(); }catch(_){ } }
+    });
+
     m.on('dragstart',function(){
       m.__skipNextClick = true;
       if(map && map.dragging){ try{ map.dragging.disable(); }catch(_){ } }
@@ -227,6 +235,7 @@
       if(type==='stek'){ showStekInfoById(id); }
       if(type==='rig'){ showRigInfoById(id); }
       S(type==='stek' ? 'Swim moved.' : 'Rig moved.');
+      setTimeout(function(){ m.__skipNextClick = false; }, 0);
     });
     m.on('click',function(ev){
       if(m.__skipNextClick){ m.__skipNextClick = false; return; }
