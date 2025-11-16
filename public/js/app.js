@@ -24,7 +24,7 @@ function coloredIcon(hexOrHsl, glyph){
 
 // ===== DB (zelfde key) + snapshot loader =====
 var DB_KEY="lv_db_main"; // NIET wijzigen
-var API_DB_URL='/api/db';
+var API_DB_URL='api/db.php';
 var db={waters:[],steks:[],rigs:[],bathy:{points:[],datasets:[]},settings:{waterColor:"#33a1ff"}};
 // 1) snapshot uit <script id="lv_db_snapshot"> (als niet leeg)
 // 2) anders localStorage (fallback / handmatige import)
