@@ -264,7 +264,7 @@ function normalizeDB(){
 var map;
 (function initMap(){
   var mapEl=document.getElementById('mapContainer');
-  if(window.__VIS_MAP){ map=window.__VIS_MAP; } 
+  if(window.__VIS_MAP){ map=window.__VIS_MAP; }
   else {
     map=L.map(mapEl,{zoomControl:true,preferCanvas:true});
     window.__VIS_MAP=map;
@@ -294,8 +294,8 @@ map.whenReady(function(){
   map.getPane('heatPane').style.zIndex=510;
   map.getPane('isobandPane').style.zIndex=520;
   map.getPane('contourPane').style.zIndex=530;
-  map.getPane('markerPane').style.zIndex=800;  // markers boven labels
-  map.getPane('labelsPane').style.zIndex=750;  // labels onder markers
+  map.getPane('markerPane').style.zIndex=800;
+  map.getPane('labelsPane').style.zIndex=750;
   map.getPane('measurePane').style.zIndex=840;
 
   waterGroup=L.featureGroup([], {pane:'waterPane'}).addTo(map);
@@ -342,27 +342,24 @@ document.getElementById('btnForceDragFix').addEventListener('click',function(){u
 // ===== markers / drag =====
 var stekMarkers=new Map(), rigMarkers=new Map();
 function purgeAllMarkers(){
-  stekMarkers.forEach(function(m){try{if(useCluster && cluster){ cluster.removeLayer(m);} map.removeLayer(m);}catch(_){}}); 
-  rigMarkers.forEach(function(m){try{if(useCluster && cluster){ cluster.removeLayer(m);} map.removeLayer(m);}catch(_){}}); 
-  stekMarkers.clear(); rigMarkers.clear(); 
-  try{if(cluster&&map.hasLayer(cluster)){cluster.clearLayers(); map.removeLayer(cluster);}}catch(_){} 
-}
+  stekMarkers.forEach(function(m){try{if(useCluster && cluster){ cluster.removeLayer(m);} map.removeLayer(m);}catch(_){}});
+  rigMarkers.forEach(function(m){try{if(useCluster && cluster){ cluster.removeLayer(m);} map.removeLayer(m);}catch(_){}});
+  stekMarkers.clear(); rigMarkers.clear();
+  try{if(cluster&&map.hasLayer(cluster)){cluster.clearLayers(); map.removeLayer(cluster);}}catch(_){}}
 
 function attachMarker(m,type,id){
-  // altijd drag activeren
   if(m.dragging && typeof m.dragging.enable === 'function') { m.dragging.enable(); }
 
-  // kaart niet pannen tijdens slepen / down
-  m.on('mousedown touchstart pointerdown', function(){ try{ map.dragging.disable(); }catch(_){} });
-  m.on('mouseup touchend pointerup',     function(){ try{ map.dragging.enable();  }catch(_){} });
+  m.on('mousedown touchstart pointerdown', function(){ try{ map.dragging.disable(); }catch(_){ } });
+  m.on('mouseup touchend pointerup',     function(){ try{ map.dragging.enable();  }catch(_){ } });
 
   m.on('dragstart',function(){
-    try{ map.dragging.disable(); }catch(_){}
+    try{ map.dragging.disable(); }catch(_){ }
     if(useCluster && cluster){ try{ cluster.removeLayer(m);}catch(_){ } m.addTo(map); }
   });
   m.on('drag',function(){ drawDistances(); });
   m.on('dragend',function(ev){
-    try{ map.dragging.enable(); }catch(_){}
+    try{ map.dragging.enable(); }catch(_){ }
     if(useCluster && cluster){ try{ map.removeLayer(m);}catch(_){ } cluster.addLayer(m); }
     var ll=ev.target.getLatLng();
     if(type==='stek'){
@@ -375,7 +372,6 @@ function attachMarker(m,type,id){
     }
     saveDB(); renderAll(); S(type+' verplaatst & gekoppeld.');
   });
-  // selectie
   m.on('click',function(ev){
     if(!selectMode) return;
     ev.originalEvent.preventDefault();ev.originalEvent.stopPropagation();
@@ -409,7 +405,7 @@ function nearestWaterIdForLatLng(lat, lng, edgeMaxMeters){
     var inside=false;
     try{ inside = turf.booleanPointInPolygon(pt, f); }catch(_){ inside=false; }
     var d=Infinity;
-    try{ var line = turf.polygonToLine(f); d = turf.pointToLineDistance(pt, line, {units:'meters'});}catch(_){}
+    try{ var line = turf.polygonToLine(f); d = turf.pointToLineDistance(pt, line, {units:'meters'});}catch(_){ }
     var better=false;
     if(inside && !best.inside) better=true;
     else if(inside && best.inside) better = d < best.dist - 1e-9;
@@ -495,7 +491,6 @@ window.renderAll = function(){
   if(contourLayer){ contourLayer.clearLayers(); }
   if(measureLayer){ measureLayer.clearLayers(); }
 
-  // waters
   (db.waters||[]).forEach(function(w){
     var color=db.settings.waterColor||"#33a1ff";
     var gj=L.geoJSON(w.geojson,{pane:'waterPane',interactive:true,style:function(){return {color:color,weight:2,fillOpacity:0.25};}});
@@ -511,7 +506,6 @@ window.renderAll = function(){
   });
   waterGroup.addTo(map);
 
-  // markers
   (db.steks||[]).forEach(function(s){ var m=makeStekMarker(s); if(useCluster) cluster.addLayer(m); else m.addTo(map); });
   (db.rigs ||[]).forEach(function(r){ var m=makeRigMarker(r); if(useCluster) cluster.addLayer(m); else m.addTo(map); });
 
@@ -605,7 +599,6 @@ function buildOverview(){
   });
   trc.appendChild(rTable);
 
-  // events
   tw.querySelectorAll(".btnRenWater").forEach(function(b){ b.onclick=function(ev){ renameWater(ev.target.dataset.id); }; });
   tw.querySelectorAll(".btnDelWater").forEach(function(b){ b.onclick=function(ev){ var id=ev.target.dataset.id; if(!confirm("Water verwijderen?")) return;
     db.waters=db.waters.filter(function(x){return x.id!==id;}); (db.steks||[]).forEach(function(s){ if(s.waterId===id) s.waterId=null; }); (db.rigs||[]).forEach(function(r){ if(r.waterId===id) r.waterId=null; }); saveDB(); renderAll(); }; });
@@ -622,8 +615,8 @@ function buildOverview(){
         var f=(w.geojson && w.geojson.features && w.geojson.features[0])?w.geojson.features[0]:null;
         var d=1e12,inside=false;
         if(f){
-          try{inside=turf.booleanPointInPolygon(pt,f);}catch(_){}
-          try{var line=turf.polygonToLine(f); d=turf.pointToLineDistance(pt,line,{units:'meters'});}catch(_){}
+          try{inside=turf.booleanPointInPolygon(pt,f);}catch(_){ }
+          try{var line=turf.polygonToLine(f); d=turf.pointToLineDistance(pt,line,{units:'meters'});}catch(_){ }
         }
         return {id:w.id, text:(w.name||w.id)+(inside?' (binnen)':'')+' • '+Math.round(d)+' m', d:d, inside:inside};
       }).sort(function(a,b){ return (a.inside===b.inside)?(a.d-b.d):(a.inside?-1:1); });
@@ -657,8 +650,8 @@ function buildOverview(){
         var f=(w.geojson && w.geojson.features && w.geojson.features[0])?w.geojson.features[0]:null;
         var d=1e12,inside=false;
         if(f){
-          try{inside=turf.booleanPointInPolygon(pt,f);}catch(_){}
-          try{var line=turf.polygonToLine(f); d=turf.pointToLineDistance(pt,line,{units:'meters'});}catch(_){}
+          try{inside=turf.booleanPointInPolygon(pt,f);}catch(_){ }
+          try{var line=turf.polygonToLine(f); d=turf.pointToLineDistance(pt,line,{units:'meters'});}catch(_){ }
         }
         return {id:w.id, text:(w.name||w.id)+(inside?' (binnen)':'')+' • '+Math.round(d)+' m', d:d, inside:inside};
       }).sort(function(a,b){ return (a.inside===b.inside)?(a.d-b.d):(a.inside?-1:1); });
@@ -668,14 +661,12 @@ function buildOverview(){
   });
 }
 
-// ====== rename/remove ======
 function renameWater(id){ var w=(db.waters||[]).find(function(x){return x.id===id;}); if(!w) return; var nv=prompt("Nieuwe waternaam:", w.name||""); if(nv==null) return; w.name=String(nv).trim(); if(w.geojson&&w.geojson.features){ w.geojson.features.forEach(function(f){if(!f.properties) f.properties={}; f.properties.name=w.name; f.properties.id=w.id; f.properties.kind='water';}); } saveDB(); renderAll(); S("Water hernoemd."); }
 function renameStek(id){ var s=(db.steks||[]).find(function(x){return x.id===id;}); if(!s) return; var nv=prompt("Nieuwe steknaam:", s.name||""); if(nv==null) return; s.name=String(nv).trim(); saveDB(); renderAll(); S("Stek hernoemd."); }
 function renameRig(id){ var r=(db.rigs||[]).find(function(x){return x.id===id;}); if(!r) return; var nv=prompt("Nieuwe rigspotnaam:", r.name||""); if(nv==null) return; r.name=String(nv).trim(); saveDB(); renderAll(); }
 function removeStek(id){ db.steks=(db.steks||[]).filter(function(s){return s.id!==id;}); (db.rigs||[]).forEach(function(r){ if(r.stekId===id) r.stekId=null; }); saveDB(); renderAll(); }
 function removeRig(id){ db.rigs=(db.rigs||[]).filter(function(r){return r.id!==id;}); saveDB(); renderAll(); }
 
-// ====== Detectie OSM ======
 var OVERPASS="https://overpass-api.de/api/interpreter";
 function featuresTouchOrOverlap(a,b){ try{ if(turf.booleanIntersects(a,b)) return true; var eps=0.00001; var ab=turf.buffer(a, eps, {units:'kilometers'}); return turf.booleanIntersects(ab,b); }catch(_){ return false; } }
 function mergeTouchingPolys(features){
@@ -688,7 +679,7 @@ function mergeTouchingPolys(features){
         var bbA=turf.bbox(A), bbB=turf.bbox(B);
         if(bbA[2]<bbB[0]||bbB[2]<bbA[0]||bbA[3]<bbB[1]||bbB[3]<bbA[1]) continue;
         if(featuresTouchOrOverlap(A,B)){
-          var U=null; try{ U=turf.union(A,B); }catch(_){}
+          var U=null; try{ U=turf.union(A,B); }catch(_){ }
           if(U){ U.properties=Object.assign({},A.properties||{},B.properties||{}, {merged:true}); list.splice(j,1); list.splice(i,1,U); }
           changed=true; break outer;
         }
@@ -702,6 +693,7 @@ function mergeTouchingPolys(features){
   function wayMap(elements){var m=new Map();for(var i=0;i<elements.length;i++){var el=elements[i];if(el.type==='way')m.set(el.id,{nodes:el.nodes||[],tags:el.tags||{}});}return m;}
   function getCoordsOfWay(way,nmap){var c=[];for(var i=0;i<way.nodes.length;i++){var nid=way.nodes[i];var p=nmap.get(nid);if(!p)return null;c.push(p);}return c;}
   function isClosed(c){if(!c||c.length<4)return false;var a=c[0],b=c[c.length-1];return a[0]===b[0]&&a[1]===b[1];}
+  function stitchRings(list){var rings=[];var segs=list.map(function(a){return a.slice();});while(segs.length){var ring=segs.shift(),loop=true;while(loop){loop=false;for(var i=0;i<segs.length;i++){var s=segs[i],h=ring[0],t=ring[ring length???}
   function stitchRings(list){var rings=[];var segs=list.map(function(a){return a.slice();});while(segs.length){var ring=segs.shift(),loop=true;while(loop){loop=false;for(var i=0;i<segs.length;i++){var s=segs[i],h=ring[0],t=ring[ring.length-1],sh=s[0],st=s[s.length-1];if(t[0]===sh[0]&&t[1]===sh[1]){ring=ring.concat(s.slice(1));segs.splice(i,1);loop=true;break;}if(t[0]===st[0]&&t[1]===st[1]){ring=ring.concat(s.slice(0,-1).reverse());segs.splice(i,1);loop=true;break;}if(h[0]===st[0]&&h[1]===st[1]){ring=s.concat(ring.slice(1));segs.splice(i,1);loop=true;break;}if(h[0]===sh[0]&&h[1]===sh[1]){ring=s.slice(0,-1).reverse().concat(ring);segs.splice(i,1);loop=true;break;}}}if(ring.length&&(ring[0][0]!==ring[ring.length-1][0]||ring[0][1]!==ring[ring.length-1][1]))ring.push(ring[0]);if(ring.length>=4)rings.push(ring);}return rings;}
   function relationToMP(rel,wmap,nmap){var outerWays=[],innerWays=[];for(var i=0;i<rel.members.length;i++){var m=rel.members[i];if(m.type!=='way')continue;var w=wmap.get(m.ref);if(!w)continue;var coords=getCoordsOfWay(w,nmap);if(!coords)continue;(m.role==='inner'?innerWays:outerWays).push(coords);}var outers=stitchRings(outerWays),inners=stitchRings(innerWays);if(!outers.length)return null;function bbox(r){var minx=Infinity,miny=Infinity,maxx=-Infinity,maxy=Infinity*-1;for(var i=0;i<r.length;i++){var c=r[i];if(c[0]<minx)minx=c[0];if(c[0]>maxx)maxx=c[0];if(c[1]<miny)miny=c[1];if(c[1]>maxy)maxy=c[1];}return[minx,miny,maxx,maxy]}function inside(bi,bo){return bi[0]>=bo[0]-1e-10&&bi[2]<=bo[2]+1e-10&&bi[1]>=bo[1]-1e-10&&bi[3]<=bo[3]+1e-10}
     var ouB=outers.map(bbox);var polys=outers.map(function(o){return[o];});
@@ -728,7 +720,7 @@ document.getElementById("btnDetectOSM").addEventListener('click', function(){
     (gj.features||[]).forEach(function(f){
       if(!f.geometry) return;
       if(f.geometry.type==="Polygon"||f.geometry.type==="MultiPolygon"){
-        try{ var c=turf.bboxClip(f,bb); if(c && c.geometry && c.geometry.coordinates && c.geometry.coordinates.length){ polys.push(c); } }catch(_){}
+        try{ var c=turf.bboxClip(f,bb); if(c && c.geometry && c.geometry.coordinates && c.geometry.coordinates.length){ polys.push(c); } }catch(_){ }
       }
     });
     if(!polys.length){ S("Geen OSM-water in beeld."); I("0 polygonen"); return; }
@@ -743,7 +735,6 @@ document.getElementById("btnDetectOSM").addEventListener('click', function(){
   }).catch(function(){ S("OSM: netwerkfout / rate-limit."); });
 });
 
-// Opslaan naar water
 document.getElementById("btnSaveAsWater").addEventListener('click', function(){
   var gj=null;
   if(selection.preview){ selection.preview.eachLayer(function(l){ try{ gj=l.toGeoJSON(); }catch(_){ } }); }
@@ -755,7 +746,7 @@ document.getElementById("btnSaveAsWater").addEventListener('click', function(){
   var name=(document.getElementById("detName").value||("Water "+new Date().toISOString().slice(0,16).replace('T',' '))).trim();
   saveWaterFeature(gj,name);
   if(selection.preview){ map.removeLayer(selection.preview); selection.preview=null; }
-  selection.points.clear(); selection.bestWater=null; 
+  selection.points.clear(); selection.bestWater=null;
 });
 function saveWaterFeature(feat,name){
   var id=uid("water"); var f=JSON.parse(JSON.stringify(feat));
@@ -765,7 +756,6 @@ function saveWaterFeature(feat,name){
   db.waters.push({id:id,name:name,geojson:fc}); saveDB(); renderAll(); S("Water aangemaakt: "+name);
 }
 
-// ====== Heatmap / Deeper import ======
 var hmRadius = document.getElementById("hmRadius"),
     hmBlur   = document.getElementById("hmBlur"),
     hmMin    = document.getElementById("hmMin"),
@@ -798,7 +788,7 @@ function scaleDepth(val,min,max,inv){
 }
 function buildHeat(points){
   if (!window.L || !L.heatLayer || !map || !map._loaded) { return; }
-  if(heatLayer){ try{ map.removeLayer(heatLayer); }catch(_){} }
+  if(heatLayer){ try{ map.removeLayer(heatLayer); }catch(_){ } }
   heatLayer = L.heatLayer(points, {radius: Number(hmRadius.value), blur: Number(hmBlur.value), pane:'heatPane'});
   map.addLayer(heatLayer);
   window.heatLayer = heatLayer;
@@ -831,19 +821,17 @@ function applyHeatFromRaw(){
   buildHeat(currentPoints);
 }
 
-// Import UI
 var btnFiles = document.getElementById("btn-import-files"),
     btnDir   = document.getElementById("btn-import-dir"),
     fileInp  = document.getElementById("fileDeeper"),
     dirInp   = document.getElementById("dirDeeper");
-btnFiles.addEventListener("click", function(){ try{ fileInp.value=null; }catch(_){} fileInp.click(); });
-btnDir  .addEventListener("click", function(){ try{ dirInp.value=null; }catch(_){} dirInp.click(); });
+btnFiles.addEventListener("click", function(){ try{ fileInp.value=null; }catch(_){ } fileInp.click(); });
+btnDir  .addEventListener("click", function(){ try{ dirInp.value=null; }catch(_){ } dirInp.click(); });
 fileInp.addEventListener("change", function(e){ handleFiles([].slice.call(e.target.files||[])); });
 dirInp .addEventListener("change", function(e){ handleFiles([].slice.call(e.target.files||[])); });
 
 var queueDiv=document.getElementById("queue"); function setQueue(names){ if(queueDiv) queueDiv.textContent = names.join("\n"); }
 
-// CSV parse + ZIP handling
 function parseCSV(text, seen){
   var lines = text.replace(/\r\n?/g,"\n").split("\n").filter(function(x){return x.trim().length>0;});
   if(lines.length<1) return {points:[], raw:[]};
@@ -910,7 +898,7 @@ function handleFiles(files){
               tasks.push({label:name+"::"+k, fetchText:function(){ return zf.async("text"); }});
             }
           });
-        }).catch(function(){ /* ignore */ })
+        }).catch(function(){})
           .finally(function(){ pendingZips--; if(pendingZips===0) afterEnumerate(); });
       }
     })(files[i]);
@@ -978,7 +966,6 @@ function handleFiles(files){
   }
 }
 
-// Wis knoppen
 document.getElementById("btn-clear-heat").addEventListener("click", function(){
   if(heatLayer){ map.removeLayer(heatLayer); heatLayer=null; currentPoints=[]; setHeatCount(0); S("Heatmap gewist."); }
 });
@@ -991,10 +978,8 @@ document.getElementById("btn-clear-bathy").addEventListener("click", function(){
   S("Bathymetrie uit DB gewist.");
 });
 
-// Auto-update bij kaartbeweging indien clip aan
 map.on("moveend", function(){ if(document.getElementById("hmClip").checked){ applyHeatFromRaw(); } });
 
-// Init heatmap indien DB data
 map.whenReady(function(){
   setBathyTotal((db.bathy && Array.isArray(db.bathy.points)) ? db.bathy.points.length : 0);
   if(db.bathy && Array.isArray(db.bathy.points) && db.bathy.points.length){
@@ -1003,7 +988,6 @@ map.whenReady(function(){
   }
 });
 
-// ====== Detectie eigen punten ======
 function pointsInViewport(maxTake){
   var b=map.getBounds(), pts=[];
   (db.steks||[]).forEach(function(s){ if(b.contains([s.lat,s.lng])) pts.push([s.lng,s.lat]); });
@@ -1018,8 +1002,8 @@ function polygonFromPtsLngLat(pts){
   var fc=turf.featureCollection(pts.map(function(c){return turf.point(c);}));
   var maxEdge=parseFloat(document.getElementById("detMaxEdge").value)||250;
   var poly=null;
-  try{ poly=turf.concave(fc,{maxEdge:maxEdge,units:'meters'});}catch(_){}
-  if(!poly){ try{ poly=turf.convex(fc);}catch(_){} }
+  try{ poly=turf.concave(fc,{maxEdge:maxEdge,units:'meters'});}catch(_){ }
+  if(!poly){ try{ poly=turf.convex(fc);}catch(_){ } }
   return poly;
 }
 document.getElementById("btnDetectViewport").addEventListener("click", function(){
@@ -1041,7 +1025,6 @@ document.getElementById("btnDetectFromPoints").addEventListener("click", functio
   I("Voorbeeld (selectie) klaar — klik ‘Opslaan’.");
 });
 
-// ====== Contouren ======
 function generateContours(){
   var pts=(db.bathy&&db.bathy.points)||[]; if(pts.length<5){ S("Te weinig dieptepunten voor contouren."); return; }
   var b=map.getBounds();
@@ -1053,7 +1036,7 @@ function generateContours(){
     var uMin=parseFloat(document.getElementById("hmMin").value), uMax=parseFloat(document.getElementById("hmMax").value);
     if(document.getElementById("hmFixed").checked){ vmin=0; vmax=20; }
     else { if(!isNaN(uMin)) vmin=uMin; if(!isNaN(uMax)) vmax=uMax; }
-  }catch(_){}
+  }catch(_){ }
   var levels=[]; for(var v=vmin; v<=vmax+1e-9; v+=step) levels.push(parseFloat(v.toFixed(3)));
 
   var degPerM=1/111320; var cellM=14; var cellDeg=cellM*degPerM;
@@ -1070,7 +1053,6 @@ function generateContours(){
 document.getElementById('btn-gen-contours').addEventListener('click', generateContours);
 document.getElementById('btn-clear-contours').addEventListener('click', function(){ contourLayer.clearLayers(); isobandLayer.clearLayers(); S("Contouren gewist."); });
 
-// ====== GPS ======
 var gpsWatchId = null;
 function startGPS(){
   if (!navigator.geolocation) { S("GPS niet beschikbaar."); return; }
@@ -1086,17 +1068,16 @@ function startGPS(){
     document.getElementById('gpsStatus').textContent = 'aan';
   }, function(){ stopGPS(); S("GPS: geen fix."); }, opts);
 }
-function stopGPS(){ if (gpsWatchId != null) { try{ navigator.geolocation.clearWatch(gpsWatchId); }catch(_){} gpsWatchId = null; } document.getElementById('gpsStatus').textContent = 'uit'; }
+function stopGPS(){ if (gpsWatchId != null) { try{ navigator.geolocation.clearWatch(gpsWatchId); }catch(_){ } gpsWatchId = null; } document.getElementById('gpsStatus').textContent = 'uit'; }
 document.getElementById('btnGps').addEventListener('click', function(){ if(gpsWatchId==null) startGPS(); else stopGPS(); });
 
-// ====== Local save/export ======
 document.getElementById('btnLocalSave').addEventListener('click', function(){ saveDB(); S('Data opgeslagen in browser.'); });
 document.getElementById('btnLocalLoad').addEventListener('click', function(){
   try{ var raw=localStorage.getItem(DB_KEY); if(raw){ db=JSON.parse(raw); normalizeDB(); renderAll(); S('Data geladen uit browser.'); } else { S('Geen data gevonden in browser.'); } }catch(e){ S('Laden mislukt.'); }
 });
 document.getElementById('btnLocalReset').addEventListener('click', function(){
   if(!confirm('Alle lokale data wissen?')) return;
-  try{ localStorage.removeItem(DB_KEY); }catch(_){}
+  try{ localStorage.removeItem(DB_KEY); }catch(_){ }
   db={waters:[],steks:[],rigs:[],bathy:{points:[],datasets:[]},settings:{waterColor:"#33a1ff"}};
   renderAll(); S('Lokale data gewist.');
 });
@@ -1106,7 +1087,6 @@ document.getElementById('btnSaveHtml').addEventListener('click', function(){
   var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='Vis Lokaties v1.1.4-c.html'; a.click(); setTimeout(function(){URL.revokeObjectURL(a.href)},1000);
 });
 
-// ====== Weer integratie + wind overlay ======
 var wxDate = document.getElementById('wxDate');
 var wxHour = document.getElementById('wxHour');
 var wxOut  = document.getElementById('wxOut');
@@ -1138,7 +1118,6 @@ function updateCompass(deg, wspd){
   if(info){ info.textContent = (deg!=null? (deg|0)+'°' : '—') + ' @ '+ fmt(wspd,'m/s',1); }
 }
 
-// Kompas
 var compCtrl = L.control({position:'topright'});
 compCtrl.onAdd=function(){
   var div = L.DomUtil.create('div','leaflet-control windCompass');
@@ -1148,7 +1127,6 @@ compCtrl.onAdd=function(){
 };
 compCtrl.addTo(map);
 
-// pijlen tekenen
 function drawWind(sel){
   windLayer.clearLayers();
   if(!wxDraw.checked || !sel) return;
@@ -1206,7 +1184,6 @@ document.getElementById('btnWeatherLoad').addEventListener('click', function(){
 wxDraw.addEventListener('change', function(){ if(lastWx) drawWind(lastWx.sel); });
 map.on('moveend zoomend', function(){ if(wxDraw.checked && lastWx){ drawWind(lastWx.sel); } });
 
-// ====== eenmalig UI dedupe ======
 (function(){
   const seen=new Set();
   document.querySelectorAll('[id]').forEach(function(el){ if(!el.id) return; if(seen.has(el.id)) el.remove(); else seen.add(el.id); });
