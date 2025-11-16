@@ -127,15 +127,13 @@
 
   function attachMarker(m,type,id){
     if(m.dragging && typeof m.dragging.enable === 'function'){ m.dragging.enable(); }
-    function stopAll(ev){ if(ev && ev.originalEvent){ ev.originalEvent.stopPropagation(); ev.originalEvent.preventDefault(); } }
-    m.on('mousedown touchstart pointerdown', function(ev){ stopAll(ev); try{ map.dragging.disable(); }catch(_){ } });
-    m.on('mouseup touchend pointerup', function(ev){ stopAll(ev); try{ map.dragging.enable(); }catch(_){ } });
-    m.on('dragstart',function(ev){
-      stopAll(ev);
-      try{ map.dragging.disable(); }catch(_){ }
+    m.__skipNextClick = false;
+    m.on('dragstart',function(){
+      if(map && map.dragging){ try{ map.dragging.disable(); }catch(_){ } }
       clearSelectionForMarker(m);
       if(m._icon && m._icon.classList){ m._icon.classList.remove('sel'); }
       if(useCluster && cluster){ try{ cluster.removeLayer(m);}catch(_){ } m.addTo(map); }
+      m.__skipNextClick = true;
     });
     m.on('drag',function(ev){
       window.drawDistances();
@@ -156,8 +154,7 @@
       }
     });
     m.on('dragend',function(ev){
-      stopAll(ev);
-      try{ map.dragging.enable(); }catch(_){ }
+      if(map && map.dragging){ try{ map.dragging.enable(); }catch(_){ } }
       if(useCluster && cluster){ try{ map.removeLayer(m);}catch(_){ } cluster.addLayer(m); }
       var ll=ev.target.getLatLng();
       if(type==='stek'){
@@ -177,8 +174,13 @@
       saveDB();
       rerender();
       S(type==='stek' ? 'Swim moved.' : 'Rig moved.');
+      m.__skipNextClick = true;
     });
     m.on('click',function(ev){
+      if(m.__skipNextClick){
+        m.__skipNextClick = false;
+        return;
+      }
       if(!selectMode) return;
       ev.originalEvent.preventDefault();
       ev.originalEvent.stopPropagation();
