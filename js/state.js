@@ -8,6 +8,24 @@
   var saveTimer = null;
 
   window.db = {waters:[],steks:[],rigs:[],bathy:{points:[],datasets:[]},settings:{waterColor:'#33a1ff'}};
+  var usedLocalFallback = false;
+
+  function cacheBrowserSnapshot(){
+    try{ localStorage.setItem(DB_KEY, JSON.stringify(window.db)); }
+    catch(_){ }
+  }
+
+  function tryLoadBrowserSnapshot(){
+    try{
+      var raw = localStorage.getItem(DB_KEY);
+      if(raw){
+        window.db = JSON.parse(raw);
+        usedLocalFallback = true;
+        return true;
+      }
+    }catch(_){ }
+    return false;
+  }
 
   function syncVersionLabel(){
     var versionMeta = document.querySelector('meta[name="app-version"]');
@@ -33,8 +51,9 @@
         window.db = JSON.parse(snapEl.textContent);
         return;
       }
-      var raw = localStorage.getItem(DB_KEY);
-      if(raw) window.db = JSON.parse(raw);
+      if(window.APP_DB_READY === false){
+        tryLoadBrowserSnapshot();
+      }
     }catch(_){ }
   }
 
@@ -140,7 +159,7 @@
   window.saveDB = function saveDB(){
     if(saveTimer) clearTimeout(saveTimer);
     saveTimer = setTimeout(function(){ pushDbToServer(); }, 400);
-    try{ localStorage.setItem(DB_KEY, JSON.stringify(window.db)); }catch(_){ }
+    cacheBrowserSnapshot();
   };
 
   window.syncFromServer = function syncFromServer(){
@@ -154,11 +173,20 @@
         if(remote && typeof remote === 'object'){
           window.db = remote;
           window.normalizeDB();
+          cacheBrowserSnapshot();
+          usedLocalFallback = false;
           if(typeof window.renderAll === 'function'){ window.renderAll(); }
           S('Loaded latest server data.');
         }
       })
-      .catch(function(err){ console.warn('Server sync failed', err); });
+      .catch(function(err){
+        console.warn('Server sync failed', err);
+        if(!usedLocalFallback && tryLoadBrowserSnapshot()){
+          window.normalizeDB();
+          if(typeof window.renderAll === 'function'){ window.renderAll(); }
+          S('Server offline – loaded browser snapshot.');
+        }
+      });
   };
 
   loadSnapshot();

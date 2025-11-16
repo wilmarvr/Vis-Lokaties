@@ -30,6 +30,24 @@ $DEFAULT_DB = [
     'settings' => ['waterColor' => '#33a1ff'],
 ];
 
+function sanitize_id(?string $value): string
+{
+    $value = trim((string) ($value ?? ''));
+    if ($value === '') {
+        return '';
+    }
+    if (strlen($value) > 64) {
+        $value = substr($value, 0, 64);
+    }
+    return $value;
+}
+
+function sanitize_nullable_id($value): ?string
+{
+    $clean = sanitize_id(is_scalar($value) ? (string) $value : '');
+    return $clean === '' ? null : $clean;
+}
+
 try {
     $db = connectAppDatabase($config);
     maybeHydrateFromLegacy($db, DB_KEY, $DEFAULT_DB);
@@ -103,7 +121,7 @@ function normalizePayload(array $payload, array $defaults): array
             return null;
         }
         return [
-            'id' => (string) ($item['id'] ?? ''),
+            'id' => sanitize_id($item['id'] ?? ''),
             'name' => (string) ($item['name'] ?? ''),
             'geojson' => $item['geojson'] ?? null,
         ];
@@ -116,12 +134,12 @@ function normalizePayload(array $payload, array $defaults): array
             return null;
         }
         return [
-            'id' => (string) ($item['id'] ?? ''),
+            'id' => sanitize_id($item['id'] ?? ''),
             'name' => (string) ($item['name'] ?? ''),
             'note' => (string) ($item['note'] ?? ''),
             'lat' => (float) ($item['lat'] ?? 0.0),
             'lng' => (float) ($item['lng'] ?? 0.0),
-            'water_id' => isset($item['waterId']) ? (string) $item['waterId'] : null,
+            'water_id' => array_key_exists('waterId', $item) ? sanitize_nullable_id($item['waterId']) : null,
         ];
     }, $payload['steks'] ?? []), function ($row) {
         return $row['id'] !== '';
@@ -132,13 +150,13 @@ function normalizePayload(array $payload, array $defaults): array
             return null;
         }
         return [
-            'id' => (string) ($item['id'] ?? ''),
+            'id' => sanitize_id($item['id'] ?? ''),
             'name' => (string) ($item['name'] ?? ''),
             'note' => (string) ($item['note'] ?? ''),
             'lat' => (float) ($item['lat'] ?? 0.0),
             'lng' => (float) ($item['lng'] ?? 0.0),
-            'water_id' => isset($item['waterId']) ? (string) $item['waterId'] : null,
-            'stek_id' => isset($item['stekId']) ? (string) $item['stekId'] : null,
+            'water_id' => array_key_exists('waterId', $item) ? sanitize_nullable_id($item['waterId']) : null,
+            'stek_id' => array_key_exists('stekId', $item) ? sanitize_nullable_id($item['stekId']) : null,
         ];
     }, $payload['rigs'] ?? []), function ($row) {
         return $row['id'] !== '';
@@ -154,7 +172,7 @@ function normalizePayload(array $payload, array $defaults): array
             'lat' => (float) ($item['lat'] ?? 0.0),
             'lon' => (float) ($item['lon'] ?? 0.0),
             'dep' => (float) ($item['dep'] ?? 0.0),
-            'dataset_id' => isset($item['dataset_id']) ? (string) $item['dataset_id'] : null,
+            'dataset_id' => array_key_exists('dataset_id', $item) ? sanitize_nullable_id($item['dataset_id']) : null,
         ];
     }
 
@@ -165,9 +183,9 @@ function normalizePayload(array $payload, array $defaults): array
             continue;
         }
         $datasetIndex++;
-        $identifier = (string) ($dataset['id'] ?? ('dataset_' . $datasetIndex));
+        $identifier = sanitize_id($dataset['id'] ?? ('dataset_' . $datasetIndex));
         if ($identifier === '') {
-            $identifier = 'dataset_' . $datasetIndex;
+            $identifier = sanitize_id('dataset_' . $datasetIndex);
         }
         $datasets[] = ['id' => $identifier, 'payload' => $dataset];
     }
@@ -200,11 +218,17 @@ function ensureBathyDatasetIntegrity(array $points, array $datasets): array
         }
     };
     foreach ($datasets as &$dataset) {
+        $dataset['id'] = sanitize_id($dataset['id'] ?? '');
+        if ($dataset['id'] === '') {
+            $dataset['id'] = sanitize_id($generateDatasetId());
+        }
         if (!isset($dataset['payload']) || !is_array($dataset['payload'])) {
             $dataset['payload'] = [];
         }
-        if (!isset($dataset['payload']['id']) || $dataset['payload']['id'] === '') {
+        if (empty($dataset['payload']['id'])) {
             $dataset['payload']['id'] = $dataset['id'];
+        } else {
+            $dataset['payload']['id'] = sanitize_id((string) $dataset['payload']['id']);
         }
         if (empty($dataset['payload']['importedAt'])) {
             $dataset['payload']['importedAt'] = $now;
@@ -216,10 +240,10 @@ function ensureBathyDatasetIntegrity(array $points, array $datasets): array
     $counts = [];
     $fallbackId = null;
     foreach ($points as &$point) {
-        $datasetId = isset($point['dataset_id']) ? trim((string) $point['dataset_id']) : '';
+        $datasetId = sanitize_id($point['dataset_id'] ?? '');
         if ($datasetId === '') {
             if ($fallbackId === null) {
-                $fallbackId = $generateDatasetId();
+                $fallbackId = sanitize_id($generateDatasetId());
             }
             $datasetId = $fallbackId;
             $point['dataset_id'] = $datasetId;
@@ -395,9 +419,9 @@ function replaceBathy(mysqli $db, array $bathy): void
 
     $points = $bathy['points'] ?? [];
     if ($points) {
-        $stmt = $db->prepare('INSERT INTO bathy_points (dataset_id, lat, lon, dep) VALUES (?, ?, ?, ?)');
+        $stmt = $db->prepare("INSERT INTO bathy_points (dataset_id, lat, lon, dep) VALUES (NULLIF(?, ''), ?, ?, ?)");
         foreach ($points as $point) {
-            $datasetId = $point['dataset_id'] ?? null;
+            $datasetId = $point['dataset_id'] ?? '';
             $stmt->bind_param('sddd', $datasetId, $point['lat'], $point['lon'], $point['dep']);
             $stmt->execute();
         }

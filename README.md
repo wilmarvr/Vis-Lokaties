@@ -31,6 +31,8 @@ The Vis Lokaties toolkit now runs through a PHP entry point (`index.php`) that r
 | **Clean-up & export** | Export all data, import GeoJSON, save/load/reset browser snapshots, and download standalone HTML bundles (with or without embedded JSON). |
 | **GPS & navigation** | Start or stop live GPS logging to show latitude, longitude, accuracy, speed and bearing in the floating info panel. |
 
+A small preload shim maps Leaflet's legacy `touchleave` listeners to pointer/mouse alternatives on browsers that never implemented the event (Firefox, desktop Safari), so the console no longer fills with “wrong event specified” warnings while dragging markers with a mouse.
+
 Status updates land in the footer, together with the mouse lat/lon, zoom level and app version (from `version.json`). Every edit (waters, swims, rigs, bathy, settings) is pushed to MySQL through `api/db.php` so the database always stays authoritative. On each page load the API confirms that the database and all tables exist and silently re-creates them when something is missing.
 
 If the configured database cannot be reached, `index.php` surfaces a blocking error overlay with the connection details so you can launch `install.php` or fix `api/config.php` before any JavaScript tries to fetch data.
@@ -60,7 +62,9 @@ Always open the site via `http://localhost/...` on XAMPP so every `fetch` call t
 - `api/install.php` uses the same bootstrapper as `db.php` but adds database/user provisioning plus `config.php` creation when needed.
 - `api/bootstrap.php` reads `config.php` (or environment variables), opens the MySQL connection, creates the database if it is missing and verifies every table that the UI depends on (including the Deeper import storage and the legacy `kv` table for migrations).
 - On the first run the bootstrapper seeds the default payload (either from the new tables or by migrating the legacy `kv` snapshot). Every interaction in the UI triggers `saveDB()` → `pushDbToServer()`, so MySQL stays synced.
+- Whenever PHP confirms that MySQL is reachable the browser starts from a blank snapshot and waits for the live payload, preventing stale heatmaps or markers from lingering when the database is empty. Once the server responds, the exact JSON is cached in `localStorage` so the manual Save/Load/HTML export buttons still have something to work with offline.
 - Basemap tiles are requested through `api/tile.php`, a small PHP proxy that caches OSM/Stamen/Carto tiles for 24 hours. Keeping these requests same-origin bypasses browsers that block cross-origin PNGs/JPGs via OpaqueResponseBlocking, so you no longer see tile errors in the console.
+- Dataset identifiers, foreign keys and bathymetry metadata are now sanitized and truncated server-side so Deeper imports with long file names can never overflow the `VARCHAR(64)` columns that back the `waters`, `steks`, `spots` or `bathy_datasets` tables.
 
 ## Versioning
 - `VERSION` and `version.json` contain the current release (`v0.0.0`). Always update both when you bump the version.
