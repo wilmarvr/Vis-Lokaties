@@ -182,23 +182,11 @@
     if(m.dragging && typeof m.dragging.enable === 'function'){ m.dragging.enable(); }
     m.__skipNextClick = false;
 
-    function swallow(ev){
-      if(ev && typeof ev.preventDefault === 'function'){ ev.preventDefault(); }
-      if(ev && typeof ev.stopPropagation === 'function'){ ev.stopPropagation(); }
-      var orig = ev && ev.originalEvent;
-      if(orig){
-        if(typeof orig.preventDefault === 'function'){ orig.preventDefault(); }
-        if(typeof orig.stopPropagation === 'function'){ orig.stopPropagation(); }
-      }
-    }
-
-    function disableMapPan(ev){
-      swallow(ev);
+    function disableMapPan(){
       try{ if(map && map.dragging){ map.dragging.disable(); } }
       catch(_){ }
     }
-    function enableMapPan(ev){
-      swallow(ev);
+    function enableMapPan(){
       try{ if(map && map.dragging){ map.dragging.enable(); } }
       catch(_){ }
     }
