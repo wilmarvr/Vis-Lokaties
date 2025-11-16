@@ -93,3 +93,22 @@ scripts/pull_from_github.sh https://github.com/wilmarvr/vis-lokaties.git main "V
 The script clones the GitHub repository into a temporary directory and copies the requested file(s) into the current workspace. If your environment sits behind a restrictive proxy you may need to allow outbound HTTPS before the script can talk to GitHub.
 
 When these are present the bootstrapper will use them and ignore `config.php`.
+
+## Directory listing: GitHub vs local cache
+If you simply want to see what lives inside the public repository (or contrast that tree with the files that exist locally), use
+the listing helper:
+
+```bash
+# list the default repo/branch and compare it with the current working tree
+scripts/list_remote_vs_local.sh
+
+# override the repo, branch or local directory
+scripts/list_remote_vs_local.sh https://github.com/wilmarvr/vis-lokaties.git main /path/to/other/tree
+```
+
+It prints three sections:
+1. The remote directory tree.
+2. The local directory tree.
+3. A “Only in remote / Only in local” report so missing or extra files are obvious immediately.
+
+When outbound HTTPS is blocked the helper now still emits the complete local tree so you have a directory listing from the Codex environment; rerun the command later (or point it at a mirror you can reach) to capture the remote side once connectivity returns.
