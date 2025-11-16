@@ -1,77 +1,74 @@
 # Vis Lokaties
 
-Deze versie van Vis Lokaties draait volledig als statische HTML/CSS/JS met een lichte PHP-API voor opslag. Daardoor kan de site
-zonder Node.js op XAMPP of vrijwel elke externe hosting met PHP en MySQL draaien. De installer richt automatisch de database in
-en schrijft een `config.php`, zodat nieuwe omgevingen zichzelf herstellen zolang je éénmalig admin-toegang tot MySQL kunt geven.
+The Vis Lokaties toolkit now runs as a static HTML/CSS/JS front-end plus a lightweight PHP API so it works on XAMPP and on almost any external hosting plan that offers PHP + MySQL. The installer provisions the database, grants permissions, creates the `kv` table, seeds the default JSON payload and writes `api/config.php`, so every deployment can repair itself as long as you can temporarily supply MySQL admin credentials.
 
-## Structuur
-- `index.html` – de kaart en interface
-- `css/` – styles
-- `js/` – functionaliteit
-- `api/` – PHP installer/API (`db.php`, `install.php`, `bootstrap.php`, `config*.php`)
-- `install.php` – alias die automatisch `api/install.php` laadt voor het geval je rechtstreeks naar `/install.php` navigeert
-- `version.json` – metadata die de UI toont
+## Repository layout
+- `index.html` – user interface and Leaflet map
+- `css/` – stylesheets (including the modal styles that power the pickers)
+- `js/` – split JavaScript modules (`utils`, `state`, `map-core`, `water-manager`, `spot-manager`, `deeper-import`, `app`)
+- `api/` – PHP bootstrapper, database API and installer (`db.php`, `install.php`, `bootstrap.php`, `config*.php`)
+- `install.php` – convenience alias that forwards to `api/install.php`
+- `version.json` – metadata surfaced inside the UI and `<title>`
+- `VERSION` – repository level version string (currently `v0.0.0`)
 
-## Vereisten
-- PHP 8.0 of hoger met `mysqli`
-- MySQL 5.7/8.0 (bijvoorbeeld de server die met XAMPP wordt geleverd)
+## Requirements
+- PHP 8.0+ with `mysqli`
+- MySQL 5.7/8.0 (the MySQL server included in XAMPP works fine)
+- A browser that supports modern ES6 syntax (Chrome, Edge, Firefox, Safari)
 
-## Functionaliteiten van de site
-De interface in `index.html` bevat alle tooling voor wateren, stekken en onderwaterdata:
+## Feature overview
+`index.html` exposes every tool in one sidebar. Each panel is now fully English:
 
-| Paneel | Mogelijkheden |
+| Panel | What it does |
 | --- | --- |
-| **Basemap** | Wissel tussen OSM, Toner, Terrain en Carto Dark tegels, met schaalbalk, muispositie, zoomlabel en realtime diepte-tooltip (IDW-interpolatie op bathy-punten). |
-| **Spots** | Voeg stekken of rigs toe door op de kaart te klikken, schakel clustering, toon automatische afstandslijnen en forceer een drag-fix wanneer Leaflet-slepen blokkeert. De knop “🤖 2 rigs per zichtbare stek” genereert voor elke zichtbare stek twee rigmarkeringen. |
-| **Detectie** | Run de detector op het kaartbeeld, de huidige selectie of OpenStreetMap-wateren, stel “Max edge” in, geef de contour een naam en sla die op als water. Selecties zijn met één klik te legen. |
-| **Deeper import & heatmap** | Importeer CSV/ZIP-bestanden of hele mappen (bijvoorbeeld uit Deeper), bewaar bathymetrische punten in de database, bekijk voortgangsbalken en queue-log, configureer de heatmap (radius, blur, min/max, inversie, clipping, vast bereik) met legenda/statistiek en wis heatmap of bathy-data. |
-| **Weer & wind** | Haal direct het actuele weer op of kies een datum/uur, toon het resultaat in tekstvorm, teken windpijlen op de kaart en stel pijl-dichtheid in. |
-| **Overzicht & beheren** | Wissel tabs voor waters, stekken en rigs om lijsten te bewerken, hernoemen of verwijderen. |
-| **Contouren** | Genereer contourlijnen uit de opgeslagen bathymetrie binnen het kaartbeeld of wis bestaande contourlagen. |
-| **Opschonen & export** | Exporteer alle data, importeer GeoJSON, sla of laad een snapshot via localStorage, reset browserdata en download standalone HTML-bestanden (met of zonder embedded dataset). |
-| **GPS & navigatie** | Start/stop live GPS-tracking om positie, nauwkeurigheid, snelheid en koers op de kaart en in het infopaneel te tonen. |
+| **Basemap** | Switch between OSM, Toner, Terrain and Carto Dark tiles. Shows a scale bar, mouse position, zoom level and a live depth tooltip interpolated from your bathymetry. |
+| **Spots** | Place swims (stekken) or rigs by clicking the map, toggle clustering, display swim–rig distances, disable clustering when dragging misbehaves and auto-place two rigs for each visible swim. |
+| **Detection** | Build new waters from the viewport, a manual selection or OpenStreetMap water polygons. Set the maximum edge length, enter a name and store the polygon. Quickly clear the current selection. |
+| **Deeper import & heatmap** | Import CSV/ZIP files or whole directories (for example from Deeper sonar logs), persist bathymetry inside MySQL, monitor the queue/progress bars, tune the heatmap radius/blur/min-max/inversion/clipping and wipe the heatmap or stored bathy points. |
+| **Weather & wind** | Fetch live weather or a specific day/hour via Open-Meteo, display the result textually, render a compass overlay and optionally draw wind arrows whose density you control. |
+| **Manage everything** | Tabbed tables for waters, swims and rigs so you can rename, relink or delete entries. Clicking a row zooms the map to the corresponding geometry. |
+| **Contours** | Generate contour lines from the stored bathymetry inside the current viewport or clear existing contour layers. |
+| **Clean-up & export** | Export all data, import GeoJSON, save/load/reset browser snapshots, and download standalone HTML bundles (with or without embedded JSON). |
+| **GPS & navigation** | Start or stop live GPS logging to show latitude, longitude, accuracy, speed and bearing in the floating info panel. |
 
-Statusmeldingen verschijnen onderin, evenals de actuele muiscoördinaten, het zoomniveau en de app-versie (`version.json`). Alle
-mutaties (wateren, stekken, rigs, bathy, settings) worden direct naar MySQL gepusht via `api/db.php`.
+Status updates land in the footer, together with the mouse lat/lon, zoom level and app version (from `version.json`). Every edit (waters, swims, rigs, bathy, settings) is pushed to MySQL through `api/db.php` so the database always stays authoritative.
 
-## Installeren op XAMPP
-1. Start **Apache** en **MySQL** via het XAMPP Control Panel.
-2. Plaats de inhoud van deze repository in `C:\xampp\htdocs\vis-lokaties` (bijvoorbeeld via `git clone` direct in `htdocs`).
-3. Surf naar [http://localhost/vis-lokaties/install.php](http://localhost/vis-lokaties/install.php) (deze file vereist automatisch `api/install.php`). De wizard vraagt:
-   - Een MySQL admin (bijv. `root` + leeg wachtwoord op een standaardinstallatie).
-   - De gewenste applicatie-database (standaard `vislokaties`).
-   - Een nieuw gebruikersaccount + wachtwoord dat de app gaat gebruiken.
-4. De installer logt in met het admin-account, maakt database en gebruiker, kent rechten toe, zorgt dat de `kv`-tabel bestaat,
-schrijft `api/config.php` en seed de default dataset.
-5. Navigeer naar [http://localhost/vis-lokaties/](http://localhost/vis-lokaties/). Alle mutaties worden nu direct in MySQL opgeslagen.
-> **Tip:** Het veld “Applicatie host” bepaalt vanaf welke host MySQL jouw app laat verbinden. Vul hier `localhost`, `127.0.0.1` of `::1` in op XAMPP; de installer schrijft diezelfde waarde naar `config.php` zodat MySQL geen `Access denied` geeft doordat `localhost` en `127.0.0.1` anders worden behandeld.
+## Installing on XAMPP
+1. Start **Apache** and **MySQL** inside the XAMPP Control Panel.
+2. Clone or copy the repository into `C:\xampp\htdocs\vis-lokaties`.
+3. Browse to [http://localhost/vis-lokaties/install.php](http://localhost/vis-lokaties/install.php). The wizard asks for:
+   - A MySQL admin user (e.g. `root` with an empty password on stock XAMPP).
+   - The database name (default `vislokaties`).
+   - A new app user + password.
+   - The host value that MySQL expects (use `localhost`, `127.0.0.1` or `::1` – match whatever host your MySQL grants target).
+4. The installer logs in with the admin account, creates the database and user, grants privileges, verifies the `kv` table schema, writes `api/config.php` and seeds the default JSON.
+5. Visit [http://localhost/vis-lokaties/](http://localhost/vis-lokaties/) and start working. All edits are now persisted inside MySQL.
 
-Start altijd via `http://localhost/...` zodat fetches naar `api/db.php` correct resolven.
+Always open the site via `http://localhost/...` on XAMPP so every `fetch` call to `api/db.php` resolves correctly.
 
-## Externe hosting
-1. Upload de volledige inhoud (inclusief `api/`, `css/`, `js/`, `index.html`, `install.php` en `version.json`) naar de document-root van je host (FTP/SFTP/git deploy).
-2. Voer `install.php` (of direct `api/install.php`) uit via de browser. Op managed hosting heb je vaak phpMyAdmin-gegevens waarmee je tijdelijk als admin kunt inloggen; de installer doet de rest (database, gebruiker, `kv`-tabel, config-bestand).
-3. Kun je geen admin-credentials krijgen? Maak dan handmatig een database en gebruiker in het hostingpaneel en vul die in `api/config.php`. Zet “Applicatie host” gelijk aan het hostpatroon dat je in het paneel hebt ingesteld (bijvoorbeeld `%`, `localhost` of de servernaam) zodat de installer dezelfde waarde voor de verbindingshost gebruikt.
-4. Eventueel kun je environment-variabelen (`DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`) gebruiken als jouw host dat ondersteunt; `config.php` is dan optioneel.
-5. Zorg dat PHP 8 + `mysqli` draait en dat `api/` requests niet worden geblokkeerd. Daarna kun je dezelfde URL-structuur als lokaal aanhouden.
+## Deploying to external hosting
+1. Upload the entire repository (including `api/`, `css/`, `js/`, `install.php`, `index.html`, `version.json`) to your document root using FTP/SFTP/git.
+2. Run `install.php` (or `api/install.php`) in the browser. On managed hosting you typically have phpMyAdmin credentials you can temporarily supply; the installer provisions the rest.
+3. If the host does not allow temporary admin credentials, create the database + user manually in the hosting control panel and copy those values into `api/config.php`. Set the "Application host" field in the installer to exactly the same host mask you configured in MySQL (for example `%`, `localhost` or the server hostname) so MySQL grants align with runtime connections.
+4. Some hosts let you expose credentials through environment variables (`DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`). When those are present `config.php` is optional.
+5. Ensure PHP 8 + `mysqli` are enabled and that requests to `api/` are allowed. After that you can use the same URLs as on XAMPP.
 
-## Werking
-- De front-end doet fetch-requests naar `api/db.php` om de volledige JSON (`waters`, `steks`, `rigs`, `bathy`, `settings`) te lezen of te schrijven.
-- `api/install.php` draait dezelfde bootstrapper als `db.php`, maar met extra stappen om een database + gebruiker te provisionen en de config file neer te zetten.
-- `api/bootstrap.php` bevat alle logica om `config.php` of environment-variabelen te laden, de MySQL-verbinding te maken, en de `kv`-tabel te migreren (met validaties op kolomnamen/typen).
-- Bij de eerste run seed `bootstrap.php` de standaard dataset. Elke wijziging vanuit de UI (toevoegen van stekken, importeren van bathy, contouren genereren, etc.) triggert `pushDbToServer()` zodat MySQL altijd het actuele JSON-document bevat.
+## Runtime architecture
+- The front-end performs `fetch` requests against `api/db.php` to pull/push the entire JSON blob (`waters`, `steks`, `rigs`, `bathy`, `settings`).
+- `api/install.php` uses the same bootstrapper as `db.php` but adds database/user provisioning plus `config.php` creation when needed.
+- `api/bootstrap.php` reads `config.php` (or environment variables), opens the MySQL connection, ensures the `kv` table exists and validates its schema before returning data.
+- On the first run the bootstrapper seeds the default payload. Every interaction in the UI triggers `saveDB()` → `pushDbToServer()`, so MySQL stays synced.
 
-## Versiebeheer
-- De huidige applicatieversie wordt bijgehouden in het bestand `VERSION` (root van de repository) en in `version.json`. Pas deze gelijktijdig aan bij een nieuwe release.
-- De UI toont altijd de waarde uit `version.json`; het document `<title>` wordt er automatisch op aangepast.
-- Wil je releases volgen? Update beide bestanden en commit ze; de front-end leest `version.json` bij het laden.
+## Versioning
+- `VERSION` and `version.json` contain the current release (`v0.0.0`). Always update both when you bump the version.
+- The UI loads `version.json` on startup and mirrors the value in the header and document title.
 
-## Configuratie zonder config.php
-Op sommige hosts kun je liever environment-variabelen gebruiken (bijvoorbeeld via `.htaccess` of het hostingpaneel). Ondersteunde variabelen:
+## Configuration without `config.php`
+If your host prefers environment variables you can define the following (via `.htaccess`, the hosting dashboard or your deployment pipeline):
 - `DB_HOST`
 - `DB_PORT`
 - `DB_USER`
 - `DB_PASSWORD`
 - `DB_NAME`
 
-Wanneer deze variabelen zijn gezet is `config.php` optioneel.
+When these are present the bootstrapper will use them and ignore `config.php`.

@@ -1,6 +1,12 @@
 :root { --bg:#0b1119; --panel:#111a23; --txt:#E6EDF3; --accent:#33a1ff; }
 *{box-sizing:border-box}
 body{ margin:0;background:var(--bg);color:var(--txt);font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;height:100vh;overflow:hidden;}
+.modal-overlay{position:fixed;inset:0;background:rgba(3,5,8,0.75);z-index:999999;display:flex;align-items:center;justify-content:center;}
+.modal{background:#0e151d;border:1px solid #1f2a36;border-radius:10px;padding:12px;min-width:320px;box-shadow:0 8px 30px rgba(0,0,0,0.4);}
+.modal-title{font-weight:600;margin-bottom:8px;}
+.modal-select{width:100%;margin-bottom:10px;background:#111924;border:1px solid #223142;color:#e6f0ff;padding:6px;}
+.modal-actions{text-align:right;}
+.modal-actions button{margin-left:6px;}
 #toolbar{ position:absolute; top:0; left:0; width:320px; height:100%; overflow-y:auto; background:var(--panel); box-shadow:2px 0 10px #000a; padding:6px; z-index:9999; }
 #mapContainer{ position:absolute; left:320px; top:0; right:0; bottom:58px; z-index:0; }
 #footer{ position:absolute; left:320px; bottom:0; right:0; height:58px; background:#0e151d; border-top:1px solid #1e2a33; display:flex; align-items:center; gap:8px; padding:6px 10px; font-size:13px; z-index:10000; overflow:hidden; }
