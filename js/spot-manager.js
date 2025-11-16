@@ -153,16 +153,6 @@
     var suggestion = selection.bestWater ? (' • suggestion: ' + (nameOfWater(selection.bestWater.id) || selection.bestWater.id)) : '';
     I('Selection: ' + n + ' points' + suggestion + '.');
   }
-  function clearSelectionForMarker(marker){
-    if(!selection.points.size) return;
-    var ll = marker.getLatLng();
-    var key = ll.lat.toFixed(7) + ',' + ll.lng.toFixed(7);
-    if(selection.points.delete(key)){
-      if(marker._icon && marker._icon.classList){ marker._icon.classList.remove('sel'); }
-      updateSelInfo();
-    }
-  }
-
   var selectMode=false;
   var useCluster=false;
   var cluster=null;
@@ -190,15 +180,11 @@
 
   function attachMarker(m,type,id){
     if(m.dragging && typeof m.dragging.enable === 'function'){ m.dragging.enable(); }
-    m.__skipNextClick = false;
     m.on('mousedown touchstart pointerdown', function(){ if(map && map.dragging){ try{ map.dragging.disable(); }catch(_){ } } });
     m.on('mouseup touchend pointerup', function(){ if(map && map.dragging){ try{ map.dragging.enable(); }catch(_){ } } });
     m.on('dragstart',function(){
       if(map && map.dragging){ try{ map.dragging.disable(); }catch(_){ } }
-      clearSelectionForMarker(m);
-      if(m._icon && m._icon.classList){ m._icon.classList.remove('sel'); }
       if(useCluster && cluster){ try{ cluster.removeLayer(m);}catch(_){ } m.addTo(map); }
-      m.__skipNextClick = true;
     });
     m.on('drag',function(ev){
       window.drawDistances();
@@ -239,13 +225,8 @@
       saveDB();
       rerender();
       S(type==='stek' ? 'Swim moved.' : 'Rig moved.');
-      m.__skipNextClick = true;
     });
     m.on('click',function(ev){
-      if(m.__skipNextClick){
-        m.__skipNextClick = false;
-        return;
-      }
       if(selectMode){
         ev.originalEvent.preventDefault();
         ev.originalEvent.stopPropagation();
@@ -263,15 +244,13 @@
   }
 
   function makeStekMarker(s){
-    var colors=colorForStekId(String(s.id||''));
     var m=L.marker([s.lat,s.lng],{
       draggable:true,
       pane:'markerPane',
       autoPan:true,
       autoPanPadding:[60,60],
       riseOnHover:true,
-      bubblingMouseEvents:false,
-      icon:coloredIcon(colors.fill,'S')
+      bubblingMouseEvents:false
     });
     attachMarker(m,'stek',s.id);
     m.bindTooltip((s.name||'Swim'),{direction:'top'});
@@ -280,15 +259,13 @@
   }
   function makeRigMarker(r){
     var s=db.steks.find(function(x){return x.id===r.stekId;});
-    var colors=colorForStekId(String(r.stekId||r.id||''));
     var m=L.marker([r.lat,r.lng],{
       draggable:true,
       pane:'markerPane',
       autoPan:true,
       autoPanPadding:[60,60],
       riseOnHover:true,
-      bubblingMouseEvents:false,
-      icon:coloredIcon(colors.fill,'R')
+      bubblingMouseEvents:false
     });
     attachMarker(m,'rig',r.id);
     m.bindTooltip((r.name||'Rig')+(s? ' • '+(s.name||s.id):''),{direction:'top'});
