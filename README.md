@@ -41,12 +41,13 @@ A Laravel-based fishing location manager with a MySQL-first schema, user authent
      FLUSH PRIVILEGES;
      ```
    - Adjust `DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME`, and `DB_PASSWORD` in `.env` to the values for your MySQL server.
+   - Leave `APP_AUTO_MIGRATE=true` (default) if you want the app to create the schema automatically the first time it runs; set it to `false` if you prefer running `php artisan migrate` manually.
    - (Optional) To use SQLite for quick experiments, switch `DB_CONNECTION=sqlite` and ensure `database/database.sqlite` exists.
-4. **Migrate & seed**
+4. **(Optional) Manual migrate & seed**
    ```bash
    php artisan migrate --seed
    ```
-   The seeder provisions `admin@example.com / password` as an initial admin.
+   The seeder provisions `admin@example.com / password` as an initial admin. If you skip this step, the app will auto-run `php artisan migrate --force` the first time a web request hits it (controlled by `APP_AUTO_MIGRATE`, enabled by default) so an empty database works out of the box.
 5. **Serve**
    ```bash
    php artisan serve
