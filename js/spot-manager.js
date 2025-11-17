@@ -191,8 +191,27 @@
       catch(_){ }
     }
 
-    m.on('mousedown touchstart pointerdown', disableMapPan);
-    m.on('mouseup touchend pointerup', enableMapPan);
+    function swallowAndDisable(ev){
+      if(ev && ev.originalEvent){
+        try{
+          ev.originalEvent.preventDefault();
+          ev.originalEvent.stopPropagation();
+        }catch(_){ }
+      }
+      if(window.L && L.DomEvent){
+        try{ L.DomEvent.stop(ev); }catch(_){ }
+      }
+      disableMapPan();
+    }
+    function releaseAndEnable(ev){
+      if(ev && ev.originalEvent){
+        try{ ev.originalEvent.stopPropagation(); }catch(_){ }
+      }
+      enableMapPan();
+    }
+
+    m.on('mousedown touchstart pointerdown', swallowAndDisable);
+    m.on('mouseup touchend pointerup', releaseAndEnable);
 
     m.on('dragstart',function(){
       m.__skipNextClick = true;
