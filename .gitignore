@@ -5,6 +5,7 @@
 /database/*.sqlite
 .env
 .env.*
+!.env.example
 .phpunit.result.cache
 .idea/
 .php-cs-fixer.cache
