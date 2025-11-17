@@ -10,6 +10,7 @@ return [
     'locale' => 'en',
     'fallback_locale' => 'en',
     'faker_locale' => 'en_US',
+    'auto_migrate' => env('APP_AUTO_MIGRATE', true),
     'key' => env('APP_KEY'),
     'cipher' => 'AES-256-CBC',
     'providers' => [
