@@ -1,117 +1,83 @@
-# Vis Lokaties
+# Vis Lokaties Laravel Edition
 
-The Vis Lokaties toolkit now runs through a PHP entry point (`index.php`) that renders the HTML/CSS/JS interface and refuses to load when MySQL is unavailable. A lightweight PHP API powers data persistence so the project works on XAMPP and on almost any external hosting plan that offers PHP + MySQL. The installer provisions the database, grants permissions, seeds all domain tables (`waters`, `steks`, `spots`, `bathy_points`, `bathy_datasets`, `settings`, legacy `kv`) and writes `api/config.php`, so every deployment can repair itself as long as you can temporarily supply MySQL admin credentials.
+A Laravel-based fishing location manager with MySQL/SQLite-friendly schema, user authentication, an admin panel, and a Leaflet-powered map UI that stores waters, steks (swims), rigs, and Deeper bathymetry points per user.
 
-## Repository layout
-- `index.php` – user interface, version banner and database readiness check
-- `css/` – stylesheets (including the modal styles that power the pickers)
-- `js/` – split JavaScript modules (`utils`, `state`, `map-core`, `water-manager`, `spot-manager`, `deeper-import`, `app`)
-- `api/` – PHP bootstrapper, database API, installer (`db.php`, `install.php`, `bootstrap.php`, `config*.php`) and the tile proxy (`tile.php`)
-- `install.php` – convenience alias that forwards to `api/install.php`
-- `version.json` – metadata surfaced inside the UI and `<title>`
-- `VERSION` – repository level version string (currently `v0.0.0`)
+## Features
 
-## Requirements
-- PHP 8.0+ with `mysqli`
-- MySQL 5.7/8.0 (the MySQL server included in XAMPP works fine)
-- A browser that supports modern ES6 syntax (Chrome, Edge, Firefox, Safari)
+- **Self-service registration & login** (session-based) with optional admin role for user/setting/backup management.
+- **Multi-tenant data model** – every water, stek, rig, dataset, bathymetry point, attachment, and preference is scoped to the authenticated angler.
+- **Admin panel** with dashboards, user role management, global settings, and one-click SQLite backups.
+- **Leaflet + Turf + heatmap** frontend served from Blade/Vite (`resources/js/app.js`) that:
+  - draws waters/steks/rigs with clustering + drag-to-update
+  - streams live depth & distance telemetry per drag
+  - imports Deeper CSV/ZIP files straight into the `/api/bathy` endpoint chunk-by-chunk
+  - manages contour/heatmap rendering via client-side controls.
+- **REST API (routes/api.php)** protected by Sanctum, offering CRUD for all core models plus attachment upload endpoints.
+- **Attachment model & storage** for file uploads (stored in `storage/app/attachments`).
+- **SQLite by default** (see `.env.example`) but migrations are portable to MySQL.
 
-## Feature overview
-`index.php` exposes every tool in one sidebar. Each panel is now fully English:
+## Getting Started
 
-| Panel | What it does |
+1. **Install PHP dependencies** (internet access required):
+   ```bash
+   composer install
+   ```
+2. **Install JS/Vite dependencies** (optional but recommended for asset building):
+   ```bash
+   npm install
+   npm run build # or npm run dev
+   ```
+3. **Environment**
+   - Copy `.env.example` to `.env` and generate an app key:
+     ```bash
+     cp .env.example .env
+     php artisan key:generate
+     ```
+   - The default DB connection uses SQLite at `database/database.sqlite`. Ensure the file exists (`touch database/database.sqlite`).
+4. **Migrate & seed**
+   ```bash
+   php artisan migrate --seed
+   ```
+   The seeder provisions `admin@example.com / password` as an initial admin.
+5. **Serve**
+   ```bash
+   php artisan serve
+   ```
+   Then visit `http://localhost:8000`, register/sign-in, and open the map workspace.
+
+## API Overview
+
+All routes live under `/api/*` and require Sanctum-authenticated sessions:
+
+| Endpoint | Description |
 | --- | --- |
-| **Basemap** | Switch between OSM, Toner, Terrain and Carto Dark tiles. Tiles are proxied through `api/tile.php`, so browsers that apply OpaqueResponseBlocking no longer block the PNG/JPG requests. The panel also shows a scale bar, mouse position, zoom level and a live depth tooltip interpolated from your bathymetry. |
-| **Spots** | Toggle placement mode to drop new swims or rigs anywhere on the map. Swims automatically link to the nearest water polygon, rigs automatically snap to the closest swim and inherit its water, and the badge reminds you when placement mode is active. Clustering, distance overlays and the drag-fix button work as before, but while you drag a rig you now see its live depth (from the bathymetry) plus the distance back to its swim. |
-| **Detection** | Build new waters from the viewport, a manual selection or OpenStreetMap water polygons. Set the maximum edge length, enter a name and store the polygon. Quickly clear the current selection. |
-| **Deeper import & heatmap** | Import CSV/ZIP files or whole directories (for example from Deeper sonar logs), stream the parsed points into MySQL in large batches so uploads finish as fast as before, monitor the queue/progress bars, tune the heatmap radius/blur/min-max/inversion/clipping and wipe the heatmap or stored bathy points. The heatmap now disappears automatically whenever the database holds zero bathymetry rows, so a fresh install or a cleared table never shows stale overlays. |
-| **Weather & wind** | Fetch live weather or a specific day/hour via Open-Meteo, display the result textually, render a compass overlay and optionally draw wind arrows whose density you control. |
-| **Manage everything** | Tabbed tables for waters, swims and rigs so you can rename, relink or delete entries. Clicking a row zooms the map to the corresponding geometry. |
-| **Contours** | Generate contour lines directly from the Deeper bathymetry (even freshly imported data) inside the current viewport, monitor the live progress bar while isolines are built, or clear existing contour layers. |
-| **Clean-up & export** | Export all data, import GeoJSON, save/load/reset browser snapshots, and download standalone HTML bundles (with or without embedded JSON). |
-| **GPS & navigation** | Start or stop live GPS logging to show latitude, longitude, accuracy, speed and bearing in the floating info panel. |
+| `GET/POST/PATCH/DELETE /api/waters` | Manage waters (GeoJSON geometry + color) |
+| `api/steks`, `api/rigs` | CRUD for swims & rigs, auto-coupled to nearest parents |
+| `GET/POST/DELETE /api/bathy` | Stream Deeper samples (points chunked at 500 rows) |
+| `GET/POST /api/settings` | Per-user JSON settings |
+| `POST/DELETE /api/attachments` | Upload/download references |
 
-A new **Profile** box at the top of the sidebar lets you enter a short identifier (letters/numbers/dashes). Switching profiles reloads the page data through the PHP API using that identifier, so every profile gets its own isolated waters, swims, rigs, bathymetry, settings and offline snapshot. This effectively enables multi-user hosting without exposing other users' datasets—each profile talks to its own rows inside MySQL, and the UI always shows which profile is active.
+The Blade/Vite client consumes these endpoints via Axios and surfaces errors inside the toolbar.
 
-A small preload shim maps Leaflet's legacy `touchleave` listeners to pointer/mouse alternatives on browsers that never implemented the event (Firefox, desktop Safari), so the console no longer fills with “wrong event specified” warnings while dragging markers with a mouse. The same shim now supplies pointer-friendly stand-ins for `mozPressure`/`mozInputSource`, which suppresses Firefox's “use PointerEvent.pressure” deprecation spam.
+## Admin Panel
 
-Status updates land in the footer, together with the mouse lat/lon, zoom level and app version (from `version.json`). Every edit (waters, swims, rigs, bathy, settings) is pushed to MySQL through `api/db.php` so the database always stays authoritative. On each page load the API confirms that the database and all tables exist and silently re-creates them when something is missing.
+Once logged in as an admin, use the header link to reach `/admin` and:
 
-If the configured database cannot be reached, `index.php` surfaces a blocking error overlay with the connection details so you can launch `install.php` or fix `api/config.php` before any JavaScript tries to fetch data.
+- Inspect live dataset counts.
+- Toggle user admin flags or delete stale users.
+- Create key/value global settings records (stored in `settings` table where `user_id` is `NULL`).
+- Trigger SQLite backups saved under `storage/app/backups/*` with download links.
 
-## Installing on XAMPP
-1. Start **Apache** and **MySQL** inside the XAMPP Control Panel.
-2. Clone or copy the repository into `C:\xampp\htdocs\vis-lokaties`.
-3. Browse to [http://localhost/vis-lokaties/install.php](http://localhost/vis-lokaties/install.php). The wizard asks for:
-   - A MySQL admin user (e.g. `root` with an empty password on stock XAMPP).
-   - The database name (default `vislokaties`).
-   - A new app user + password.
-   - The host value that MySQL expects (use `localhost`, `127.0.0.1` or `::1` – match whatever host your MySQL grants target).
-4. The installer logs in with the admin account, creates the database and user, grants privileges, verifies the entire schema (waters, steks, spots, Deeper import tables, settings, legacy `kv`), writes `api/config.php` and seeds the default records.
-5. Visit [http://localhost/vis-lokaties/](http://localhost/vis-lokaties/) and start working. All edits are now persisted inside MySQL.
+## Testing
 
-Always open the site via `http://localhost/...` on XAMPP so every `fetch` call to `api/db.php` resolves correctly.
-
-## Deploying to external hosting
-1. Upload the entire repository (including `api/`, `css/`, `js/`, `install.php`, `index.php`, `version.json`) to your document root using FTP/SFTP/git.
-2. Run `install.php` (or `api/install.php`) in the browser. On managed hosting you typically have phpMyAdmin credentials you can temporarily supply; the installer provisions the rest.
-3. If the host does not allow temporary admin credentials, create the database + user manually in the hosting control panel and copy those values into `api/config.php`. Set the "Application host" field in the installer to exactly the same host mask you configured in MySQL (for example `%`, `localhost` or the server hostname) so MySQL grants align with runtime connections.
-4. Some hosts let you expose credentials through environment variables (`DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`). When those are present `config.php` is optional.
-5. Ensure PHP 8 + `mysqli` are enabled and that requests to `api/` are allowed. After that you can use the same URLs as on XAMPP.
-
-## Runtime architecture
-- The front-end performs `fetch` requests against `api/db.php`, which now splits the JSON payload across normalized tables (`waters`, `steks`, `spots`, `bathy_points`, `bathy_datasets`, `settings`) before serving the combined document back to the browser. Every bathymetry save also records dataset metadata (name, counts, depth range, bounding box, timestamp) so the `bathy_datasets` table stays in sync for exports even though the toolbar no longer renders a list. The Deeper importer batches CSV/ZIP chunks and streams them to `api/db.php?action=bathy_append`, so MySQL receives large payloads immediately instead of one request per file.
-- Every table now carries a `user_id` column and composite primary key so multiple anglers can share the same deployment without sharing data. The profile switcher simply injects `?user=<profile>` into each API request, `api/db.php` filters by `user_id`, and the bootstrapper auto-seeds defaults for any profile that does not have rows yet. Legacy snapshots (from the old `kv` store) still migrate into the very first profile so existing datasets survive the upgrade.
-- Clearing bathymetry data in the UI calls `api/db.php?action=bathy_clear`, so only `bathy_points`/`bathy_datasets` are wiped while waters/steks/spots/settings remain untouched.
-- `api/install.php` uses the same bootstrapper as `db.php` but adds database/user provisioning plus `config.php` creation when needed.
-- `api/bootstrap.php` reads `config.php` (or environment variables), opens the MySQL connection, creates the database if it is missing and verifies every table that the UI depends on (including the Deeper import storage and the legacy `kv` table for migrations).
-- On the first run the bootstrapper seeds the default payload (either from the new tables or by migrating the legacy `kv` snapshot). Every interaction in the UI triggers `saveDB()` → `pushDbToServer()`, so MySQL stays synced.
-- Whenever PHP confirms that MySQL is reachable the browser starts from a blank snapshot and waits for the live payload, preventing stale heatmaps or markers from lingering when the database is empty. Once the server responds, the exact JSON is cached in `localStorage` so the manual Save/Load/HTML export buttons still have something to work with offline.
-- Basemap tiles are requested through `api/tile.php`, a small PHP proxy that caches OSM/Stamen/Carto tiles for 24 hours. Keeping these requests same-origin bypasses browsers that block cross-origin PNGs/JPGs via OpaqueResponseBlocking, so you no longer see tile errors in the console.
-- Dataset identifiers, foreign keys and bathymetry metadata are now sanitized and truncated server-side so Deeper imports with long file names can never overflow the `VARCHAR(64)` columns that back the `waters`, `steks`, `spots` or `bathy_datasets` tables.
-
-## Versioning
-- `VERSION` and `version.json` contain the current release (`v0.0.0`). Always update both when you bump the version.
-- The UI loads `version.json` on startup and mirrors the value in the header and document title.
-
-## Configuration without `config.php`
-If your host prefers environment variables you can define the following (via `.htaccess`, the hosting dashboard or your deployment pipeline):
-- `DB_HOST`
-- `DB_PORT`
-- `DB_USER`
-- `DB_PASSWORD`
-- `DB_NAME`
-
-## Pulling files from GitHub
-When you need to refresh this working tree with the exact contents of the public GitHub repository (for example to copy `Vis lokaties 1.1.4-c.html` from the `main` branch), run the helper script that now lives inside `scripts/`:
+The default PHPUnit & Pest scaffolding from Laravel is available once dependencies are installed:
 
 ```bash
-# pull the whole repository
-scripts/pull_from_github.sh
-
-# or pull a single file from the default repo/branch
-scripts/pull_from_github.sh https://github.com/wilmarvr/vis-lokaties.git main "Vis lokaties 1.1.4-c.html"
+php artisan test
 ```
 
-The script clones the GitHub repository into a temporary directory and copies the requested file(s) into the current workspace. If your environment sits behind a restrictive proxy you may need to allow outbound HTTPS before the script can talk to GitHub.
+## Notes
 
-When these are present the bootstrapper will use them and ignore `config.php`.
-
-## Directory listing: GitHub vs local cache
-If you simply want to see what lives inside the public repository (or contrast that tree with the files that exist locally), use
-the listing helper:
-
-```bash
-# list the default repo/branch and compare it with the current working tree
-scripts/list_remote_vs_local.sh
-
-# override the repo, branch or local directory
-scripts/list_remote_vs_local.sh https://github.com/wilmarvr/vis-lokaties.git main /path/to/other/tree
-```
-
-It prints three sections:
-1. The remote directory tree.
-2. The local directory tree.
-3. A “Only in remote / Only in local” report so missing or extra files are obvious immediately.
-
-When outbound HTTPS is blocked the helper now still emits the complete local tree so you have a directory listing from the Codex environment; rerun the command later (or point it at a mirror you can reach) to capture the remote side once connectivity returns.
+- The JS build references CDN-hosted Leaflet marker icons; during production builds you may opt to copy them locally.
+- When moving to MySQL, update `.env` with proper credentials and rerun migrations.
+- The importer accepts `.csv` and `.zip` (containing CSVs) and writes data immediately to `/api/bathy` for the current user.
