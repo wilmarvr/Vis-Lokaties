@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title data-i18n="title">Vis Lokaties</title>
+
+  <!-- Favicons & App Icons -->
+  <link rel="icon" type="image/x-icon" href="favicon.ico" />
+  <link rel="apple-touch-icon" sizes="180x180" href="assets/img/icon-180.png" />
+  <link rel="icon" sizes="192x192" href="assets/img/icon-192.png" />
+  <link rel="icon" sizes="512x512" href="assets/img/icon-512.png" />
+
+  <!-- Thema -->
+  <link id="theme" rel="stylesheet" href="assets/css/style-dark.css" />
+
+  <!-- Leaflet & plug-ins -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
+  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+
+  <!-- Helpers -->
+  <script
+    src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"
+    integrity="sha512-XMVd28F1oH/O71fzwBnV7HucLxVwtxf26XV8P4wPk26EDxuGZ91N8bsOttmnomcCD3CS5ZMRL50H0GgOHvegtg=="
+    crossorigin="anonymous"
+    referrerpolicy="no-referrer"
+  ></script>
+  <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6.5.0/turf.min.js"></script>
+
+  <!-- Modules -->
+  <script type="module" src="assets/js/i18n.js?v=20250611"></script>
+</head>
+
+<body>
+  <header>
+    <div class="header-left">
+      <img src="assets/img/logo.svg" alt="Vis Lokaties logo" height="32" />
+      <h1><span data-i18n="app_title">Vis Lokaties</span> <small id="versionLabel">v0.0.0</small></h1>
+    </div>
+
+    <div class="toolbar-right">
+      <div class="toolbar-group toolbar-group--selectors">
+        <label class="sr-only" for="baseLayerSelect" data-i18n="label_basemap">Basemap</label>
+        <select id="baseLayerSelect" data-i18n-title="tooltip_basemap" title="Wissel kaartstijl">
+          <option value="osm" data-i18n="basemap_osm">🗺️ OSM</option>
+          <option value="topo" data-i18n="basemap_topo">🗻 Topo</option>
+          <option value="toner" data-i18n="basemap_toner">📰 Toner</option>
+          <option value="dark" data-i18n="basemap_dark">🌙 Donker</option>
+        </select>
+        <label class="sr-only" for="langSelect" data-i18n="label_language">Taal</label>
+        <select id="langSelect" data-i18n-title="tooltip_language" title="Taal kiezen">
+          <option value="nl" data-i18n="lang_nl">🇳🇱 Nederlands</option>
+          <option value="en" data-i18n="lang_en">🇬🇧 English</option>
+        </select>
+      </div>
+      <div class="toolbar-group toolbar-group--utilities">
+        <button id="btnTheme" data-i18n-title="tooltip_theme" title="Wissel thema">🌗</button>
+        <button id="btnResetCache" data-i18n-title="tooltip_reset_cache" title="Cache wissen">🧹</button>
+        <button id="btnResetServer" data-i18n-title="tooltip_reset_server" title="Herstel serverdata">🔁</button>
+      </div>
+      <div class="toolbar-group toolbar-group--export">
+        <button id="btnSaveHtml" data-i18n-title="tooltip_save_html" title="Sla huidige pagina op">💾 HTML</button>
+        <button id="btnSaveHtmlData" data-i18n-title="tooltip_save_html_data" title="Sla HTML + data op">💾 +📊</button>
+      </div>
+      <div class="toolbar-group toolbar-group--links">
+        <a class="toolbar-link" href="admin.html" data-i18n="link_admin" data-i18n-title="tooltip_admin" title="Beheer">⚙️ Admin</a>
+        <details id="linkSummary" class="toolbar-summary">
+          <summary data-i18n="summary_links">🔗 Koppelingen</summary>
+          <div id="linkSummaryContent" class="toolbar-summary-content" data-i18n="link_summary_empty">Nog geen wateren beschikbaar.</div>
+        </details>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <div id="mapContainer"></div>
+
+    <aside id="uiControls">
+      <div class="toolbar-resize">
+        <label for="toolbarWidthControl" data-i18n="label_toolbar_width">Toolbarbreedte</label>
+        <input type="range" id="toolbarWidthControl" min="280" max="520" step="10" />
+        <output id="toolbarWidthValue">340px</output>
+      </div>
+
+      <details data-panel="map" class="ui-panel" open>
+        <summary data-i18n="tab_map">📍 Spots &amp; kaart</summary>
+        <div class="group">
+          <button id="btnModeWater" data-mode="water" data-i18n="btn_mode_water">🌊 Klikmodus water</button>
+          <button id="btnModeStek" data-mode="stek" data-i18n="btn_mode_stek">🎣 Klikmodus stek</button>
+          <button id="btnModeRig" data-mode="rig" data-i18n="btn_mode_rig">🪝 Klikmodus rig</button>
+          <button id="btnModeClear" data-mode="none" data-i18n="btn_mode_clear">🛑 Stop klikmodus</button>
+        </div>
+        <div class="group group-water-draw">
+          <button id="btnDrawWaterPoly" data-i18n="btn_draw_water">✏️ Teken water</button>
+          <button id="btnFinishWaterPoly" data-i18n="btn_finish_water">✅ Voltooien</button>
+          <button id="btnCancelWaterPoly" data-i18n="btn_cancel_water">❌ Annuleren</button>
+        </div>
+        <div class="group">
+          <button id="btnTrackGPS" data-i18n="btn_gps_start">Start GPS</button>
+          <button id="btnStopGPS" data-i18n="btn_gps_stop">⏹️ Stop GPS</button>
+          <button id="btnCenter" data-i18n="btn_center">🎯 Centreer</button>
+          <span id="gpsStatus" class="status-pill" data-i18n="gps_idle">GPS uit</span>
+        </div>
+        <div id="gpsPanel">
+          <p><span data-i18n="label_lat">Lat</span>: <span id="gpsLat">–</span> <span data-i18n="label_lon">Lon</span>: <span id="gpsLon">–</span></p>
+          <p><span data-i18n="label_speed">Snelheid</span>: <span id="gpsSpeed">–</span> m/s – <span data-i18n="label_accuracy">Acc</span>: <span id="gpsAcc">–</span> m</p>
+        </div>
+        <div class="group">
+          <button id="btnCluster" data-i18n="btn_cluster">Clustering</button>
+          <button id="btnDrawDistances" data-i18n="btn_distance">📏 Afstanden</button>
+          <button id="btnFixDrag" data-i18n="btn_fix_drag">🧷 Drag fix</button>
+          <button id="btnAutoRigs" data-i18n="btn_auto_rigs">🤖 Auto rigs</button>
+        </div>
+        <div class="group">
+          <button id="btnDetectWater" data-i18n="btn_detect_osm">🌐 Detecteer OSM-water</button>
+        </div>
+        <div id="mapHints" class="panel-note" data-i18n="hint_click_modes">
+          Gebruik klikmodus om snel punten toe te voegen. Sleep markers om hun positie te wijzigen.
+        </div>
+        <div class="group group-water-draw">
+          <button id="btnDrawWaterPoly" data-i18n="btn_draw_water">✏️ Teken water</button>
+          <button id="btnFinishWaterPoly" data-i18n="btn_finish_water">✅ Voltooien</button>
+          <button id="btnCancelWaterPoly" data-i18n="btn_cancel_water">❌ Annuleren</button>
+        </div>
+        <div class="group">
+          <button id="btnModeWater" data-mode="water" data-i18n="btn_mode_water">🌊 Klikmodus water</button>
+          <button id="btnModeStek" data-mode="stek" data-i18n="btn_mode_stek">🎣 Klikmodus stek</button>
+          <button id="btnModeRig" data-mode="rig" data-i18n="btn_mode_rig">🪝 Klikmodus rig</button>
+          <button id="btnModeClear" data-mode="none" data-i18n="btn_mode_clear">🛑 Stop klikmodus</button>
+        </div>
+        <div id="mapHints" class="panel-note" data-i18n="hint_click_modes">Gebruik klikmodus om snel punten toe te voegen. Sleep markers om hun positie te wijzigen.</div>
+      </details>
+
+      <details data-panel="data" class="ui-panel" open>
+        <summary data-i18n="tab_data">🌊 Data &amp; detectie</summary>
+        <h4 class="group-title" data-i18n="group_import_heading">Imports</h4>
+        <div class="group">
+          <input type="file" id="csvFile" accept=".csv,.zip" class="file-input-hidden" />
+          <input type="file" id="folderInput" webkitdirectory multiple class="file-input-hidden" />
+          <button id="btnLoadCSV" data-i18n="btn_import_csv">📂 Import CSV/ZIP</button>
+          <button id="btnImportFolder" data-i18n="btn_import_folder">📁 Import map</button>
+          <button id="btnImportGeoJSON" data-i18n="btn_import_geojson">🌐 Import GeoJSON</button>
+        </div>
+        <div class="group">
+          <label class="checkbox"><input type="checkbox" id="saveBathy" /> <span data-i18n="label_save_bathy">Opslaan in database</span></label>
+          <button id="btnRefreshImports" data-i18n="btn_refresh_imports">🔄 Vernieuw importen</button>
+          <button id="btnClearBathyServer" data-i18n="btn_clear_bathy_server">🗑️ Wis bathy (DB)</button>
+        </div>
+        <div class="group">
+          <label class="checkbox"><input type="checkbox" id="toggleImports" /> <span data-i18n="label_show_imports">Toon Deeper-punten</span></label>
+        </div>
+        <div id="importQueue" class="panel-note" data-i18n="import_idle">Geen actieve import</div>
+        <div class="import-progress">
+          <span
+            id="importProgressBar"
+            role="progressbar"
+            aria-valuemin="0"
+            aria-valuemax="100"
+            aria-valuenow="0"
+            aria-valuetext="0%"
+          ></span>
+        </div>
+        <div class="import-progress-legacy" aria-hidden="true">
+          <div id="impBarAll"></div>
+          <span id="impCount">0/0</span>
+          <span id="impPctAll">0%</span>
+        </div>
+        <pre id="importQueueList" class="import-queue" hidden></pre>
+        <div id="importStats" class="panel-note"></div>
+
+        <h4 class="group-title" data-i18n="group_heatmap_heading">Heatmap &amp; bathy</h4>
+        <div class="group heat-settings">
+          <label data-i18n="label_heat_radius">Radius
+            <input type="range" id="heatRadius" min="5" max="60" value="25" />
+          </label>
+          <label data-i18n="label_heat_blur">Vervagen
+            <input type="range" id="heatBlur" min="5" max="40" value="15" />
+          </label>
+          <label data-i18n="label_heat_min">Min
+            <input type="number" id="heatMin" step="0.1" value="0" />
+          </label>
+          <label data-i18n="label_heat_max">Max
+            <input type="number" id="heatMax" step="0.1" value="10" />
+          </label>
+        </div>
+        <div class="group">
+          <label class="checkbox"><input type="checkbox" id="heatInvert" /> <span data-i18n="label_heat_invert">Invert</span></label>
+          <label class="checkbox"><input type="checkbox" id="heatClamp" /> <span data-i18n="label_heat_clamp">Clip buiten bereik</span></label>
+        </div>
+        <div class="group">
+          <button id="btnShowHeat" data-i18n="btn_heat">🔥 Heatmap</button>
+          <button id="btnClearHeat" data-i18n="btn_heat_clear">🧽 Wis heatmap</button>
+        </div>
+        <div id="detectSummary" class="panel-note" data-i18n="detect_idle">Nog geen detectie uitgevoerd.</div>
+        <div class="group">
+          <button id="btnMakeContours" data-i18n="btn_contours">🌀 Contouren</button>
+          <button id="btnClearContours" data-i18n="btn_clear_contours">❌ Wissen</button>
+          <button id="btnBathyStats" data-i18n="btn_bathy_stats">📊 Toon statistieken</button>
+          <button id="btnClearBathy" data-i18n="btn_bathy_clear">💧 Wis lokale bathy</button>
+        </div>
+        <div id="contourStats" class="panel-note" data-i18n="contour_idle">Nog geen contouren of bathy-data geanalyseerd.</div>
+
+        <h4 class="group-title" data-i18n="group_detection_heading">Detectie &amp; analyse</h4>
+        <div class="group">
+          <label data-i18n="label_detect_radius">Detectie radius
+            <input type="range" id="detectRadius" min="50" max="1500" step="50" value="200" />
+          </label>
+          <label data-i18n="label_max_edge">Max edge
+            <input type="number" id="detectMaxEdge" min="10" max="1000" step="10" value="60" />
+          </label>
+        </div>
+        <div class="group">
+          <label data-i18n="label_detect_name">Naam selectie
+            <input type="text" id="detectName" placeholder="Waternaam" data-i18n-placeholder="placeholder_detect_name" />
+          </label>
+          <label data-i18n="label_detect_depth_min">Diepte minimum
+            <input type="number" id="depthMin" step="0.1" value="0" />
+          </label>
+          <label data-i18n="label_detect_depth_max">Diepte maximum
+            <input type="number" id="depthMax" step="0.1" value="10" />
+          </label>
+        </div>
+        <div class="group">
+          <button id="btnDetectViewport" data-i18n="btn_detect_viewport">Detectie (beeld)</button>
+          <button id="btnDetectSelection" data-i18n="btn_detect_selection">Detectie (selectie)</button>
+          <button id="btnClearSelection" data-i18n="btn_clear_selection">🧽 Wis selectie</button>
+        </div>
+        <div class="group">
+          <button id="btnFilterDepth" data-i18n="btn_filter_depth">🔍 Filter diepte</button>
+          <button id="btnResetDepth" data-i18n="btn_reset_depth">♻️ Reset filters</button>
+          <button id="btnDetectSave" data-i18n="btn_detect_save">💾 Opslaan als water</button>
+          <button id="btnDetectClear" data-i18n="btn_detect_clear">🧽 Wis detectie</button>
+        </div>
+        <div id="detectSummary" class="panel-note" data-i18n="detect_idle">Nog geen detectie uitgevoerd.</div>
+
+        <h4 class="group-title" data-i18n="group_export_heading">Opslag &amp; export</h4>
+        <div class="group">
+          <button id="btnExportAll" data-i18n="btn_export_all">📤 Export alles</button>
+          <button id="btnExportGeoJSON" data-i18n="btn_export_geojson">🌐 GeoJSON</button>
+          <button id="btnExportZIP" data-i18n="btn_export_zip">📦 ZIP</button>
+          <button id="btnSyncServer" data-i18n="btn_sync">🔄 Sync database</button>
+          <button id="btnNormalizeDB" data-i18n="btn_normalize">🧮 Normaliseer DB</button>
+        </div>
+        <pre id="importQueueList" class="import-queue" hidden></pre>
+        <div id="importStats" class="panel-note"></div>
+      </details>
+
+      <details data-panel="weather" class="ui-panel">
+        <summary data-i18n="tab_weather">☁️ Weer &amp; wind</summary>
+        <div class="group">
+          <label data-i18n="label_weather_date">Datum <input type="date" id="wxDate" /></label>
+          <label data-i18n="label_weather_hour">Uur
+            <select id="wxHour">
+              <option value="0">00</option>
+              <option value="3">03</option>
+              <option value="6">06</option>
+              <option value="9">09</option>
+              <option value="12">12</option>
+              <option value="15">15</option>
+              <option value="18">18</option>
+              <option value="21">21</option>
+            </select>
+          </label>
+          <label data-i18n="label_weather_density">Dens <input type="range" id="wxDensity" min="1" max="10" value="5" /> <span id="wxDensityLabel">5</span></label>
+        </div>
+        <div class="group">
+          <button id="btnWeatherLoad" data-i18n="btn_weather_load">🌡️ Laad weerdata</button>
+          <button id="btnWeatherNow" data-i18n="btn_weather_now">⚡ Weer nu</button>
+          <label class="checkbox"><input type="checkbox" id="chkWindOverlay" /> <span data-i18n="label_wind_overlay">Wind overlay</span></label>
+        </div>
+        <div id="weatherOutput" class="panel-note" data-i18n="weather_idle">Geen weerdata geladen.</div>
+        <div id="weatherLegend" class="panel-note weather-legend"></div>
+      </details>
+
+      <details data-panel="catches" class="ui-panel" open>
+        <summary data-i18n="tab_catches">🐟 Vangsten</summary>
+        <div class="group form-grid catch-form">
+          <label data-i18n="catch_label_stek">Stek
+            <select id="catchStekSelect"></select>
+          </label>
+          <label data-i18n="catch_label_rig">Rig (optioneel)
+            <select id="catchRigSelect" disabled></select>
+          </label>
+          <label data-i18n="catch_label_title">Titel
+            <input type="text" id="catchTitle" />
+          </label>
+          <label data-i18n="catch_label_species">Soort
+            <input type="text" id="catchSpecies" />
+          </label>
+          <label data-i18n="catch_label_weight">Gewicht (kg)
+            <input type="number" id="catchWeight" step="0.01" min="0" />
+          </label>
+          <label data-i18n="catch_label_length">Lengte (cm)
+            <input type="number" id="catchLength" step="0.1" min="0" />
+          </label>
+          <label data-i18n="catch_label_date">Datum
+            <input type="date" id="catchDate" />
+          </label>
+          <label data-i18n="catch_label_photo">Foto
+            <input type="file" id="catchPhoto" accept="image/*" />
+          </label>
+          <label data-i18n="catch_label_notes">Notities
+            <textarea id="catchNotes"></textarea>
+          </label>
+          <button id="btnAddCatch" data-i18n="btn_add_catch">➕ Opslaan</button>
+        </div>
+        <div id="catchStatus" class="panel-note" data-i18n="catch_hint">Selecteer een stek om vangsten toe te voegen.</div>
+        <div class="catch-table-wrapper">
+          <table id="catchTable">
+            <thead>
+              <tr>
+                <th data-i18n="catch_col_stek">Stek</th>
+                <th data-i18n="catch_col_title">Titel</th>
+                <th data-i18n="catch_col_date">Datum</th>
+                <th data-i18n="catch_col_species">Soort</th>
+                <th data-i18n="catch_col_rig">Rig</th>
+                <th data-i18n="catch_col_weight">Gewicht (kg)</th>
+                <th data-i18n="catch_col_length">Lengte (cm)</th>
+                <th data-i18n="catch_col_photo">Foto</th>
+                <th data-i18n="catch_col_actions">Acties</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+          <p id="catchTableEmpty" class="panel-note" data-i18n="catch_table_empty">Nog geen vangsten geregistreerd.</p>
+        </div>
+      </details>
+
+      <details data-panel="manage" class="ui-panel" open>
+        <summary data-i18n="tab_manage">🛠️ Beheer</summary>
+        <div id="manageTabs"></div>
+        <p class="panel-note manage-hint" data-i18n="manage_hint">Gebruik de tabbladen om waters, stekken en rigs te beheren. Wijzig koppelingen via de dropdowns en verwijder items met de actiekolom.</p>
+      </details>
+
+      <details data-panel="overview" class="ui-panel" open>
+        <summary data-i18n="tab_overview">📊 Overzicht (laatste 50)</summary>
+        <div class="manage-table-wrapper manage-table-wrapper--overview">
+          <table id="overviewTable">
+            <thead>
+              <tr>
+                <th data-i18n="col_type">Type</th>
+                <th data-i18n="col_name">Naam</th>
+                <th data-i18n="col_lat">Lat</th>
+                <th data-i18n="col_lon">Lon</th>
+                <th data-i18n="col_value">Waarde</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </details>
+
+      <details data-panel="about" class="ui-panel">
+        <summary data-i18n="tab_about">ℹ️ Over / Changelog</summary>
+        <div id="tab-changelog" data-i18n="changelog_loading">Wordt geladen…</div>
+      </details>
+    </aside>
+  </main>
+
+  <footer>
+    <span id="statusLine" data-i18n="status_ready">Status: Gereed</span>
+    <span id="mouseLL" class="footer-info">| Lat: – Lon: –</span>
+    <span id="zoomLbl" class="footer-info">| Zoom: –</span>
+    <span id="detectInfo" class="footer-info">| Detectie: –</span>
+    <span id="depthInfo" class="footer-info">| Diepte: –</span>
+    <span id="footerInfo" data-i18n="footer">© 2025 Vis Lokaties</span>
+  </footer>
+
+  <script type="module" src="assets/js/core.js?v=20250611"></script>
+  <script type="module" src="assets/js/helpers.js?v=20250611"></script>
+  <script type="module" src="assets/js/db.js?v=20250611"></script>
+  <script type="module" src="assets/js/map.js?v=20250611"></script>
+  <script type="module" src="assets/js/data.js?v=20250611"></script>
+  <script type="module" src="assets/js/ui.js?v=20250611"></script>
+  <script type="module" src="assets/js/weather.js?v=20250611"></script>
+</body>
+</html>

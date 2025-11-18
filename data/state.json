@@ -1,0 +1,23 @@
+{
+  "version": "0.0.0",
+  "theme": "dark",
+  "language": "nl",
+  "gpsActive": false,
+  "center": [
+    52.1,
+    5.1
+  ],
+  "zoom": 8,
+  "settings": {
+    "heatmapRadius": 25,
+    "heatmapBlur": 15,
+    "cluster": true,
+    "tooltipDepth": true,
+    "saveBathy": true,
+    "autoSync": true
+  },
+  "imports": [],
+  "waters": [],
+  "stekken": [],
+  "spots": []
+}
