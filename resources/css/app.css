@@ -1,0 +1,9 @@
+body { background:#05070b; }
+#map-app { display:flex; min-height:70vh; border:1px solid rgba(255,255,255,.1); border-radius:1rem; overflow:hidden; }
+#map { flex:1; min-height:80vh; }
+.map-toolbar { width:320px; background:#0f1827; padding:1rem; overflow:auto; border-right:1px solid rgba(255,255,255,.08); }
+.map-toolbar h2, .map-toolbar h3 { margin-top:0; }
+.map-toolbar button { width:100%; margin-bottom:0.5rem; }
+.legend { height:12px; background:linear-gradient(to right, blue, cyan, green, yellow, orange, red); border-radius:999px; margin-top:0.5rem; }
+.muted { color:#9ba8c3; font-size:0.9rem; }
+.leaflet-control-container .leaflet-top.leaflet-left { margin-top:70px; }
