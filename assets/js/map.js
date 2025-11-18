@@ -2065,7 +2065,7 @@ function ensureSpotPopup() {
 function buildSpotPopupContent(item, type) {
   const title = escapeHtml(item.name || item.id || (type === "stek" ? t("default_stek", "Stek") : t("default_rig", "Rig")));
   const coords = Number.isFinite(item.lat) && Number.isFinite(item.lng)
-    ? formatLatLng({ lat: item.lat, lng: item.lng })
+    ? formatLatLng(item.lat, item.lng)
     : "";
   const labelCatch = t("spot_popup_catch", "Registreer vangst");
   const labelRename = t("spot_popup_rename", "Hernoem");
