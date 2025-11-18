@@ -646,8 +646,8 @@ function handleMapClick(e) {
   if (consumeClickSuppression()) {
     return;
   }
-  if (popupMoveContext && !popupMoveContext.dragging) {
-    cancelPendingMarkerMove(false);
+  if (attemptPopupMarkerMove(e.latlng)) {
+    return;
   }
   if (pickResolver) {
     const resolver = pickResolver;
@@ -2177,6 +2177,30 @@ function completePopupMarkerMove(marker) {
   if (!popupMoveContext || popupMoveContext.marker !== marker) return;
   popupMoveContext.dragging = false;
   cancelPendingMarkerMove(true);
+}
+
+function attemptPopupMarkerMove(latlng) {
+  if (!popupMoveContext || popupMoveContext.dragging) return false;
+  if (!latlng) return false;
+  const { marker, item, type } = popupMoveContext;
+  if (!marker?.setLatLng || !marker.getLatLng) {
+    cancelPendingMarkerMove(false);
+    return false;
+  }
+  popupMoveContext.dragging = true;
+  marker.setLatLng(latlng);
+  document.dispatchEvent(
+    new CustomEvent("vislok:spot-move", {
+      detail: {
+        id: item.id,
+        type,
+        lat: latlng.lat,
+        lng: latlng.lng
+      }
+    })
+  );
+  completePopupMarkerMove(marker);
+  return true;
 }
 
 function createSpotIcon(type) {
