@@ -2118,35 +2118,39 @@ function buildWaterTooltip(water) {
 
 function attachMarkerHandlers(marker, item, type) {
   let interactionCaptured = false;
+  const captureInteractions = () => {
+    if (interactionCaptured) return;
+    interactionCaptured = true;
+    suspendMapInteractions();
+  };
   const releaseInteractions = () => {
     if (!interactionCaptured) return;
     interactionCaptured = false;
     resumeMapInteractions();
   };
-  const prepareInteraction = e => {
-    swallowLeafletEvent(e);
-    if (interactionCaptured) return;
-    interactionCaptured = true;
-    suspendMapInteractions();
-  };
+  const swallow = e => swallowLeafletEvent(e);
 
-  marker.on("mousedown", prepareInteraction);
-  marker.on("touchstart", prepareInteraction);
-  marker.on("mouseup", releaseInteractions);
-  marker.on("touchend", releaseInteractions);
-  marker.on("touchcancel", releaseInteractions);
+  marker.on("mousedown", swallow);
+  marker.on("touchstart", swallow);
   marker.on("dragstart", e => {
-    swallowLeafletEvent(e);
+    swallow(e);
+    captureInteractions();
     startMarkerDistancePreview(marker, item, type);
   });
   marker.on("drag", e => {
     updateMarkerDistancePreview(e.target.getLatLng());
   });
 
-  marker.on("dragend", e => {
+  const finalizeDrag = e => {
+    const target = e?.target;
+    if (!target?.getLatLng) {
+      releaseInteractions();
+      stopMarkerDistancePreview();
+      return;
+    }
     releaseInteractions();
     stopMarkerDistancePreview();
-    const { lat, lng } = e.target.getLatLng();
+    const { lat, lng } = target.getLatLng();
     document.dispatchEvent(
       new CustomEvent("vislok:spot-move", {
         detail: {
@@ -2157,10 +2161,14 @@ function attachMarkerHandlers(marker, item, type) {
         }
       })
     );
-  });
+  };
+
+  marker.on("dragend", finalizeDrag);
+  marker.on("touchcancel", releaseInteractions);
+  marker.on("remove", releaseInteractions);
 
   marker.on("click", e => {
-    swallowLeafletEvent(e);
+    swallow(e);
     releaseInteractions();
     stopMarkerDistancePreview();
     if (type === "stek") {
