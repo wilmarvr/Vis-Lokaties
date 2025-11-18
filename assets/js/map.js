@@ -2289,8 +2289,6 @@ function attachMarkerHandlers(marker, item, type) {
   };
   const swallow = e => swallowLeafletEvent(e);
 
-  marker.on("mousedown", swallow);
-  marker.on("touchstart", swallow);
   marker.on("dragstart", e => {
     swallow(e);
     captureInteractions();
