@@ -375,6 +375,9 @@ function handleMouseMove(e) {
   mouseMoveFrame = requestAnimationFrame(() => {
     mouseMoveFrame = null;
     updateMouseHover(pendingMouseLatLng);
+    if (popupMoveContext?.armed && !popupMoveContext.dragging && dragDistanceContext && pendingMouseLatLng) {
+      updateMarkerDistancePreview(pendingMouseLatLng);
+    }
   });
 }
 
@@ -599,8 +602,8 @@ function resolveMarkerReference(item, type) {
   return null;
 }
 
-function startMarkerDistancePreview(marker, item, type) {
-  if (!map || !marker) return;
+function startMarkerDistancePreview(marker, item, type, initialLatLng = null) {
+  if (!map) return;
   const reference = resolveMarkerReference(item, type);
   dragDistanceContext = reference ? { marker, reference, type } : null;
   if (!dragDistanceContext) {
@@ -615,7 +618,10 @@ function startMarkerDistancePreview(marker, item, type) {
       opacity: 0.9
     }).addTo(map);
   }
-  updateMarkerDistancePreview(marker.getLatLng());
+  const startPoint = initialLatLng || (marker?.getLatLng ? marker.getLatLng() : null);
+  if (startPoint) {
+    updateMarkerDistancePreview(startPoint);
+  }
 }
 
 function updateMarkerDistancePreview(latlng) {
@@ -2144,7 +2150,11 @@ function requestMarkerMoveFromPopup(marker, item, type) {
   if (el) {
     el.classList.add("spot-marker--armed");
   }
-  const template = t("spot_popup_move_hint", "Sleep de {type} naar de nieuwe plek en laat los.");
+  startMarkerDistancePreview(marker, item, type);
+  const template = t(
+    "spot_popup_move_hint",
+    "Sleep de {type} naar de nieuwe plek of klik op de kaart voor een nieuwe positie."
+  );
   const name = escapeHtml(item?.name || "");
   const typeLabel = type === "rig" ? t("label_rig", "rig") : t("label_stek", "stek");
   const message = template
@@ -2159,6 +2169,7 @@ function cancelPendingMarkerMove(notify = true) {
   if (el) el.classList.remove("spot-marker--armed");
   const wasDragging = popupMoveContext.dragging;
   popupMoveContext = null;
+  stopMarkerDistancePreview();
   if (notify) {
     const key = wasDragging ? "spot_popup_move_done" : "spot_popup_move_cancel";
     const fallback = wasDragging ? "Positie bijgewerkt" : "Verplaatsen geannuleerd";
