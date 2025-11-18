@@ -7,7 +7,7 @@ A Laravel-based fishing location manager with a MySQL-first schema, user authent
 - **Self-service registration & login** (session-based) with optional admin role for user/setting/backup management.
 - **Multi-tenant data model** – every water, stek, rig, dataset, bathymetry point, attachment, and preference is scoped to the authenticated angler.
 - **Admin panel** with dashboards, user role management, global settings, and one-click database backups (SQLite file copy or `mysqldump`).
-- **Leaflet + Turf + heatmap** frontend served from Blade/Vite (`resources/js/app.js`) that:
+- **Leaflet + Turf + heatmap** frontend served from Blade with CDN assets (`public/js/app.js`) that:
   - draws waters/steks/rigs with clustering + drag-to-update
   - streams live depth & distance telemetry per drag
   - imports Deeper CSV/ZIP files straight into the `/api/bathy` endpoint chunk-by-chunk
@@ -22,12 +22,7 @@ A Laravel-based fishing location manager with a MySQL-first schema, user authent
    ```bash
    composer install
    ```
-2. **Install JS/Vite dependencies** (optional but recommended for asset building):
-   ```bash
-   npm install
-   npm run build # or npm run dev
-   ```
-3. **Environment**
+2. **Environment**
    - Copy `.env.example` to `.env` and generate an app key:
      ```bash
      cp .env.example .env
@@ -43,12 +38,12 @@ A Laravel-based fishing location manager with a MySQL-first schema, user authent
    - Adjust `DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME`, and `DB_PASSWORD` in `.env` to the values for your MySQL server.
    - Leave `APP_AUTO_MIGRATE=true` (default) if you want the app to create the schema automatically the first time it runs; set it to `false` if you prefer running `php artisan migrate` manually.
    - (Optional) To use SQLite for quick experiments, switch `DB_CONNECTION=sqlite` and ensure `database/database.sqlite` exists.
-4. **(Optional) Manual migrate & seed**
+3. **(Optional) Manual migrate & seed**
    ```bash
    php artisan migrate --seed
    ```
    The seeder provisions `admin@example.com / password` as an initial admin. If you skip this step, the app will auto-run `php artisan migrate --force` the first time a web request hits it (controlled by `APP_AUTO_MIGRATE`, enabled by default) so an empty database works out of the box.
-5. **Serve**
+4. **Serve**
    ```bash
    php artisan serve
    ```
@@ -66,7 +61,7 @@ All routes live under `/api/*` and require Sanctum-authenticated sessions:
 | `GET/POST /api/settings` | Per-user JSON settings |
 | `POST/DELETE /api/attachments` | Upload/download references |
 
-The Blade/Vite client consumes these endpoints via Axios and surfaces errors inside the toolbar.
+The Blade client consumes these endpoints via Axios and surfaces errors inside the toolbar.
 
 ## Admin Panel
 
@@ -88,5 +83,6 @@ php artisan test
 ## Notes
 
 - The JS build references CDN-hosted Leaflet marker icons; during production builds you may opt to copy them locally.
+- Front-end assets live under `public/js`/`public/css` and are loaded directly via CDN helpers, so no Node/Vite toolchain is required—there is no `npm install` or `npm run build` step anymore.
 - When moving to MySQL, update `.env` with proper credentials and rerun migrations.
 - The importer accepts `.csv` and `.zip` (containing CSVs) and writes data immediately to `/api/bathy` for the current user.
