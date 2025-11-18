@@ -2117,9 +2117,16 @@ function buildWaterTooltip(water) {
 }
 
 function attachMarkerHandlers(marker, item, type) {
-  const releaseInteractions = () => resumeMapInteractions();
+  let interactionCaptured = false;
+  const releaseInteractions = () => {
+    if (!interactionCaptured) return;
+    interactionCaptured = false;
+    resumeMapInteractions();
+  };
   const prepareInteraction = e => {
     swallowLeafletEvent(e);
+    if (interactionCaptured) return;
+    interactionCaptured = true;
     suspendMapInteractions();
   };
 
@@ -2127,6 +2134,7 @@ function attachMarkerHandlers(marker, item, type) {
   marker.on("touchstart", prepareInteraction);
   marker.on("mouseup", releaseInteractions);
   marker.on("touchend", releaseInteractions);
+  marker.on("touchcancel", releaseInteractions);
   marker.on("dragstart", e => {
     swallowLeafletEvent(e);
     startMarkerDistancePreview(marker, item, type);
