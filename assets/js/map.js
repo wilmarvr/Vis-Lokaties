@@ -45,6 +45,9 @@ let placementLine = null;
 let placementTooltip = null;
 let placementBase = null;
 let placementMode = null;
+let interactionLock = 0;
+let pendingMouseLatLng = null;
+let mouseMoveFrame = null;
 
 function emitMapBounds() {
   if (!map) return;
@@ -116,12 +119,6 @@ export function initMap() {
     refreshImportLayer();
     emitMapBounds();
   });
-  map.on("zoomend", refreshImportLayer);
-
-  map.on("mousemove", handleMouseMove);
-  map.on("click", handleMapClick);
-  map.on("dblclick", handleMapDoubleClick);
-
   map.on("mousemove", handleMouseMove);
   map.on("click", handleMapClick);
   map.on("dblclick", handleMapDoubleClick);
@@ -191,6 +188,53 @@ function switchBaseLayer(key) {
   saveState();
 }
 
+function disableMapInteractions() {
+  if (!map) return;
+  if (map.dragging) map.dragging.disable();
+  if (map.boxZoom) map.boxZoom.disable();
+  if (map.doubleClickZoom) map.doubleClickZoom.disable();
+  if (map.scrollWheelZoom) map.scrollWheelZoom.disable();
+}
+
+function enableMapInteractions() {
+  if (!map) return;
+  if (map.dragging) map.dragging.enable();
+  if (map.boxZoom) map.boxZoom.enable();
+  if (map.doubleClickZoom) map.doubleClickZoom.enable();
+  if (map.scrollWheelZoom) map.scrollWheelZoom.enable();
+}
+
+function suspendMapInteractions() {
+  if (!map) return;
+  if (interactionLock === 0) {
+    disableMapInteractions();
+  }
+  interactionLock += 1;
+}
+
+function resumeMapInteractions(force = false) {
+  if (!map) return;
+  if (force) {
+    interactionLock = 0;
+  } else if (interactionLock > 0) {
+    interactionLock -= 1;
+  }
+  if (interactionLock === 0) {
+    enableMapInteractions();
+  }
+}
+
+function swallowLeafletEvent(event) {
+  const original = event?.originalEvent || event;
+  if (!original) return;
+  if (typeof original.stopPropagation === "function") {
+    original.stopPropagation();
+  }
+  if (typeof original.preventDefault === "function") {
+    original.preventDefault();
+  }
+}
+
 function bindUI() {
   document.addEventListener("vislok:basemap", e => switchBaseLayer(e.detail));
   document.addEventListener("vislok:detect-radius", e => {
@@ -226,8 +270,16 @@ function bindUI() {
 
 /* ---------- FOOTER & DIEPTE ---------- */
 function handleMouseMove(e) {
+  pendingMouseLatLng = e?.latlng || null;
+  if (mouseMoveFrame) return;
+  mouseMoveFrame = requestAnimationFrame(() => {
+    mouseMoveFrame = null;
+    updateMouseHover(pendingMouseLatLng);
+  });
+}
+
+function updateMouseHover(latlng) {
   if (!map) return;
-  const latlng = e?.latlng;
   const lat = latlng?.lat;
   const lng = latlng?.lng;
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
@@ -235,6 +287,7 @@ function handleMouseMove(e) {
       depthTooltip.remove();
     }
     updatePlacementPreview(null);
+    setFooterInfo({ depth: `| ${t("footer_depth", "Diepte")}: –` });
     return;
   }
   updatePlacementPreview(latlng);
@@ -1633,9 +1686,7 @@ document.addEventListener("vislok:language", () => {
 });
 
 function fixDragIssues() {
-  map.dragging.enable();
-  map.scrollWheelZoom.enable();
-  map.boxZoom.enable();
+  resumeMapInteractions(true);
   map.invalidateSize();
   setStatus(t("status_map_fix", "Kaartinteractie hersteld"), "ok");
 }
@@ -1922,7 +1973,19 @@ function buildWaterTooltip(water) {
 }
 
 function attachMarkerHandlers(marker, item, type) {
+  const releaseInteractions = () => resumeMapInteractions();
+  const prepareInteraction = e => {
+    swallowLeafletEvent(e);
+    suspendMapInteractions();
+  };
+
+  marker.on("mousedown", prepareInteraction);
+  marker.on("touchstart", prepareInteraction);
+  marker.on("mouseup", releaseInteractions);
+  marker.on("touchend", releaseInteractions);
+
   marker.on("dragend", e => {
+    releaseInteractions();
     const { lat, lng } = e.target.getLatLng();
     document.dispatchEvent(
       new CustomEvent("vislok:spot-move", {
@@ -1936,7 +1999,9 @@ function attachMarkerHandlers(marker, item, type) {
     );
   });
 
-  marker.on("click", () => {
+  marker.on("click", e => {
+    swallowLeafletEvent(e);
+    releaseInteractions();
     if (type === "stek") {
       document.dispatchEvent(
         new CustomEvent("vislok:focus-catch-form", {
