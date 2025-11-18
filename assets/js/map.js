@@ -301,6 +301,31 @@ function swallowLeafletEvent(event) {
 }
 
 function bindUI() {
+  const releaseAllInteractions = () => resumeMapInteractions(true);
+  if (typeof document !== "undefined") {
+    ["mouseup", "touchend", "touchcancel"].forEach(evt => {
+      document.addEventListener(evt, releaseAllInteractions, true);
+    });
+    document.addEventListener(
+      "visibilitychange",
+      () => {
+        if (document.visibilityState === "hidden") {
+          resumeMapInteractions(true);
+        }
+      },
+      true
+    );
+  }
+  if (typeof window !== "undefined") {
+    window.addEventListener(
+      "blur",
+      () => {
+        resumeMapInteractions(true);
+      },
+      true
+    );
+  }
+
   document.addEventListener("vislok:basemap", e => switchBaseLayer(e.detail));
   document.addEventListener("vislok:detect-radius", e => {
     if (selectionCircle) selectionCircle.setRadius(e.detail);
