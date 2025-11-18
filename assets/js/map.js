@@ -52,6 +52,13 @@ let suppressPlacementClick = false;
 let suppressTimer = null;
 let dragDistanceTooltip = null;
 let dragDistanceContext = null;
+let spotPopup = null;
+let spotPopupData = null;
+let popupMoveContext = null;
+const markerRegistry = {
+  stek: new Map(),
+  rig: new Map()
+};
 
 function emitMapBounds() {
   if (!map) return;
@@ -147,6 +154,8 @@ export function initMap() {
   log("Kaart init voltooid");
   document.dispatchEvent(new Event("vislok:map-ready"));
 }
+
+document.addEventListener("click", handleSpotPopupAction, true);
 
 function createBaseLayers() {
   baseLayers = {
@@ -636,6 +645,9 @@ function stopMarkerDistancePreview() {
 function handleMapClick(e) {
   if (consumeClickSuppression()) {
     return;
+  }
+  if (popupMoveContext && !popupMoveContext.dragging) {
+    cancelPendingMarkerMove(false);
   }
   if (pickResolver) {
     const resolver = pickResolver;
@@ -1949,6 +1961,9 @@ export function refreshDataLayers() {
     }
   });
 
+  markerRegistry.stek.clear();
+  markerRegistry.rig.clear();
+
   const stekMarkers = (state.stekken || []).map(s => createSpotMarker(s, "stek"));
   const rigMarkers = (state.rigs || []).map(r => createSpotMarker(r, "rig"));
 
@@ -1974,8 +1989,19 @@ function createSpotMarker(item, type) {
     draggable: true,
     icon: createSpotIcon(type)
   });
+  registerMarkerReference(marker, item, type);
   attachMarkerHandlers(marker, item, type);
   return marker;
+}
+
+function registerMarkerReference(marker, item, type) {
+  if (!marker || !item || !item.id || !markerRegistry[type]) return;
+  markerRegistry[type].set(String(item.id), marker);
+}
+
+function getMarkerReference(type, id) {
+  if (!type || !id || !markerRegistry[type]) return null;
+  return markerRegistry[type].get(String(id)) || null;
 }
 
 function renderLinkLines() {
@@ -2025,6 +2051,134 @@ function drawLink(source, target, color, opacity, dashed = false) {
   L.polyline([start, end], options).addTo(linkLayer);
 }
 
+function ensureSpotPopup() {
+  if (spotPopup) return spotPopup;
+  spotPopup = L.popup({
+    className: "spot-popup-wrapper",
+    closeButton: true,
+    autoClose: true,
+    maxWidth: 260
+  });
+  return spotPopup;
+}
+
+function buildSpotPopupContent(item, type) {
+  const title = escapeHtml(item.name || item.id || (type === "stek" ? t("default_stek", "Stek") : t("default_rig", "Rig")));
+  const coords = Number.isFinite(item.lat) && Number.isFinite(item.lng)
+    ? formatLatLng({ lat: item.lat, lng: item.lng })
+    : "";
+  const labelCatch = t("spot_popup_catch", "Registreer vangst");
+  const labelRename = t("spot_popup_rename", "Hernoem");
+  const labelDelete = t("spot_popup_delete", "Verwijderen");
+  const labelMove = t("spot_popup_move", "Verplaatsen");
+  const actionButtons = [
+    { action: "catch", label: labelCatch },
+    { action: "rename", label: labelRename },
+    { action: "delete", label: labelDelete },
+    { action: "move", label: labelMove }
+  ];
+
+  const buttonsHtml = actionButtons
+    .map(btn =>
+      `<button type="button" class="spot-popup__btn" data-spot-action="${btn.action}" data-spot-id="${escapeHtml(item.id)}" data-spot-type="${type}">${escapeHtml(btn.label)}</button>`
+    )
+    .join("");
+
+  const subtitle = coords ? `<div class="spot-popup__meta">${escapeHtml(coords)}</div>` : "";
+  return `<div class="spot-popup">` +
+    `<div class="spot-popup__title">${title}</div>` +
+    subtitle +
+    `<div class="spot-popup__actions">${buttonsHtml}</div>` +
+    `</div>`;
+}
+
+function showSpotPopup(marker, item, type) {
+  if (!map || !marker || !item || !type) return;
+  const popup = ensureSpotPopup();
+  const latLng = marker.getLatLng();
+  popup.setLatLng(latLng);
+  popup.setContent(buildSpotPopupContent(item, type));
+  popup.openOn(map);
+  spotPopupData = { id: item.id, type, item };
+}
+
+function closeSpotPopup() {
+  if (spotPopup) {
+    map.closePopup(spotPopup);
+  }
+  spotPopupData = null;
+}
+
+function handleSpotPopupAction(e) {
+  const btn = e.target.closest("[data-spot-action]");
+  if (!btn) return;
+  const action = btn.dataset.spotAction;
+  const id = btn.dataset.spotId;
+  const type = btn.dataset.spotType;
+  if (!action || !id || !type) return;
+  e.preventDefault();
+  e.stopPropagation();
+  const item = spotPopupData && spotPopupData.id === id && spotPopupData.type === type
+    ? spotPopupData.item
+    : type === "stek"
+      ? findStekById(id)
+      : findRigById(id);
+  closeSpotPopup();
+  if (action === "move") {
+    const marker = getMarkerReference(type, id);
+    requestMarkerMoveFromPopup(marker, item, type);
+    return;
+  }
+  document.dispatchEvent(
+    new CustomEvent("vislok:spot-action", {
+      detail: { action, id, type }
+    })
+  );
+}
+
+function requestMarkerMoveFromPopup(marker, item, type) {
+  if (!marker) return;
+  cancelPendingMarkerMove(false);
+  popupMoveContext = { marker, type, item, armed: true, dragging: false };
+  const el = marker.getElement ? marker.getElement() : marker._icon;
+  if (el) {
+    el.classList.add("spot-marker--armed");
+  }
+  const template = t("spot_popup_move_hint", "Sleep de {type} naar de nieuwe plek en laat los.");
+  const name = escapeHtml(item?.name || "");
+  const typeLabel = type === "rig" ? t("label_rig", "rig") : t("label_stek", "stek");
+  const message = template
+    .replace("{type}", typeLabel)
+    .replace("{name}", name);
+  setStatus(message, "info");
+}
+
+function cancelPendingMarkerMove(notify = true) {
+  if (!popupMoveContext) return;
+  const el = popupMoveContext.marker?.getElement?.() || popupMoveContext.marker?._icon;
+  if (el) el.classList.remove("spot-marker--armed");
+  const wasDragging = popupMoveContext.dragging;
+  popupMoveContext = null;
+  if (notify) {
+    const key = wasDragging ? "spot_popup_move_done" : "spot_popup_move_cancel";
+    const fallback = wasDragging ? "Positie bijgewerkt" : "Verplaatsen geannuleerd";
+    setStatus(t(key, fallback), wasDragging ? "ok" : "info");
+  }
+}
+
+function noteMarkerMoveDragStart(marker) {
+  if (!popupMoveContext || popupMoveContext.marker !== marker) return;
+  popupMoveContext.dragging = true;
+  const el = marker.getElement ? marker.getElement() : marker._icon;
+  if (el) el.classList.remove("spot-marker--armed");
+}
+
+function completePopupMarkerMove(marker) {
+  if (!popupMoveContext || popupMoveContext.marker !== marker) return;
+  popupMoveContext.dragging = false;
+  cancelPendingMarkerMove(true);
+}
+
 function createSpotIcon(type) {
   const colors = {
     water: "#42a5f5",
@@ -2047,6 +2201,11 @@ function findWaterById(id) {
 function findStekById(id) {
   if (!id) return null;
   return (state.stekken || []).find(s => s.id === id) || null;
+}
+
+function findRigById(id) {
+  if (!id) return null;
+  return (state.rigs || []).find(r => r.id === id) || null;
 }
 
 function extractWaterStatsFromGeometry(geometry) {
@@ -2135,6 +2294,7 @@ function attachMarkerHandlers(marker, item, type) {
   marker.on("dragstart", e => {
     swallow(e);
     captureInteractions();
+    noteMarkerMoveDragStart(marker);
     startMarkerDistancePreview(marker, item, type);
   });
   marker.on("drag", e => {
@@ -2146,6 +2306,7 @@ function attachMarkerHandlers(marker, item, type) {
     if (!target?.getLatLng) {
       releaseInteractions();
       stopMarkerDistancePreview();
+      cancelPendingMarkerMove(false);
       return;
     }
     releaseInteractions();
@@ -2161,30 +2322,23 @@ function attachMarkerHandlers(marker, item, type) {
         }
       })
     );
+    completePopupMarkerMove(target);
   };
 
   marker.on("dragend", finalizeDrag);
   marker.on("touchcancel", releaseInteractions);
-  marker.on("remove", releaseInteractions);
+  marker.on("remove", () => {
+    releaseInteractions();
+    if (popupMoveContext && popupMoveContext.marker === marker) {
+      cancelPendingMarkerMove(false);
+    }
+  });
 
   marker.on("click", e => {
     swallow(e);
     releaseInteractions();
     stopMarkerDistancePreview();
-    if (type === "stek") {
-      document.dispatchEvent(
-        new CustomEvent("vislok:focus-catch-form", {
-          detail: { stekId: item.id, scroll: true }
-        })
-      );
-    } else if (type === "rig") {
-      const stekId = item.stekId || item.stek_id || null;
-      document.dispatchEvent(
-        new CustomEvent("vislok:focus-catch-form", {
-          detail: { stekId: stekId || "", rigId: item.id, scroll: true }
-        })
-      );
-    }
+    showSpotPopup(marker, item, type);
   });
 }
 
