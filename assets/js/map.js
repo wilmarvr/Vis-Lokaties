@@ -622,6 +622,7 @@ function startMarkerDistancePreview(marker, item, type, initialLatLng = null) {
 
 function updateMarkerDistancePreview(latlng) {
   if (!map || !dragDistanceTooltip || !dragDistanceContext || !latlng) return;
+  if (!Number.isFinite(latlng.lat) || !Number.isFinite(latlng.lng)) return;
   const { reference, type } = dragDistanceContext;
   if (!reference || !Number.isFinite(reference.lat) || !Number.isFinite(reference.lng)) return;
   const distance = map.distance([reference.lat, reference.lng], [latlng.lat, latlng.lng]);
