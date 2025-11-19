@@ -2293,6 +2293,7 @@ function buildWaterTooltip(water) {
 
 function attachMarkerHandlers(marker, item, type) {
   let interactionCaptured = false;
+  let markerMoved = false;
   const captureInteractions = () => {
     if (interactionCaptured) return;
     interactionCaptured = true;
@@ -2305,13 +2306,28 @@ function attachMarkerHandlers(marker, item, type) {
   };
   const swallow = e => swallowLeafletEvent(e);
 
+  marker.on("mousedown", e => {
+    swallow(e);
+    captureInteractions();
+    noteMarkerMoveDragStart(marker);
+    startMarkerDistancePreview(marker, item, type, marker.getLatLng());
+  });
+  marker.on("touchstart", e => {
+    swallow(e);
+    captureInteractions();
+    noteMarkerMoveDragStart(marker);
+    startMarkerDistancePreview(marker, item, type, marker.getLatLng());
+  });
+
   marker.on("dragstart", e => {
     swallow(e);
     captureInteractions();
+    markerMoved = false;
     noteMarkerMoveDragStart(marker);
     startMarkerDistancePreview(marker, item, type);
   });
   marker.on("drag", e => {
+    markerMoved = true;
     updateMarkerDistancePreview(e.target.getLatLng());
   });
 
@@ -2326,6 +2342,7 @@ function attachMarkerHandlers(marker, item, type) {
     releaseInteractions();
     stopMarkerDistancePreview();
     const { lat, lng } = target.getLatLng();
+    markerMoved = true;
     document.dispatchEvent(
       new CustomEvent("vislok:spot-move", {
         detail: {
@@ -2340,12 +2357,35 @@ function attachMarkerHandlers(marker, item, type) {
   };
 
   marker.on("dragend", finalizeDrag);
+  marker.on("mouseup", () => {
+    releaseInteractions();
+    stopMarkerDistancePreview();
+    if (!popupMoveContext && markerMoved) {
+      setStatus(t("spot_popup_move_done", "Positie bijgewerkt"), "ok");
+    }
+    markerMoved = false;
+  });
+  marker.on("touchend", () => {
+    releaseInteractions();
+    stopMarkerDistancePreview();
+    if (!popupMoveContext && markerMoved) {
+      setStatus(t("spot_popup_move_done", "Positie bijgewerkt"), "ok");
+    }
+    markerMoved = false;
+  });
   marker.on("touchcancel", releaseInteractions);
   marker.on("remove", () => {
     releaseInteractions();
     if (popupMoveContext && popupMoveContext.marker === marker) {
       cancelPendingMarkerMove(false);
     }
+  });
+
+  marker.on("click", e => {
+    swallow(e);
+    releaseInteractions();
+    stopMarkerDistancePreview();
+    showSpotPopup(marker, item, type);
   });
 
   marker.on("click", e => {
