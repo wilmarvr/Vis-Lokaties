@@ -497,11 +497,18 @@ function updatePlacementPreview(latlng) {
     return;
   }
 
+  const lat = latlng?.lat;
+  const lng = latlng?.lng;
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+    clearPlacementPreview();
+    return;
+  }
+
   let reference = null;
   if (clickMode === "stek") {
-    reference = findNearestWater(latlng.lat, latlng.lng);
+    reference = findNearestWater(lat, lng);
   } else if (clickMode === "rig") {
-    reference = findNearestStek(latlng.lat, latlng.lng);
+    reference = findNearestStek(lat, lng);
   } else {
     clearPlacementPreview();
     return;
@@ -512,7 +519,7 @@ function updatePlacementPreview(latlng) {
     return;
   }
 
-  const distance = map.distance([reference.lat, reference.lng], [latlng.lat, latlng.lng]);
+  const distance = map.distance([reference.lat, reference.lng], [lat, lng]);
   if (!Number.isFinite(distance)) {
     clearPlacementPreview();
     return;
@@ -534,7 +541,7 @@ function updatePlacementPreview(latlng) {
   }
 
   const label = nameLine ? `${text}<br><small>${nameLine}</small>` : text;
-  placementTooltip.setLatLng([latlng.lat, latlng.lng]);
+  placementTooltip.setLatLng([lat, lng]);
   placementTooltip.setContent(label);
 
   placementBase = reference;
