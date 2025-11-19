@@ -1986,7 +1986,9 @@ function createSpotMarker(item, type) {
   if (!item.lat || !item.lng) return null;
   const marker = L.marker([item.lat, item.lng], {
     draggable: true,
-    icon: createSpotIcon(type)
+    icon: createSpotIcon(type),
+    autoPan: true,
+    autoPanPadding: [80, 80]
   });
   registerMarkerReference(marker, item, type);
   attachMarkerHandlers(marker, item, type);
@@ -2226,9 +2228,35 @@ function buildWaterTooltip(water) {
 
 function attachMarkerHandlers(marker, item, type) {
   let markerMoved = false;
+  let clusteredDuringDrag = false;
+
+  const removeFromClusterForDrag = () => {
+    if (!clusterGroup || !map || !state.settings.cluster) return false;
+    if (clusterGroup.hasLayer(marker)) {
+      clusteredDuringDrag = true;
+      clusterGroup.removeLayer(marker);
+      marker.addTo(map);
+      return true;
+    }
+    clusteredDuringDrag = false;
+    return false;
+  };
+
+  const restoreClusterAfterDrag = () => {
+    if (!clusterGroup || !map || !state.settings.cluster) return;
+    if (clusteredDuringDrag) {
+      if (map.hasLayer(marker)) {
+        map.removeLayer(marker);
+      }
+      clusterGroup.addLayer(marker);
+    }
+    clusteredDuringDrag = false;
+  };
 
   marker.on("dragstart", () => {
     markerMoved = false;
+    try { map.dragging.disable(); } catch (_) {}
+    removeFromClusterForDrag();
     startMarkerDistancePreview(marker, item, type);
   });
 
@@ -2239,6 +2267,8 @@ function attachMarkerHandlers(marker, item, type) {
 
   marker.on("dragend", e => {
     stopMarkerDistancePreview();
+    try { map.dragging.enable(); } catch (_) {}
+    restoreClusterAfterDrag();
     const target = e?.target;
     if (!target?.getLatLng) return;
     const { lat, lng } = target.getLatLng();
@@ -2255,20 +2285,6 @@ function attachMarkerHandlers(marker, item, type) {
 
   marker.on("click", e => {
     swallowLeafletEvent(e);
-    stopMarkerDistancePreview();
-    showSpotPopup(marker, item, type);
-  });
-
-  marker.on("click", e => {
-    swallow(e);
-    releaseInteractions();
-    stopMarkerDistancePreview();
-    showSpotPopup(marker, item, type);
-  });
-
-  marker.on("click", e => {
-    swallow(e);
-    releaseInteractions();
     stopMarkerDistancePreview();
     showSpotPopup(marker, item, type);
   });
