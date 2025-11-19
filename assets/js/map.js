@@ -5,7 +5,7 @@
    ======================================================= */
 
 import { setStatus, log, state, saveState, setFooterInfo } from "./core.js?v=20250611";
-import { distanceM, formatLatLng } from "./helpers.js?v=20250611";
+import { distanceM, formatLatLng, escapeHtml } from "./helpers.js?v=20250611";
 import { t } from "./i18n.js?v=20250611";
 
 const OVERPASS_ENDPOINTS = [
@@ -41,10 +41,24 @@ let drawWaterActive = false;
 let drawWaterPoints = [];
 let drawWaterLayer = null;
 let doubleClickWasEnabled = true;
-let placementLine = null;
 let placementTooltip = null;
 let placementBase = null;
 let placementMode = null;
+let interactionLock = 0;
+let pendingMouseLatLng = null;
+let mouseMoveFrame = null;
+let pointerDownPoint = null;
+let suppressPlacementClick = false;
+let suppressTimer = null;
+let dragDistanceTooltip = null;
+let dragDistanceContext = null;
+let spotPopup = null;
+let spotPopupData = null;
+let popupMoveContext = null;
+const markerRegistry = {
+  stek: new Map(),
+  rig: new Map()
+};
 
 function emitMapBounds() {
   if (!map) return;
@@ -116,15 +130,15 @@ export function initMap() {
     refreshImportLayer();
     emitMapBounds();
   });
-  map.on("zoomend", refreshImportLayer);
-
   map.on("mousemove", handleMouseMove);
   map.on("click", handleMapClick);
   map.on("dblclick", handleMapDoubleClick);
-
-  map.on("mousemove", handleMouseMove);
-  map.on("click", handleMapClick);
-  map.on("dblclick", handleMapDoubleClick);
+  map.on("mousedown", rememberPointerOrigin);
+  map.on("touchstart", rememberPointerOrigin);
+  map.on("mouseup", resetPointerOrigin);
+  map.on("touchend", resetPointerOrigin);
+  map.on("dragstart", markClickSuppressed);
+  map.on("dragend", markClickSuppressed);
 
   setFooterInfo({ zoom: `| ${t("footer_zoom", "Zoom")}: ${map.getZoom()}` });
 
@@ -140,6 +154,8 @@ export function initMap() {
   log("Kaart init voltooid");
   document.dispatchEvent(new Event("vislok:map-ready"));
 }
+
+document.addEventListener("click", handleSpotPopupAction, true);
 
 function createBaseLayers() {
   baseLayers = {
@@ -191,7 +207,134 @@ function switchBaseLayer(key) {
   saveState();
 }
 
+function disableMapInteractions() {
+  if (!map) return;
+  if (map.dragging) map.dragging.disable();
+  if (map.boxZoom) map.boxZoom.disable();
+  if (map.doubleClickZoom) map.doubleClickZoom.disable();
+  if (map.scrollWheelZoom) map.scrollWheelZoom.disable();
+}
+
+function enableMapInteractions() {
+  if (!map) return;
+  if (map.dragging) map.dragging.enable();
+  if (map.boxZoom) map.boxZoom.enable();
+  if (map.doubleClickZoom) map.doubleClickZoom.enable();
+  if (map.scrollWheelZoom) map.scrollWheelZoom.enable();
+}
+
+function cloneContainerPoint(e) {
+  if (!e) return null;
+  if (e.containerPoint && typeof e.containerPoint.clone === "function") {
+    return e.containerPoint.clone();
+  }
+  const touch = e.originalEvent?.touches?.[0];
+  if (touch && map?.mouseEventToContainerPoint) {
+    return map.mouseEventToContainerPoint(touch);
+  }
+  return null;
+}
+
+function markClickSuppressed() {
+  suppressPlacementClick = true;
+  if (suppressTimer) clearTimeout(suppressTimer);
+  suppressTimer = setTimeout(() => {
+    suppressPlacementClick = false;
+    suppressTimer = null;
+  }, 250);
+}
+
+function consumeClickSuppression() {
+  if (!suppressPlacementClick) return false;
+  suppressPlacementClick = false;
+  if (suppressTimer) {
+    clearTimeout(suppressTimer);
+    suppressTimer = null;
+  }
+  return true;
+}
+
+function rememberPointerOrigin(e) {
+  pointerDownPoint = cloneContainerPoint(e);
+}
+
+function resetPointerOrigin() {
+  pointerDownPoint = null;
+}
+
+function detectPointerDrag(e) {
+  if (!pointerDownPoint || !map) return;
+  const buttons = e?.originalEvent?.buttons;
+  const touchCount = e?.originalEvent?.touches?.length || 0;
+  if (!buttons && !touchCount) return;
+  let currentPoint = cloneContainerPoint(e);
+  if (!currentPoint) return;
+  const distance =
+    typeof pointerDownPoint.distanceTo === "function"
+      ? pointerDownPoint.distanceTo(currentPoint)
+      : Math.hypot(pointerDownPoint.x - currentPoint.x, pointerDownPoint.y - currentPoint.y);
+  if (distance > 8) {
+    markClickSuppressed();
+  }
+}
+
+function suspendMapInteractions() {
+  if (!map) return;
+  if (interactionLock === 0) {
+    disableMapInteractions();
+  }
+  interactionLock += 1;
+}
+
+function resumeMapInteractions(force = false) {
+  if (!map) return;
+  if (force) {
+    interactionLock = 0;
+  } else if (interactionLock > 0) {
+    interactionLock -= 1;
+  }
+  if (interactionLock === 0) {
+    enableMapInteractions();
+  }
+}
+
+function swallowLeafletEvent(event) {
+  const original = event?.originalEvent || event;
+  if (!original) return;
+  if (typeof original.stopPropagation === "function") {
+    original.stopPropagation();
+  }
+  if (typeof original.preventDefault === "function") {
+    original.preventDefault();
+  }
+}
+
 function bindUI() {
+  const releaseAllInteractions = () => resumeMapInteractions(true);
+  if (typeof document !== "undefined") {
+    ["mouseup", "touchend", "touchcancel"].forEach(evt => {
+      document.addEventListener(evt, releaseAllInteractions, true);
+    });
+    document.addEventListener(
+      "visibilitychange",
+      () => {
+        if (document.visibilityState === "hidden") {
+          resumeMapInteractions(true);
+        }
+      },
+      true
+    );
+  }
+  if (typeof window !== "undefined") {
+    window.addEventListener(
+      "blur",
+      () => {
+        resumeMapInteractions(true);
+      },
+      true
+    );
+  }
+
   document.addEventListener("vislok:basemap", e => switchBaseLayer(e.detail));
   document.addEventListener("vislok:detect-radius", e => {
     if (selectionCircle) selectionCircle.setRadius(e.detail);
@@ -226,8 +369,20 @@ function bindUI() {
 
 /* ---------- FOOTER & DIEPTE ---------- */
 function handleMouseMove(e) {
+  detectPointerDrag(e);
+  pendingMouseLatLng = e?.latlng || null;
+  if (mouseMoveFrame) return;
+  mouseMoveFrame = requestAnimationFrame(() => {
+    mouseMoveFrame = null;
+    updateMouseHover(pendingMouseLatLng);
+    if (popupMoveContext?.armed && !popupMoveContext.dragging && dragDistanceContext && pendingMouseLatLng) {
+      updateMarkerDistancePreview(pendingMouseLatLng);
+    }
+  });
+}
+
+function updateMouseHover(latlng) {
   if (!map) return;
-  const latlng = e?.latlng;
   const lat = latlng?.lat;
   const lng = latlng?.lng;
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
@@ -235,6 +390,7 @@ function handleMouseMove(e) {
       depthTooltip.remove();
     }
     updatePlacementPreview(null);
+    setFooterInfo({ depth: `| ${t("footer_depth", "Diepte")}: –` });
     return;
   }
   updatePlacementPreview(latlng);
@@ -330,10 +486,6 @@ function interpolateDepth(lat, lng) {
 /* ---------- PICK / CLICK MODES ---------- */
 
 function clearPlacementPreview() {
-  if (placementLine) {
-    map.removeLayer(placementLine);
-    placementLine = null;
-  }
   if (placementTooltip) {
     map.removeLayer(placementTooltip);
     placementTooltip = null;
@@ -370,39 +522,23 @@ function updatePlacementPreview(latlng) {
     return;
   }
 
-  if (!placementLine) {
-    placementLine = L.polyline(
-      [
-        [reference.lat, reference.lng],
-        [latlng.lat, latlng.lng]
-      ],
-      { color: "#ff9800", weight: 2, dashArray: "6 6", opacity: 0.8 }
-    ).addTo(map);
-  } else {
-    placementLine.setLatLngs([
-      [reference.lat, reference.lng],
-      [latlng.lat, latlng.lng]
-    ]);
-  }
-
   const labelKey = clickMode === "stek" ? "preview_stek_distance" : "preview_rig_distance";
   const rounded = Math.round(distance);
   const text = t(labelKey, clickMode === "stek" ? "Afstand tot water: {distance} m" : "Distance to spot: {distance} m")
     .replace("{distance}", String(rounded));
   const nameLine = escapeHtml(reference.name || reference.id || "");
-  const midpoint = [(reference.lat + latlng.lat) / 2, (reference.lng + latlng.lng) / 2];
 
   if (!placementTooltip) {
     placementTooltip = L.tooltip({
       permanent: false,
-      direction: "center",
+      direction: "top",
       className: "placement-tip",
       opacity: 0.9
     }).addTo(map);
   }
 
   const label = nameLine ? `${text}<br><small>${nameLine}</small>` : text;
-  placementTooltip.setLatLng(midpoint);
+  placementTooltip.setLatLng([latlng.lat, latlng.lng]);
   placementTooltip.setContent(label);
 
   placementBase = reference;
@@ -439,7 +575,91 @@ function findNearestStek(lat, lng) {
   return best;
 }
 
+function resolveMarkerReference(item, type) {
+  if (!item || !type) return null;
+  if (type === "stek") {
+    const ref = item.waterId || item.water_id;
+    if (ref) {
+      const water = findWaterById(ref);
+      if (water) return water;
+    }
+    if (Number.isFinite(item.lat) && Number.isFinite(item.lng)) {
+      return findNearestWater(item.lat, item.lng);
+    }
+    return null;
+  }
+  if (type === "rig") {
+    const stekRef = item.stekId || item.stek_id;
+    if (stekRef) {
+      const stek = findStekById(stekRef);
+      if (stek) return stek;
+    }
+    if (Number.isFinite(item.lat) && Number.isFinite(item.lng)) {
+      return findNearestStek(item.lat, item.lng);
+    }
+    return null;
+  }
+  return null;
+}
+
+function startMarkerDistancePreview(marker, item, type, initialLatLng = null) {
+  if (!map) return;
+  const reference = resolveMarkerReference(item, type);
+  dragDistanceContext = reference ? { marker, reference, type } : null;
+  if (!dragDistanceContext) {
+    stopMarkerDistancePreview();
+    return;
+  }
+  if (!dragDistanceTooltip) {
+    dragDistanceTooltip = L.tooltip({
+      permanent: false,
+      direction: "top",
+      className: "placement-tip",
+      opacity: 0.9
+    }).addTo(map);
+  }
+  const startPoint = initialLatLng || (marker?.getLatLng ? marker.getLatLng() : null);
+  if (startPoint) {
+    updateMarkerDistancePreview(startPoint);
+  }
+}
+
+function updateMarkerDistancePreview(latlng) {
+  if (!map || !dragDistanceTooltip || !dragDistanceContext || !latlng) return;
+  const { reference, type } = dragDistanceContext;
+  if (!reference || !Number.isFinite(reference.lat) || !Number.isFinite(reference.lng)) return;
+  const distance = map.distance([reference.lat, reference.lng], [latlng.lat, latlng.lng]);
+  if (!Number.isFinite(distance)) return;
+  const labelKey = type === "rig" ? "preview_rig_distance" : "preview_stek_distance";
+  const fallback = type === "rig" ? "Afstand tot stek: {distance} m" : "Afstand tot water: {distance} m";
+  const rounded = Math.round(distance);
+  const text = t(labelKey, fallback).replace("{distance}", String(rounded));
+  const nameLine = escapeHtml(reference.name || reference.id || "");
+  const label = nameLine ? `${text}<br><small>${nameLine}</small>` : text;
+  dragDistanceTooltip.setLatLng([latlng.lat, latlng.lng]);
+  dragDistanceTooltip.setContent(label);
+}
+
+function stopMarkerDistancePreview() {
+  dragDistanceContext = null;
+  if (dragDistanceTooltip) {
+    map.removeLayer(dragDistanceTooltip);
+    dragDistanceTooltip = null;
+  }
+}
+
 function handleMapClick(e) {
+  if (consumeClickSuppression()) {
+    return;
+  }
+  if (popupMoveContext && popupMoveContext.armed && !popupMoveContext.dragging) {
+    const message = t(
+      "spot_popup_move_hint_drag_only",
+      "Sleep de marker naar de nieuwe plek en laat los om te bevestigen."
+    );
+    setStatus(message, "info");
+    return;
+  }
   if (pickResolver) {
     const resolver = pickResolver;
     pickResolver = null;
@@ -1633,9 +1853,7 @@ document.addEventListener("vislok:language", () => {
 });
 
 function fixDragIssues() {
-  map.dragging.enable();
-  map.scrollWheelZoom.enable();
-  map.boxZoom.enable();
+  resumeMapInteractions(true);
   map.invalidateSize();
   setStatus(t("status_map_fix", "Kaartinteractie hersteld"), "ok");
 }
@@ -1754,6 +1972,9 @@ export function refreshDataLayers() {
     }
   });
 
+  markerRegistry.stek.clear();
+  markerRegistry.rig.clear();
+
   const stekMarkers = (state.stekken || []).map(s => createSpotMarker(s, "stek"));
   const rigMarkers = (state.rigs || []).map(r => createSpotMarker(r, "rig"));
 
@@ -1779,8 +2000,19 @@ function createSpotMarker(item, type) {
     draggable: true,
     icon: createSpotIcon(type)
   });
+  registerMarkerReference(marker, item, type);
   attachMarkerHandlers(marker, item, type);
   return marker;
+}
+
+function registerMarkerReference(marker, item, type) {
+  if (!marker || !item || !item.id || !markerRegistry[type]) return;
+  markerRegistry[type].set(String(item.id), marker);
+}
+
+function getMarkerReference(type, id) {
+  if (!type || !id || !markerRegistry[type]) return null;
+  return markerRegistry[type].get(String(id)) || null;
 }
 
 function renderLinkLines() {
@@ -1830,6 +2062,139 @@ function drawLink(source, target, color, opacity, dashed = false) {
   L.polyline([start, end], options).addTo(linkLayer);
 }
 
+function ensureSpotPopup() {
+  if (spotPopup) return spotPopup;
+  spotPopup = L.popup({
+    className: "spot-popup-wrapper",
+    closeButton: true,
+    autoClose: true,
+    maxWidth: 260
+  });
+  return spotPopup;
+}
+
+function buildSpotPopupContent(item, type) {
+  const title = escapeHtml(item.name || item.id || (type === "stek" ? t("default_stek", "Stek") : t("default_rig", "Rig")));
+  const coords = Number.isFinite(item.lat) && Number.isFinite(item.lng)
+    ? formatLatLng(item.lat, item.lng)
+    : "";
+  const labelCatch = t("spot_popup_catch", "Registreer vangst");
+  const labelRename = t("spot_popup_rename", "Hernoem");
+  const labelDelete = t("spot_popup_delete", "Verwijderen");
+  const labelMove = t("spot_popup_move", "Verplaatsen");
+  const actionButtons = [
+    { action: "catch", label: labelCatch },
+    { action: "rename", label: labelRename },
+    { action: "delete", label: labelDelete },
+    { action: "move", label: labelMove }
+  ];
+
+  const buttonsHtml = actionButtons
+    .map(btn =>
+      `<button type="button" class="spot-popup__btn" data-spot-action="${btn.action}" data-spot-id="${escapeHtml(item.id)}" data-spot-type="${type}">${escapeHtml(btn.label)}</button>`
+    )
+    .join("");
+
+  const subtitle = coords ? `<div class="spot-popup__meta">${escapeHtml(coords)}</div>` : "";
+  return `<div class="spot-popup">` +
+    `<div class="spot-popup__title">${title}</div>` +
+    subtitle +
+    `<div class="spot-popup__actions">${buttonsHtml}</div>` +
+    `</div>`;
+}
+
+function showSpotPopup(marker, item, type) {
+  if (!map || !marker || !item || !type) return;
+  const popup = ensureSpotPopup();
+  const latLng = marker.getLatLng();
+  popup.setLatLng(latLng);
+  popup.setContent(buildSpotPopupContent(item, type));
+  popup.openOn(map);
+  spotPopupData = { id: item.id, type, item };
+}
+
+function closeSpotPopup() {
+  if (spotPopup) {
+    map.closePopup(spotPopup);
+  }
+  spotPopupData = null;
+}
+
+function handleSpotPopupAction(e) {
+  const btn = e.target.closest("[data-spot-action]");
+  if (!btn) return;
+  const action = btn.dataset.spotAction;
+  const id = btn.dataset.spotId;
+  const type = btn.dataset.spotType;
+  if (!action || !id || !type) return;
+  e.preventDefault();
+  e.stopPropagation();
+  const item = spotPopupData && spotPopupData.id === id && spotPopupData.type === type
+    ? spotPopupData.item
+    : type === "stek"
+      ? findStekById(id)
+      : findRigById(id);
+  closeSpotPopup();
+  if (action === "move") {
+    const marker = getMarkerReference(type, id);
+    requestMarkerMoveFromPopup(marker, item, type);
+    return;
+  }
+  document.dispatchEvent(
+    new CustomEvent("vislok:spot-action", {
+      detail: { action, id, type }
+    })
+  );
+}
+
+function requestMarkerMoveFromPopup(marker, item, type) {
+  if (!marker) return;
+  cancelPendingMarkerMove(false);
+  popupMoveContext = { marker, type, item, armed: true, dragging: false };
+  const el = marker.getElement ? marker.getElement() : marker._icon;
+  if (el) {
+    el.classList.add("spot-marker--armed");
+  }
+  startMarkerDistancePreview(marker, item, type);
+  const template = t(
+    "spot_popup_move_hint",
+    "Sleep de {type} naar de nieuwe plek en laat los om de nieuwe positie vast te leggen."
+  );
+  const name = escapeHtml(item?.name || "");
+  const typeLabel = type === "rig" ? t("label_rig", "rig") : t("label_stek", "stek");
+  const message = template
+    .replace("{type}", typeLabel)
+    .replace("{name}", name);
+  setStatus(message, "info");
+}
+
+function cancelPendingMarkerMove(notify = true) {
+  if (!popupMoveContext) return;
+  const el = popupMoveContext.marker?.getElement?.() || popupMoveContext.marker?._icon;
+  if (el) el.classList.remove("spot-marker--armed");
+  const wasDragging = popupMoveContext.dragging;
+  popupMoveContext = null;
+  stopMarkerDistancePreview();
+  if (notify) {
+    const key = wasDragging ? "spot_popup_move_done" : "spot_popup_move_cancel";
+    const fallback = wasDragging ? "Positie bijgewerkt" : "Verplaatsen geannuleerd";
+    setStatus(t(key, fallback), wasDragging ? "ok" : "info");
+  }
+}
+
+function noteMarkerMoveDragStart(marker) {
+  if (!popupMoveContext || popupMoveContext.marker !== marker) return;
+  popupMoveContext.dragging = true;
+  const el = marker.getElement ? marker.getElement() : marker._icon;
+  if (el) el.classList.remove("spot-marker--armed");
+}
+
+function completePopupMarkerMove(marker) {
+  if (!popupMoveContext || popupMoveContext.marker !== marker) return;
+  popupMoveContext.dragging = false;
+  cancelPendingMarkerMove(true);
+}
+
 function createSpotIcon(type) {
   const colors = {
     water: "#42a5f5",
@@ -1852,6 +2217,11 @@ function findWaterById(id) {
 function findStekById(id) {
   if (!id) return null;
   return (state.stekken || []).find(s => s.id === id) || null;
+}
+
+function findRigById(id) {
+  if (!id) return null;
+  return (state.rigs || []).find(r => r.id === id) || null;
 }
 
 function extractWaterStatsFromGeometry(geometry) {
@@ -1922,8 +2292,57 @@ function buildWaterTooltip(water) {
 }
 
 function attachMarkerHandlers(marker, item, type) {
-  marker.on("dragend", e => {
-    const { lat, lng } = e.target.getLatLng();
+  let interactionCaptured = false;
+  let markerMoved = false;
+  const captureInteractions = () => {
+    if (interactionCaptured) return;
+    interactionCaptured = true;
+    suspendMapInteractions();
+  };
+  const releaseInteractions = () => {
+    if (!interactionCaptured) return;
+    interactionCaptured = false;
+    resumeMapInteractions();
+  };
+  const swallow = e => swallowLeafletEvent(e);
+
+  marker.on("mousedown", e => {
+    swallow(e);
+    captureInteractions();
+    noteMarkerMoveDragStart(marker);
+    startMarkerDistancePreview(marker, item, type, marker.getLatLng());
+  });
+  marker.on("touchstart", e => {
+    swallow(e);
+    captureInteractions();
+    noteMarkerMoveDragStart(marker);
+    startMarkerDistancePreview(marker, item, type, marker.getLatLng());
+  });
+
+  marker.on("dragstart", e => {
+    swallow(e);
+    captureInteractions();
+    markerMoved = false;
+    noteMarkerMoveDragStart(marker);
+    startMarkerDistancePreview(marker, item, type);
+  });
+  marker.on("drag", e => {
+    markerMoved = true;
+    updateMarkerDistancePreview(e.target.getLatLng());
+  });
+
+  const finalizeDrag = e => {
+    const target = e?.target;
+    if (!target?.getLatLng) {
+      releaseInteractions();
+      stopMarkerDistancePreview();
+      cancelPendingMarkerMove(false);
+      return;
+    }
+    releaseInteractions();
+    stopMarkerDistancePreview();
+    const { lat, lng } = target.getLatLng();
+    markerMoved = true;
     document.dispatchEvent(
       new CustomEvent("vislok:spot-move", {
         detail: {
@@ -1934,23 +2353,39 @@ function attachMarkerHandlers(marker, item, type) {
         }
       })
     );
+    completePopupMarkerMove(target);
+  };
+
+  marker.on("dragend", finalizeDrag);
+  marker.on("mouseup", () => {
+    releaseInteractions();
+    stopMarkerDistancePreview();
+    if (!popupMoveContext && markerMoved) {
+      setStatus(t("spot_popup_move_done", "Positie bijgewerkt"), "ok");
+    }
+    markerMoved = false;
+  });
+  marker.on("touchend", () => {
+    releaseInteractions();
+    stopMarkerDistancePreview();
+    if (!popupMoveContext && markerMoved) {
+      setStatus(t("spot_popup_move_done", "Positie bijgewerkt"), "ok");
+    }
+    markerMoved = false;
+  });
+  marker.on("touchcancel", releaseInteractions);
+  marker.on("remove", () => {
+    releaseInteractions();
+    if (popupMoveContext && popupMoveContext.marker === marker) {
+      cancelPendingMarkerMove(false);
+    }
   });
 
-  marker.on("click", () => {
-    if (type === "stek") {
-      document.dispatchEvent(
-        new CustomEvent("vislok:focus-catch-form", {
-          detail: { stekId: item.id, scroll: true }
-        })
-      );
-    } else if (type === "rig") {
-      const stekId = item.stekId || item.stek_id || null;
-      document.dispatchEvent(
-        new CustomEvent("vislok:focus-catch-form", {
-          detail: { stekId: stekId || "", rigId: item.id, scroll: true }
-        })
-      );
-    }
+  marker.on("click", e => {
+    swallow(e);
+    releaseInteractions();
+    stopMarkerDistancePreview();
+    showSpotPopup(marker, item, type);
   });
 }
 
