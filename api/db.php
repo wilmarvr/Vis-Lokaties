@@ -7,6 +7,10 @@ function vislok_get_connection(): PDO {
         return $pdo;
     }
 
+    if (!in_array('mysql', PDO::getAvailableDrivers(), true)) {
+        throw new RuntimeException('MySQL driver ontbreekt. Installeer pdo_mysql.');
+    }
+
     $options = [
         PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
@@ -14,11 +18,24 @@ function vislok_get_connection(): PDO {
     ];
 
     $baseDsn = sprintf('mysql:host=%s;port=%s;charset=utf8mb4', DB_HOST, DB_PORT);
-    $adminPdo = new PDO($baseDsn, DB_USER, DB_PASS, $options);
-    $adminPdo->exec(sprintf('CREATE DATABASE IF NOT EXISTS `%s` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci', DB_NAME));
+    $dsnWithDb = sprintf('mysql:host=%s;port=%s;dbname=%s;charset=utf8mb4', DB_HOST, DB_PORT, DB_NAME);
 
-    $dsn = sprintf('mysql:host=%s;port=%s;dbname=%s;charset=utf8mb4', DB_HOST, DB_PORT, DB_NAME);
-    $pdo = new PDO($dsn, DB_USER, DB_PASS, $options);
+    try {
+        $pdo = new PDO($dsnWithDb, DB_USER, DB_PASS, $options);
+    } catch (PDOException $e) {
+        $errorCode = $e->errorInfo[1] ?? null;
+        if ($errorCode !== 1049) { // 1049 = Unknown database
+            throw new RuntimeException('MySQL-verbinding mislukt: ' . $e->getMessage(), 0, $e);
+        }
+
+        // Database bestaat niet: maak aan met dezelfde credentials en verbind opnieuw
+        $adminPdo = new PDO($baseDsn, DB_USER, DB_PASS, $options);
+        $adminPdo->exec(sprintf(
+            'CREATE DATABASE IF NOT EXISTS `%s` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci',
+            DB_NAME
+        ));
+        $pdo = new PDO($dsnWithDb, DB_USER, DB_PASS, $options);
+    }
 
     vislok_ensure_schema($pdo);
     return $pdo;
