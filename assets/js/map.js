@@ -652,7 +652,12 @@ function handleMapClick(e) {
   if (consumeClickSuppression()) {
     return;
   }
-  if (attemptPopupMarkerMove(e.latlng)) {
+  if (popupMoveContext && popupMoveContext.armed && !popupMoveContext.dragging) {
+    const message = t(
+      "spot_popup_move_hint_drag_only",
+      "Sleep de marker naar de nieuwe plek en laat los om te bevestigen."
+    );
+    setStatus(message, "info");
     return;
   }
   if (pickResolver) {
@@ -2153,7 +2158,7 @@ function requestMarkerMoveFromPopup(marker, item, type) {
   startMarkerDistancePreview(marker, item, type);
   const template = t(
     "spot_popup_move_hint",
-    "Sleep de {type} naar de nieuwe plek of klik op de kaart voor een nieuwe positie."
+    "Sleep de {type} naar de nieuwe plek en laat los om de nieuwe positie vast te leggen."
   );
   const name = escapeHtml(item?.name || "");
   const typeLabel = type === "rig" ? t("label_rig", "rig") : t("label_stek", "stek");
@@ -2188,30 +2193,6 @@ function completePopupMarkerMove(marker) {
   if (!popupMoveContext || popupMoveContext.marker !== marker) return;
   popupMoveContext.dragging = false;
   cancelPendingMarkerMove(true);
-}
-
-function attemptPopupMarkerMove(latlng) {
-  if (!popupMoveContext || popupMoveContext.dragging) return false;
-  if (!latlng) return false;
-  const { marker, item, type } = popupMoveContext;
-  if (!marker?.setLatLng || !marker.getLatLng) {
-    cancelPendingMarkerMove(false);
-    return false;
-  }
-  popupMoveContext.dragging = true;
-  marker.setLatLng(latlng);
-  document.dispatchEvent(
-    new CustomEvent("vislok:spot-move", {
-      detail: {
-        id: item.id,
-        type,
-        lat: latlng.lat,
-        lng: latlng.lng
-      }
-    })
-  );
-  completePopupMarkerMove(marker);
-  return true;
 }
 
 function createSpotIcon(type) {
