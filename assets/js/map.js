@@ -2387,6 +2387,13 @@ function attachMarkerHandlers(marker, item, type) {
     stopMarkerDistancePreview();
     showSpotPopup(marker, item, type);
   });
+
+  marker.on("click", e => {
+    swallow(e);
+    releaseInteractions();
+    stopMarkerDistancePreview();
+    showSpotPopup(marker, item, type);
+  });
 }
 
 /* ---------- EXPORT ALS MODULE ---------- */
