@@ -175,6 +175,7 @@ function vislok_create_bathy_tables(PDO $pdo): void {
         return;
     }
 
+function vislok_create_bathy_tables(PDO $pdo): void {
     $pdo->exec('CREATE TABLE IF NOT EXISTS bathy_imports (
         id VARCHAR(64) PRIMARY KEY,
         source VARCHAR(255) NULL,
