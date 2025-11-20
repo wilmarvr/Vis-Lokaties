@@ -17,36 +17,106 @@ function vislok_get_connection(): PDO {
         PDO::ATTR_EMULATE_PREPARES => false,
     ];
 
-    $useSocket = isset($GLOBALS['DB_SOCKET']) && DB_SOCKET !== '';
-    if ($useSocket) {
-        $baseDsn = sprintf('mysql:unix_socket=%s;charset=utf8mb4', DB_SOCKET);
-        $dsnWithDb = sprintf('mysql:unix_socket=%s;dbname=%s;charset=utf8mb4', DB_SOCKET, DB_NAME);
-    } else {
-        $baseDsn = sprintf('mysql:host=%s;port=%s;charset=utf8mb4', DB_HOST, DB_PORT);
-        $dsnWithDb = sprintf('mysql:host=%s;port=%s;dbname=%s;charset=utf8mb4', DB_HOST, DB_PORT, DB_NAME);
+    $socketOverride = trim((string)DB_SOCKET);
+    $socketCandidates = vislok_socket_candidates($socketOverride);
+    $dsnTargets = [];
+
+    // 1) Altijd host/poort proberen
+    $dsnTargets[] = [
+        'base' => sprintf('mysql:host=%s;port=%s;charset=utf8mb4', DB_HOST, DB_PORT),
+        'db' => sprintf('mysql:host=%s;port=%s;dbname=%s;charset=utf8mb4', DB_HOST, DB_PORT, DB_NAME),
+        'desc' => DB_HOST . ':' . DB_PORT,
+    ];
+
+    // 2) Socket override of auto-detectie als fallback
+    foreach ($socketCandidates as $candidate) {
+        if (!file_exists($candidate)) {
+            continue;
+        }
+        $dsnTargets[] = [
+            'base' => sprintf('mysql:unix_socket=%s;charset=utf8mb4', $candidate),
+            'db' => sprintf('mysql:unix_socket=%s;dbname=%s;charset=utf8mb4', $candidate, DB_NAME),
+            'desc' => 'socket ' . $candidate,
+        ];
     }
 
-    $targetDesc = $useSocket ? ('socket ' . DB_SOCKET) : (DB_HOST . ':' . DB_PORT);
-    try {
-        $pdo = new PDO($dsnWithDb, DB_USER, DB_PASS, $options);
-    } catch (PDOException $e) {
-        $errorCode = $e->errorInfo[1] ?? null;
-        if ($errorCode !== 1049) { // 1049 = Unknown database
-            $hint = sprintf('Controleer host/poort of socket (%s) en inloggegevens.', $targetDesc);
+    $errors = [];
+    foreach ($dsnTargets as $target) {
+        try {
+            $pdo = new PDO($target['db'], DB_USER, DB_PASS, $options);
+            $targetDesc = $target['desc'];
+            break;
+        } catch (PDOException $e) {
+            $errorCode = $e->errorInfo[1] ?? null;
+
+            $bootstrapNeeded = in_array($errorCode, [1049, 1045], true);
+            if ($bootstrapNeeded) {
+                try {
+                    $pdo = vislok_bootstrap_database_and_user($target, $options);
+                    $targetDesc = $target['desc'];
+                    break;
+                } catch (PDOException $inner) {
+                    $errors[] = [$target['desc'], $inner->getMessage()];
+                    continue;
+                }
+            }
+
+            if (in_array($errorCode, [2002, 2003], true)) { // connection refused / host unreachable
+                $errors[] = [$target['desc'], $e->getMessage()];
+                continue;
+            }
+
+            $hint = sprintf('Controleer host/poort of socket (%s) en inloggegevens.', $target['desc']);
             throw new RuntimeException('MySQL-verbinding mislukt: ' . $e->getMessage() . ' — ' . $hint, 0, $e);
         }
+    }
 
-        // Database bestaat niet: maak aan met dezelfde credentials en verbind opnieuw
-        $adminPdo = new PDO($baseDsn, DB_USER, DB_PASS, $options);
-        $adminPdo->exec(sprintf(
-            'CREATE DATABASE IF NOT EXISTS `%s` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci',
-            DB_NAME
-        ));
-        $pdo = new PDO($dsnWithDb, DB_USER, DB_PASS, $options);
+    if (!$pdo instanceof PDO) {
+        $errorText = array_map(function ($item) {
+            return sprintf('[%s] %s', $item[0], $item[1]);
+        }, $errors);
+        throw new RuntimeException('MySQL-verbinding mislukt. Geprobeerd: ' . implode('; ', $errorText));
     }
 
     vislok_ensure_schema($pdo);
     return $pdo;
+}
+
+function vislok_bootstrap_database_and_user(array $target, array $options): PDO {
+    $adminUser = DB_ADMIN_USER ?: DB_USER;
+    $adminPass = DB_ADMIN_PASS ?: DB_PASS;
+
+    $adminPdo = new PDO($target['base'], $adminUser, $adminPass, $options);
+
+    $dbName = vislok_escape_identifier(DB_NAME);
+    $adminPdo->exec(sprintf(
+        'CREATE DATABASE IF NOT EXISTS %s CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci',
+        $dbName
+    ));
+
+    if (DB_USER !== '' && DB_USER !== $adminUser) {
+        vislok_ensure_app_user($adminPdo, DB_USER, DB_PASS, DB_NAME);
+    }
+
+    return new PDO($target['db'], DB_USER, DB_PASS, $options);
+}
+
+function vislok_ensure_app_user(PDO $adminPdo, string $user, string $pass, string $db): void {
+    $escapedUser = str_replace("'", "''", $user);
+    $quotedPass = $adminPdo->quote($pass);
+    $dbName = vislok_escape_identifier($db);
+
+    foreach (['%', 'localhost'] as $host) {
+        $adminPdo->exec("CREATE USER IF NOT EXISTS '{$escapedUser}'@'{$host}' IDENTIFIED BY {$quotedPass}");
+        $adminPdo->exec("ALTER USER '{$escapedUser}'@'{$host}' IDENTIFIED BY {$quotedPass}");
+        $adminPdo->exec("GRANT ALL PRIVILEGES ON {$dbName}.* TO '{$escapedUser}'@'{$host}'");
+    }
+
+    $adminPdo->exec('FLUSH PRIVILEGES');
+}
+
+function vislok_escape_identifier(string $identifier): string {
+    return '`' . str_replace('`', '``', $identifier) . '`';
 }
 
 function vislok_ensure_schema(PDO $pdo): void {
@@ -57,6 +127,30 @@ function vislok_ensure_schema(PDO $pdo): void {
     vislok_create_catches_table($pdo);
     vislok_migrate_legacy_spots($pdo);
 }
+
+function vislok_socket_candidates(string $additional = ''): array {
+    $configured = trim((string)DB_SOCKET);
+    $candidates = [];
+    foreach ([$additional, $configured] as $maybe) {
+        if ($maybe !== '' && !in_array($maybe, $candidates, true)) {
+            $candidates[] = $maybe;
+        }
+    }
+
+    $common = [
+        '/var/run/mysqld/mysqld.sock',
+        '/run/mysqld/mysqld.sock',
+        '/tmp/mysql.sock',
+    ];
+    foreach ($common as $path) {
+        if (!in_array($path, $candidates, true) && file_exists($path)) {
+            $candidates[] = $path;
+        }
+    }
+
+    return $candidates;
+}
+
 
 function vislok_create_waters_table(PDO $pdo): void {
     $pdo->exec('CREATE TABLE IF NOT EXISTS waters (

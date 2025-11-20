@@ -13,8 +13,11 @@ const VISLOK_CONFIG_DEFAULT = [
     'host' => '127.0.0.1',
     'port' => '3306',
     'name' => 'vis_lokaties',
-    'user' => 'root',
-    'pass' => '',
+    'user' => 'vislok',
+    'pass' => 'vislok',
+    // Gebruik root alleen voor checks/aanmaak en het provisionen van de app-gebruiker.
+    'adminUser' => 'root',
+    'adminPass' => '',
     'socket' => '',
     'options' => []
 ];
@@ -28,6 +31,8 @@ const VISLOK_ENV_KEYS = [
     'name'   => 'VISLOK_DB_NAME',
     'user'   => 'VISLOK_DB_USER',
     'pass'   => 'VISLOK_DB_PASS',
+    'adminUser' => 'VISLOK_DB_ADMIN_USER',
+    'adminPass' => 'VISLOK_DB_ADMIN_PASS',
     'socket' => 'VISLOK_DB_SOCKET',
 ];
 
@@ -69,6 +74,8 @@ function vislok_sanitise_config(array $config): array
         'name' => trim((string)($config['name'] ?? VISLOK_CONFIG_DEFAULT['name'])),
         'user' => trim((string)($config['user'] ?? VISLOK_CONFIG_DEFAULT['user'])),
         'pass' => (string)($config['pass'] ?? VISLOK_CONFIG_DEFAULT['pass']),
+        'adminUser' => trim((string)($config['adminUser'] ?? VISLOK_CONFIG_DEFAULT['adminUser'])),
+        'adminPass' => (string)($config['adminPass'] ?? VISLOK_CONFIG_DEFAULT['adminPass']),
         'socket' => trim((string)($config['socket'] ?? VISLOK_CONFIG_DEFAULT['socket'])),
         'options' => vislok_sanitise_options($config['options'] ?? [])
     ];
@@ -88,6 +95,9 @@ function vislok_sanitise_config(array $config): array
     }
     if ($clean['user'] === '') {
         $clean['user'] = VISLOK_CONFIG_DEFAULT['user'];
+    }
+    if ($clean['adminUser'] === '') {
+        $clean['adminUser'] = VISLOK_CONFIG_DEFAULT['adminUser'];
     }
     if ($clean['socket'] === null) {
         $clean['socket'] = '';
@@ -153,4 +163,6 @@ define('DB_PORT', $config['port']);
 define('DB_NAME', $config['name']);
 define('DB_USER', $config['user']);
 define('DB_PASS', $config['pass']);
+define('DB_ADMIN_USER', $config['adminUser']);
+define('DB_ADMIN_PASS', $config['adminPass']);
 define('DB_SOCKET', $config['socket']);
