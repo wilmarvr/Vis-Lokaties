@@ -21,6 +21,7 @@ try {
         'name' => $data['name'],
         'user' => $data['user'],
         'pass' => $data['pass'] ?? '',
+        'socket' => $data['socket'] ?? '',
         'options' => $data['options'] ?? []
     ];
 
