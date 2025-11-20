@@ -17,15 +17,23 @@ function vislok_get_connection(): PDO {
         PDO::ATTR_EMULATE_PREPARES => false,
     ];
 
-    $baseDsn = sprintf('mysql:host=%s;port=%s;charset=utf8mb4', DB_HOST, DB_PORT);
-    $dsnWithDb = sprintf('mysql:host=%s;port=%s;dbname=%s;charset=utf8mb4', DB_HOST, DB_PORT, DB_NAME);
+    $useSocket = isset($GLOBALS['DB_SOCKET']) && DB_SOCKET !== '';
+    if ($useSocket) {
+        $baseDsn = sprintf('mysql:unix_socket=%s;charset=utf8mb4', DB_SOCKET);
+        $dsnWithDb = sprintf('mysql:unix_socket=%s;dbname=%s;charset=utf8mb4', DB_SOCKET, DB_NAME);
+    } else {
+        $baseDsn = sprintf('mysql:host=%s;port=%s;charset=utf8mb4', DB_HOST, DB_PORT);
+        $dsnWithDb = sprintf('mysql:host=%s;port=%s;dbname=%s;charset=utf8mb4', DB_HOST, DB_PORT, DB_NAME);
+    }
 
+    $targetDesc = $useSocket ? ('socket ' . DB_SOCKET) : (DB_HOST . ':' . DB_PORT);
     try {
         $pdo = new PDO($dsnWithDb, DB_USER, DB_PASS, $options);
     } catch (PDOException $e) {
         $errorCode = $e->errorInfo[1] ?? null;
         if ($errorCode !== 1049) { // 1049 = Unknown database
-            throw new RuntimeException('MySQL-verbinding mislukt: ' . $e->getMessage(), 0, $e);
+            $hint = sprintf('Controleer host/poort of socket (%s) en inloggegevens.', $targetDesc);
+            throw new RuntimeException('MySQL-verbinding mislukt: ' . $e->getMessage() . ' — ' . $hint, 0, $e);
         }
 
         // Database bestaat niet: maak aan met dezelfde credentials en verbind opnieuw
