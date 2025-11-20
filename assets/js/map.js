@@ -605,27 +605,33 @@ function resolveMarkerReference(item, type) {
   return null;
 }
 
-function startMarkerDistancePreview(marker, item, type, initialLatLng = null) {
-  if (!map) return;
-  const reference = resolveMarkerReference(item, type);
-  dragDistanceContext = reference ? { marker, reference, type } : null;
-  if (!dragDistanceContext) {
-    stopMarkerDistancePreview();
-    return;
-  }
-  if (!dragDistanceTooltip) {
-    dragDistanceTooltip = L.tooltip({
-      permanent: false,
-      direction: "top",
-      className: "placement-tip",
-      opacity: 0.9
-    }).addTo(map);
-  }
-  const startPoint = initialLatLng || (marker?.getLatLng ? marker.getLatLng() : null);
-  if (startPoint) {
+  function startMarkerDistancePreview(marker, item, type, initialLatLng = null) {
+    if (!map) return;
+    const reference = resolveMarkerReference(item, type);
+    dragDistanceContext = reference ? { marker, reference, type } : null;
+    if (!dragDistanceContext) {
+      stopMarkerDistancePreview();
+      return;
+    }
+    const startPoint = initialLatLng || (marker?.getLatLng ? marker.getLatLng() : null);
+    if (!startPoint || !Number.isFinite(startPoint.lat) || !Number.isFinite(startPoint.lng)) {
+      stopMarkerDistancePreview();
+      return;
+    }
+    if (!dragDistanceTooltip) {
+      dragDistanceTooltip = L.tooltip({
+        permanent: false,
+        direction: "top",
+        className: "placement-tip",
+        opacity: 0.9
+      });
+    }
+    dragDistanceTooltip.setLatLng([startPoint.lat, startPoint.lng]);
+    if (!map.hasLayer(dragDistanceTooltip)) {
+      dragDistanceTooltip.addTo(map);
+    }
     updateMarkerDistancePreview(startPoint);
   }
-}
 
 function updateMarkerDistancePreview(latlng) {
   if (!map || !dragDistanceTooltip || !dragDistanceContext || !latlng) return;
