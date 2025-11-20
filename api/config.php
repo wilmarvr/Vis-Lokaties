@@ -8,7 +8,9 @@
 // =======================================================
 
 const VISLOK_CONFIG_DEFAULT = [
-    'host' => 'localhost',
+    // Gebruik 127.0.0.1 als standaard zodat MySQL via TCP wordt aangesproken
+    // en niet via een ontbrekende socket op "localhost".
+    'host' => '127.0.0.1',
     'port' => '3306',
     'name' => 'vis_lokaties',
     'user' => 'root',
@@ -61,6 +63,10 @@ function vislok_sanitise_config(array $config): array
 
     if ($clean['host'] === '') {
         $clean['host'] = VISLOK_CONFIG_DEFAULT['host'];
+    }
+    // Vermijd impliciete socket-connecties: forceer TCP bij "localhost" zonder socket
+    if ($clean['socket'] === '' && strcasecmp($clean['host'], 'localhost') === 0) {
+        $clean['host'] = '127.0.0.1';
     }
     if (!preg_match('/^[0-9]+$/', $clean['port'])) {
         $clean['port'] = VISLOK_CONFIG_DEFAULT['port'];
