@@ -2238,6 +2238,12 @@ function attachMarkerHandlers(marker, item, type) {
   let markerMoved = false;
   let clusteredDuringDrag = false;
 
+  const ensureDraggingEnabled = () => {
+    if (marker?.dragging && typeof marker.dragging.enable === "function") {
+      marker.dragging.enable();
+    }
+  };
+
   const removeFromClusterForDrag = () => {
     if (!clusterGroup || !map || !state.settings.cluster) return false;
     if (clusterGroup.hasLayer(marker)) {
@@ -2249,6 +2255,20 @@ function attachMarkerHandlers(marker, item, type) {
     clusteredDuringDrag = false;
     return false;
   };
+
+  marker.on("add", ensureDraggingEnabled);
+
+  ["mousedown", "touchstart", "pointerdown"].forEach(evt => {
+    marker.on(evt, ev => {
+      removeFromClusterForDrag();
+      ensureDraggingEnabled();
+      const original = ev?.originalEvent || ev;
+      if (original?.stopPropagation) original.stopPropagation();
+      if (marker.dragging?._draggable?.["_onDown"]) {
+        marker.dragging._draggable._onDown(original);
+      }
+    });
+  });
 
   const restoreClusterAfterDrag = () => {
     if (!clusterGroup || !map || !state.settings.cluster) return;
