@@ -26,8 +26,9 @@ Deze gids helpt je om Vis Lokaties op een standaard hostingpakket of VPS te plaa
 
 1. Surf naar `https://<host>/vis-lokaties/admin.html`.
 2. Vul de databasegegevens van je hostingprovider in en klik op **Opslaan**. Dit schrijft `api/config.local.json`.
-3. Gebruik **Test verbinding** om direct te zien of de credentials werken.
-4. Ga naar `index.html` en controleer of de kaart data kan laden; bij de eerste succesvolle call maakt `api/db.php` automatisch de tabellen aan.
+3. Hosting zonder schrijfrechten? Zet omgevingsvariabelen (`VISLOK_DB_HOST`, `VISLOK_DB_PORT`, `VISLOK_DB_NAME`, `VISLOK_DB_USER`, `VISLOK_DB_PASS`, `VISLOK_DB_SOCKET`). Deze worden vóór `config.local.json` toegepast.
+4. Gebruik **Test verbinding** om direct te zien of de credentials werken.
+5. Ga naar `index.html` en controleer of de kaart data kan laden; bij de eerste succesvolle call maakt `api/db.php` automatisch de tabellen aan.
 
 ## 4. Modules & performance
 

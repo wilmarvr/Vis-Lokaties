@@ -19,6 +19,18 @@ const VISLOK_CONFIG_DEFAULT = [
     'options' => []
 ];
 
+// Sta overrides via omgeving variabelen toe zodat hosting-configuraties
+// zonder schrijfrechten op bestanden toch de database kunnen instellen.
+// Gebruik dezelfde keys als de admin-configuratie.
+const VISLOK_ENV_KEYS = [
+    'host'   => 'VISLOK_DB_HOST',
+    'port'   => 'VISLOK_DB_PORT',
+    'name'   => 'VISLOK_DB_NAME',
+    'user'   => 'VISLOK_DB_USER',
+    'pass'   => 'VISLOK_DB_PASS',
+    'socket' => 'VISLOK_DB_SOCKET',
+];
+
 const VISLOK_OPTION_DEFAULTS = [
     'showData' => true,
     'showWeather' => true,
@@ -92,6 +104,16 @@ function vislok_load_config(bool $refresh = false): array
     }
 
     $config = VISLOK_CONFIG_DEFAULT;
+
+    // Omgevingsoverrides eerst toepassen (bijv. via .env of hostingpaneel)
+    // zodat platforminstellingen de basis vormen.
+    foreach (VISLOK_ENV_KEYS as $key => $envKey) {
+        $value = getenv($envKey);
+        if ($value !== false && $value !== null && $value !== '') {
+            $config[$key] = $value;
+        }
+    }
+
     $path = vislok_config_path();
     if (is_readable($path)) {
         $json = file_get_contents($path);
