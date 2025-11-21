@@ -41,6 +41,7 @@ function vislok_get_connection(): PDO {
     }
 
     $errors = [];
+    $appCredsLabel = sprintf('%s@%s', DB_USER ?: '(leeg)', DB_HOST . ':' . DB_PORT);
     foreach ($dsnTargets as $target) {
         try {
             $pdo = new PDO($target['db'], DB_USER, DB_PASS, $options);
@@ -49,8 +50,8 @@ function vislok_get_connection(): PDO {
         } catch (PDOException $e) {
             $errorCode = $e->errorInfo[1] ?? null;
 
-            $bootstrapNeeded = in_array($errorCode, [1049, 1045], true);
-            if ($bootstrapNeeded) {
+            // Database onbekend? Probeer met admin/root aan te maken.
+            if ($errorCode === 1049) {
                 try {
                     $pdo = vislok_bootstrap_database_and_user($target, $options);
                     $targetDesc = $target['desc'];
@@ -61,8 +62,15 @@ function vislok_get_connection(): PDO {
                 }
             }
 
-            if (in_array($errorCode, [2002, 2003], true)) { // connection refused / host unreachable
+            // Verbinding geweigerd / host niet bereikbaar
+            if (in_array($errorCode, [2002, 2003], true)) {
                 $errors[] = [$target['desc'], $e->getMessage()];
+                continue;
+            }
+
+            // Onjuiste app-credentials: geef een duidelijke hint i.p.v. root-bootstraps te forceren.
+            if ($errorCode === 1045) {
+                $errors[] = [$target['desc'], sprintf('Aanmeldfout voor app-gebruiker %s — %s', $appCredsLabel, $e->getMessage())];
                 continue;
             }
 

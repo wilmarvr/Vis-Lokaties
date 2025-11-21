@@ -32,6 +32,7 @@ try {
 
     $pdo = null;
     $errors = [];
+    $appCredsLabel = sprintf('%s@%s', $config['user'] ?: '(leeg)', $config['host'] . ':' . $config['port']);
     $adminUser = $config['adminUser'] ?? $config['user'];
     $adminPass = $config['adminPass'] ?? $config['pass'];
 
@@ -45,7 +46,7 @@ try {
         } catch (PDOException $e) {
             $errorCode = $e->errorInfo[1] ?? null;
 
-            if (in_array($errorCode, [1049, 1045], true)) {
+            if ($errorCode === 1049) {
                 try {
                     $adminPdo = new PDO($target['base'], $adminUser, $adminPass, [
                         PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
@@ -72,6 +73,11 @@ try {
 
             if (in_array($errorCode, [2002, 2003], true)) {
                 $errors[] = $e->getMessage();
+                continue;
+            }
+
+            if ($errorCode === 1045) {
+                $errors[] = sprintf('Aanmeldfout voor app-gebruiker %s — %s', $appCredsLabel, $e->getMessage());
                 continue;
             }
 
