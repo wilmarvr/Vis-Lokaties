@@ -976,6 +976,54 @@ footer {
   color: #9ca3af;
 }
 
+.spot-popup-wrapper .leaflet-popup-content {
+  margin: 0;
+}
+
+.spot-popup {
+  min-width: 200px;
+}
+
+.spot-popup__title {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.spot-popup__meta {
+  font-size: 0.78em;
+  color: #9ca3af;
+  margin-bottom: 8px;
+}
+
+.spot-popup__actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.spot-popup__btn {
+  border: 1px solid var(--border);
+  background: rgba(26,32,44,0.9);
+  color: var(--fg);
+  border-radius: 4px;
+  font-size: 0.85em;
+  padding: 6px 8px;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.spot-popup__btn:hover,
+.spot-popup__btn:focus {
+  background: rgba(55,65,81,0.95);
+  border-color: var(--accent);
+  color: var(--fg);
+}
+
+.spot-marker--armed {
+  box-shadow: 0 0 10px rgba(96, 165, 250, 0.8);
+  transform: scale(1.15);
+}
+
 /* ---------- HEATMAP LEGENDA ---------- */
 .legend.inv {
   background: rgba(0,0,0,0.7);
