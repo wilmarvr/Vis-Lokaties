@@ -17,84 +17,36 @@ function vislok_get_connection(): PDO {
         PDO::ATTR_EMULATE_PREPARES => false,
     ];
 
-    $socketOverride = trim((string)DB_SOCKET);
-    $socketCandidates = vislok_socket_candidates($socketOverride);
-    $dsnTargets = [];
+    $dsn = vislok_build_dsn(DB_HOST, DB_PORT, DB_SOCKET, DB_NAME);
 
-    // 1) Altijd host/poort proberen
-    $dsnTargets[] = [
-        'base' => sprintf('mysql:host=%s;port=%s;charset=utf8mb4', DB_HOST, DB_PORT),
-        'db' => sprintf('mysql:host=%s;port=%s;dbname=%s;charset=utf8mb4', DB_HOST, DB_PORT, DB_NAME),
-        'desc' => DB_HOST . ':' . DB_PORT,
-    ];
+    try {
+        $pdo = new PDO($dsn['db'], DB_USER, DB_PASS, $options);
+    } catch (PDOException $e) {
+        $errorCode = $e->errorInfo[1] ?? null;
 
-    // 2) Socket override of auto-detectie als fallback
-    foreach ($socketCandidates as $candidate) {
-        if (!file_exists($candidate)) {
-            continue;
+        // Database ontbreekt? Probeer éénmalig met admin aan te maken.
+        if ($errorCode === 1049) {
+            vislok_bootstrap_database($dsn, $options);
+            $pdo = new PDO($dsn['db'], DB_USER, DB_PASS, $options);
+        } else {
+            $hint = sprintf('MySQL connectie mislukt voor %s@%s: %s', DB_USER, $dsn['desc'], $e->getMessage());
+            throw new RuntimeException($hint, 0, $e);
         }
-        $dsnTargets[] = [
-            'base' => sprintf('mysql:unix_socket=%s;charset=utf8mb4', $candidate),
-            'db' => sprintf('mysql:unix_socket=%s;dbname=%s;charset=utf8mb4', $candidate, DB_NAME),
-            'desc' => 'socket ' . $candidate,
-        ];
-    }
-
-    $errors = [];
-    $appCredsLabel = sprintf('%s@%s', DB_USER ?: '(leeg)', DB_HOST . ':' . DB_PORT);
-    foreach ($dsnTargets as $target) {
-        try {
-            $pdo = new PDO($target['db'], DB_USER, DB_PASS, $options);
-            $targetDesc = $target['desc'];
-            break;
-        } catch (PDOException $e) {
-            $errorCode = $e->errorInfo[1] ?? null;
-
-            // Database onbekend? Probeer met admin/root aan te maken.
-            if ($errorCode === 1049) {
-                try {
-                    $pdo = vislok_bootstrap_database_and_user($target, $options);
-                    $targetDesc = $target['desc'];
-                    break;
-                } catch (PDOException $inner) {
-                    $errors[] = [$target['desc'], $inner->getMessage()];
-                    continue;
-                }
-            }
-
-            // Verbinding geweigerd / host niet bereikbaar
-            if (in_array($errorCode, [2002, 2003], true)) {
-                $errors[] = [$target['desc'], $e->getMessage()];
-                continue;
-            }
-
-            // Onjuiste app-credentials: geef een duidelijke hint i.p.v. root-bootstraps te forceren.
-            if ($errorCode === 1045) {
-                $errors[] = [$target['desc'], sprintf('Aanmeldfout voor app-gebruiker %s — %s', $appCredsLabel, $e->getMessage())];
-                continue;
-            }
-
-            $hint = sprintf('Controleer host/poort of socket (%s) en inloggegevens.', $target['desc']);
-            throw new RuntimeException('MySQL-verbinding mislukt: ' . $e->getMessage() . ' — ' . $hint, 0, $e);
-        }
-    }
-
-    if (!$pdo instanceof PDO) {
-        $errorText = array_map(function ($item) {
-            return sprintf('[%s] %s', $item[0], $item[1]);
-        }, $errors);
-        throw new RuntimeException('MySQL-verbinding mislukt. Geprobeerd: ' . implode('; ', $errorText));
     }
 
     vislok_ensure_schema($pdo);
     return $pdo;
 }
 
-function vislok_bootstrap_database_and_user(array $target, array $options): PDO {
+function vislok_bootstrap_database(array $dsn, array $options): void {
     $adminUser = DB_ADMIN_USER ?: DB_USER;
     $adminPass = DB_ADMIN_PASS ?: DB_PASS;
 
-    $adminPdo = new PDO($target['base'], $adminUser, $adminPass, $options);
+    try {
+        $adminPdo = new PDO($dsn['base'], $adminUser, $adminPass, $options);
+    } catch (PDOException $e) {
+        throw new RuntimeException('Admin-verbinding mislukt tijdens bootstrap: ' . $e->getMessage(), 0, $e);
+    }
 
     $dbName = vislok_escape_identifier(DB_NAME);
     $adminPdo->exec(sprintf(
@@ -105,8 +57,6 @@ function vislok_bootstrap_database_and_user(array $target, array $options): PDO 
     if (DB_USER !== '' && DB_USER !== $adminUser) {
         vislok_ensure_app_user($adminPdo, DB_USER, DB_PASS, DB_NAME);
     }
-
-    return new PDO($target['db'], DB_USER, DB_PASS, $options);
 }
 
 function vislok_ensure_app_user(PDO $adminPdo, string $user, string $pass, string $db): void {
@@ -123,6 +73,23 @@ function vislok_ensure_app_user(PDO $adminPdo, string $user, string $pass, strin
     $adminPdo->exec('FLUSH PRIVILEGES');
 }
 
+function vislok_build_dsn(string $host, string $port, string $socket, string $dbName): array {
+    $socket = trim($socket);
+    if ($socket !== '') {
+        return [
+            'base' => sprintf('mysql:unix_socket=%s;charset=utf8mb4', $socket),
+            'db' => sprintf('mysql:unix_socket=%s;dbname=%s;charset=utf8mb4', $socket, $dbName),
+            'desc' => 'socket ' . $socket,
+        ];
+    }
+
+    return [
+        'base' => sprintf('mysql:host=%s;port=%s;charset=utf8mb4', $host, $port),
+        'db' => sprintf('mysql:host=%s;port=%s;dbname=%s;charset=utf8mb4', $host, $port, $dbName),
+        'desc' => $host . ':' . $port,
+    ];
+}
+
 function vislok_escape_identifier(string $identifier): string {
     return '`' . str_replace('`', '``', $identifier) . '`';
 }
@@ -136,28 +103,7 @@ function vislok_ensure_schema(PDO $pdo): void {
     vislok_migrate_legacy_spots($pdo);
 }
 
-function vislok_socket_candidates(string $additional = ''): array {
-    $configured = trim((string)DB_SOCKET);
-    $candidates = [];
-    foreach ([$additional, $configured] as $maybe) {
-        if ($maybe !== '' && !in_array($maybe, $candidates, true)) {
-            $candidates[] = $maybe;
-        }
-    }
-
-    $common = [
-        '/var/run/mysqld/mysqld.sock',
-        '/run/mysqld/mysqld.sock',
-        '/tmp/mysql.sock',
-    ];
-    foreach ($common as $path) {
-        if (!in_array($path, $candidates, true) && file_exists($path)) {
-            $candidates[] = $path;
-        }
-    }
-
-    return $candidates;
-}
+// Socket autodetectie is verwijderd: gebruik expliciet DB_SOCKET om de gewenste socket te kiezen.
 
 
 function vislok_create_waters_table(PDO $pdo): void {
