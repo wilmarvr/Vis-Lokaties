@@ -60,6 +60,12 @@ function vislok_sanitise_config(array $config): array
         $base = realpath(__DIR__ . '/..') ?: dirname(__DIR__);
         $path = rtrim($base, '/\\') . '/' . ltrim($path, '/\\');
     }
+    if ($clean['adminUser'] === '') {
+        $clean['adminUser'] = VISLOK_CONFIG_DEFAULT['adminUser'];
+    }
+    if ($clean['socket'] === null) {
+        $clean['socket'] = '';
+    }
 
     return [
         'path' => $path,
