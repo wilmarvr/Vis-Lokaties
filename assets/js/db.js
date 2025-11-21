@@ -1,6 +1,6 @@
 /* =======================================================
    Vis Lokaties — db.js
-   Clienthelpers voor PHP API (XAMPP / MySQL)
+   Clienthelpers voor PHP API (SQLite)
    ======================================================= */
 
 const API_BASE = "api";

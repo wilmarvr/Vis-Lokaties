@@ -1,39 +1,21 @@
 <?php
 // =======================================================
 // Vis Lokaties — config.php
-// Dynamische databaseconfiguratie voor XAMPP (MySQL/MariaDB)
-// Deze configuratie laadt standaardwaarden en optionele overrides
-// uit config.local.json zodat de waarden via de admin-interface
-// aangepast kunnen worden.
+// Eenvoudige configuratie voor SQLite.
+// Laadt standaardwaarden en optionele overrides uit config.local.json
+// zodat de waarden via de admin-interface aangepast kunnen worden.
 // =======================================================
 
 const VISLOK_CONFIG_DEFAULT = [
-    // Gebruik 127.0.0.1 als standaard zodat MySQL via TCP wordt aangesproken
-    // en niet via een ontbrekende socket op "localhost".
-    'host' => '127.0.0.1',
-    'port' => '3306',
-    'name' => 'vis_lokaties',
-    'user' => 'vislok',
-    'pass' => 'vislok',
-    // Gebruik root alleen voor checks/aanmaak en het provisionen van de app-gebruiker.
-    'adminUser' => 'root',
-    'adminPass' => '',
-    'socket' => '',
+    // Standaard SQLite-bestand in de data-map
+    'path' => __DIR__ . '/../data/vislok.sqlite',
     'options' => []
 ];
 
 // Sta overrides via omgeving variabelen toe zodat hosting-configuraties
 // zonder schrijfrechten op bestanden toch de database kunnen instellen.
-// Gebruik dezelfde keys als de admin-configuratie.
 const VISLOK_ENV_KEYS = [
-    'host'   => 'VISLOK_DB_HOST',
-    'port'   => 'VISLOK_DB_PORT',
-    'name'   => 'VISLOK_DB_NAME',
-    'user'   => 'VISLOK_DB_USER',
-    'pass'   => 'VISLOK_DB_PASS',
-    'adminUser' => 'VISLOK_DB_ADMIN_USER',
-    'adminPass' => 'VISLOK_DB_ADMIN_PASS',
-    'socket' => 'VISLOK_DB_SOCKET',
+    'path'   => 'VISLOK_DB_PATH',
 ];
 
 const VISLOK_OPTION_DEFAULTS = [
@@ -68,33 +50,15 @@ function vislok_config_path(): string
 
 function vislok_sanitise_config(array $config): array
 {
-    $clean = [
-        'host' => trim((string)($config['host'] ?? VISLOK_CONFIG_DEFAULT['host'])),
-        'port' => (string)($config['port'] ?? VISLOK_CONFIG_DEFAULT['port']),
-        'name' => trim((string)($config['name'] ?? VISLOK_CONFIG_DEFAULT['name'])),
-        'user' => trim((string)($config['user'] ?? VISLOK_CONFIG_DEFAULT['user'])),
-        'pass' => (string)($config['pass'] ?? VISLOK_CONFIG_DEFAULT['pass']),
-        'adminUser' => trim((string)($config['adminUser'] ?? VISLOK_CONFIG_DEFAULT['adminUser'])),
-        'adminPass' => (string)($config['adminPass'] ?? VISLOK_CONFIG_DEFAULT['adminPass']),
-        'socket' => trim((string)($config['socket'] ?? VISLOK_CONFIG_DEFAULT['socket'])),
-        'options' => vislok_sanitise_options($config['options'] ?? [])
-    ];
+    $path = trim((string)($config['path'] ?? VISLOK_CONFIG_DEFAULT['path']));
+    if ($path === '') {
+        $path = VISLOK_CONFIG_DEFAULT['path'];
+    }
 
-    if ($clean['host'] === '') {
-        $clean['host'] = VISLOK_CONFIG_DEFAULT['host'];
-    }
-    // Vermijd impliciete socket-connecties: forceer TCP bij "localhost" zonder socket
-    if ($clean['socket'] === '' && strcasecmp($clean['host'], 'localhost') === 0) {
-        $clean['host'] = '127.0.0.1';
-    }
-    if (!preg_match('/^[0-9]+$/', $clean['port'])) {
-        $clean['port'] = VISLOK_CONFIG_DEFAULT['port'];
-    }
-    if ($clean['name'] === '') {
-        $clean['name'] = VISLOK_CONFIG_DEFAULT['name'];
-    }
-    if ($clean['user'] === '') {
-        $clean['user'] = VISLOK_CONFIG_DEFAULT['user'];
+    // Relative pad -> baseer op project root
+    if (!preg_match('~^(/|[A-Za-z]:[\\/])~', $path)) {
+        $base = realpath(__DIR__ . '/..') ?: dirname(__DIR__);
+        $path = rtrim($base, '/\\') . '/' . ltrim($path, '/\\');
     }
     if ($clean['adminUser'] === '') {
         $clean['adminUser'] = VISLOK_CONFIG_DEFAULT['adminUser'];
@@ -103,7 +67,10 @@ function vislok_sanitise_config(array $config): array
         $clean['socket'] = '';
     }
 
-    return $clean;
+    return [
+        'path' => $path,
+        'options' => vislok_sanitise_options($config['options'] ?? [])
+    ];
 }
 
 function vislok_load_config(bool $refresh = false): array
@@ -116,7 +83,6 @@ function vislok_load_config(bool $refresh = false): array
     $config = VISLOK_CONFIG_DEFAULT;
 
     // Omgevingsoverrides eerst toepassen (bijv. via .env of hostingpaneel)
-    // zodat platforminstellingen de basis vormen.
     foreach (VISLOK_ENV_KEYS as $key => $envKey) {
         $value = getenv($envKey);
         if ($value !== false && $value !== null && $value !== '') {
@@ -158,11 +124,4 @@ function vislok_current_config(): array
 }
 
 $config = vislok_current_config();
-define('DB_HOST', $config['host']);
-define('DB_PORT', $config['port']);
-define('DB_NAME', $config['name']);
-define('DB_USER', $config['user']);
-define('DB_PASS', $config['pass']);
-define('DB_ADMIN_USER', $config['adminUser']);
-define('DB_ADMIN_PASS', $config['adminPass']);
-define('DB_SOCKET', $config['socket']);
+define('DB_PATH', $config['path']);

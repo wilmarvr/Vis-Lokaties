@@ -33,7 +33,7 @@ try {
     switch ($type) {
         case 'water':
             $stmt = $pdo->prepare('INSERT INTO waters (id, name, lat, lng, val, note, polygon) VALUES (:id, :name, :lat, :lng, :val, :note, :polygon)
-                ON DUPLICATE KEY UPDATE name = VALUES(name), lat = VALUES(lat), lng = VALUES(lng), val = VALUES(val), note = VALUES(note), polygon = VALUES(polygon)');
+                ON CONFLICT(id) DO UPDATE SET name=excluded.name, lat=excluded.lat, lng=excluded.lng, val=excluded.val, note=excluded.note, polygon=excluded.polygon');
             $stmt->execute([
                 ':id' => $id,
                 ':name' => $name,
@@ -52,7 +52,7 @@ try {
                 }
             }
             $stmt = $pdo->prepare('INSERT INTO stekken (id, water_id, name, lat, lng, val, note, polygon) VALUES (:id, :water_id, :name, :lat, :lng, :val, :note, :polygon)
-                ON DUPLICATE KEY UPDATE water_id = VALUES(water_id), name = VALUES(name), lat = VALUES(lat), lng = VALUES(lng), val = VALUES(val), note = VALUES(note), polygon = VALUES(polygon)');
+                ON CONFLICT(id) DO UPDATE SET water_id=excluded.water_id, name=excluded.name, lat=excluded.lat, lng=excluded.lng, val=excluded.val, note=excluded.note, polygon=excluded.polygon');
             $stmt->execute([
                 ':id' => $id,
                 ':water_id' => $waterId,
@@ -82,7 +82,7 @@ try {
                 }
             }
             $stmt = $pdo->prepare('INSERT INTO rigs (id, stek_id, water_id, name, lat, lng, val, note, polygon) VALUES (:id, :stek_id, :water_id, :name, :lat, :lng, :val, :note, :polygon)
-                ON DUPLICATE KEY UPDATE stek_id = VALUES(stek_id), water_id = VALUES(water_id), name = VALUES(name), lat = VALUES(lat), lng = VALUES(lng), val = VALUES(val), note = VALUES(note), polygon = VALUES(polygon)');
+                ON CONFLICT(id) DO UPDATE SET stek_id=excluded.stek_id, water_id=excluded.water_id, name=excluded.name, lat=excluded.lat, lng=excluded.lng, val=excluded.val, note=excluded.note, polygon=excluded.polygon');
             $stmt->execute([
                 ':id' => $id,
                 ':stek_id' => $stekId,

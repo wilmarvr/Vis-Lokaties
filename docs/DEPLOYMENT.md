@@ -7,7 +7,7 @@ Deze gids helpt je om Vis Lokaties op een standaard hostingpakket of VPS te plaa
 | Component | Aanbevolen | Waarom |
 | --- | --- | --- |
 | PHP | 8.1 of hoger | Alle API-endpoints gebruiken typed properties en `enum`-achtige checks die in PHP 8+ beschikbaar zijn. |
-| Database | MySQL 8 / MariaDB 10.5 | `api/db.php` maakt automatisch tabellen (`waters`, `stekken`, `rigs`, `catches`, `bathy_*`). |
+| Database | SQLite 3 | `api/db.php` maakt automatisch tabellen (`waters`, `stekken`, `rigs`, `catches`, `bathy_*`). |
 | Webserver | Apache/Nginx met HTTPS | Nodig voor ES-modules via `index.html` en veilige upload van vangstfoto's. |
 | Node (optioneel) | 18+ | Alleen nodig als je `scripts/sync_github*.sh` of toekomstige bundlers wilt draaien. |
 
@@ -25,12 +25,10 @@ Deze gids helpt je om Vis Lokaties op een standaard hostingpakket of VPS te plaa
 ## 3. Configuratie op afstand
 
 1. Surf naar `https://<host>/vis-lokaties/admin.html`.
-2. Vul de databasegegevens van je hostingprovider in en klik op **Opslaan**. Dit schrijft `api/config.local.json`.
-3. Hosting zonder schrijfrechten? Zet omgevingsvariabelen (`VISLOK_DB_HOST`, `VISLOK_DB_PORT`, `VISLOK_DB_NAME`, `VISLOK_DB_USER`, `VISLOK_DB_PASS`, `VISLOK_DB_ADMIN_USER`, `VISLOK_DB_ADMIN_PASS`, `VISLOK_DB_SOCKET`). Deze worden vóór `config.local.json` toegepast.
-4. De app gebruikt standaard een eigen gebruiker (`vislok/vislok`) voor runtime en gebruikt **root** alleen om de database te controleren/aan te maken en om de app-gebruiker te provisionen. Pas de admin-velden aan als je hosting een ander beheerdersaccount gebruikt.
-5. Sockets nodig? Vul het pad in of laat het leeg: `api/db.php` probeert automatisch veelgebruikte MySQL-sockets (`/var/run/mysqld/mysqld.sock`, `/run/mysqld/mysqld.sock`, `/tmp/mysql.sock`) als host/poort faalt, zonder over te stappen op SQLite.
-6. Gebruik **Test verbinding** om direct te zien of de credentials werken; de test maakt de database en app-gebruiker aan met de opgegeven root/admin-gegevens als dat nodig is.
-7. Ga naar `index.html` en controleer of de kaart data kan laden; bij de eerste succesvolle call maakt `api/db.php` automatisch de tabellen aan.
+2. Vul het pad naar het SQLite-bestand in (bijv. `data/vislok.sqlite`) en klik op **Opslaan**. Dit schrijft `api/config.local.json`.
+3. Hosting zonder schrijfrechten? Zet de omgevingsvariabele `VISLOK_DB_PATH`; deze wordt vóór `config.local.json` toegepast.
+4. Gebruik **Test verbinding** om direct te zien of het bestand bereikbaar is; bij de eerste succesvolle call maakt `api/db.php` automatisch de tabellen aan.
+5. Ga naar `index.html` en controleer of de kaart data kan laden; bij de eerste succesvolle call maakt `api/db.php` automatisch de tabellen aan.
 
 ## 4. Modules & performance
 

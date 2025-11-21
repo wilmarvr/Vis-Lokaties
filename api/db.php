@@ -7,8 +7,14 @@ function vislok_get_connection(): PDO {
         return $pdo;
     }
 
-    if (!in_array('mysql', PDO::getAvailableDrivers(), true)) {
-        throw new RuntimeException('MySQL driver ontbreekt. Installeer pdo_mysql.');
+    if (!in_array('sqlite', PDO::getAvailableDrivers(), true)) {
+        throw new RuntimeException('SQLite driver ontbreekt. Installeer pdo_sqlite.');
+    }
+
+    $path = vislok_sqlite_path(DB_PATH);
+    $dir = dirname($path);
+    if (!is_dir($dir) && !mkdir($dir, 0775, true) && !is_dir($dir)) {
+        throw new RuntimeException('Kan databasepad niet aanmaken: ' . $dir);
     }
 
     $options = [
@@ -17,81 +23,24 @@ function vislok_get_connection(): PDO {
         PDO::ATTR_EMULATE_PREPARES => false,
     ];
 
-    $dsn = vislok_build_dsn(DB_HOST, DB_PORT, DB_SOCKET, DB_NAME);
-
-    try {
-        $pdo = new PDO($dsn['db'], DB_USER, DB_PASS, $options);
-    } catch (PDOException $e) {
-        $errorCode = $e->errorInfo[1] ?? null;
-
-        // Database ontbreekt? Probeer éénmalig met admin aan te maken.
-        if ($errorCode === 1049) {
-            vislok_bootstrap_database($dsn, $options);
-            $pdo = new PDO($dsn['db'], DB_USER, DB_PASS, $options);
-        } else {
-            $hint = sprintf('MySQL connectie mislukt voor %s@%s: %s', DB_USER, $dsn['desc'], $e->getMessage());
-            throw new RuntimeException($hint, 0, $e);
-        }
-    }
+    $pdo = new PDO('sqlite:' . $path, null, null, $options);
+    $pdo->exec('PRAGMA foreign_keys = ON');
+    $pdo->exec('PRAGMA journal_mode = WAL');
 
     vislok_ensure_schema($pdo);
     return $pdo;
 }
 
-function vislok_bootstrap_database(array $dsn, array $options): void {
-    $adminUser = DB_ADMIN_USER ?: DB_USER;
-    $adminPass = DB_ADMIN_PASS ?: DB_PASS;
-
-    try {
-        $adminPdo = new PDO($dsn['base'], $adminUser, $adminPass, $options);
-    } catch (PDOException $e) {
-        throw new RuntimeException('Admin-verbinding mislukt tijdens bootstrap: ' . $e->getMessage(), 0, $e);
+function vislok_sqlite_path(string $path): string {
+    $path = trim($path);
+    if ($path === '') {
+        $path = __DIR__ . '/../data/vislok.sqlite';
     }
-
-    $dbName = vislok_escape_identifier(DB_NAME);
-    $adminPdo->exec(sprintf(
-        'CREATE DATABASE IF NOT EXISTS %s CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci',
-        $dbName
-    ));
-
-    if (DB_USER !== '' && DB_USER !== $adminUser) {
-        vislok_ensure_app_user($adminPdo, DB_USER, DB_PASS, DB_NAME);
+    if (!preg_match('~^(/|[A-Za-z]:[\\/])~', $path)) {
+        $base = realpath(__DIR__ . '/..') ?: dirname(__DIR__);
+        $path = rtrim($base, '/\\') . '/' . ltrim($path, '/\\');
     }
-}
-
-function vislok_ensure_app_user(PDO $adminPdo, string $user, string $pass, string $db): void {
-    $escapedUser = str_replace("'", "''", $user);
-    $quotedPass = $adminPdo->quote($pass);
-    $dbName = vislok_escape_identifier($db);
-
-    foreach (['%', 'localhost'] as $host) {
-        $adminPdo->exec("CREATE USER IF NOT EXISTS '{$escapedUser}'@'{$host}' IDENTIFIED BY {$quotedPass}");
-        $adminPdo->exec("ALTER USER '{$escapedUser}'@'{$host}' IDENTIFIED BY {$quotedPass}");
-        $adminPdo->exec("GRANT ALL PRIVILEGES ON {$dbName}.* TO '{$escapedUser}'@'{$host}'");
-    }
-
-    $adminPdo->exec('FLUSH PRIVILEGES');
-}
-
-function vislok_build_dsn(string $host, string $port, string $socket, string $dbName): array {
-    $socket = trim($socket);
-    if ($socket !== '') {
-        return [
-            'base' => sprintf('mysql:unix_socket=%s;charset=utf8mb4', $socket),
-            'db' => sprintf('mysql:unix_socket=%s;dbname=%s;charset=utf8mb4', $socket, $dbName),
-            'desc' => 'socket ' . $socket,
-        ];
-    }
-
-    return [
-        'base' => sprintf('mysql:host=%s;port=%s;charset=utf8mb4', $host, $port),
-        'db' => sprintf('mysql:host=%s;port=%s;dbname=%s;charset=utf8mb4', $host, $port, $dbName),
-        'desc' => $host . ':' . $port,
-    ];
-}
-
-function vislok_escape_identifier(string $identifier): string {
-    return '`' . str_replace('`', '``', $identifier) . '`';
+    return $path;
 }
 
 function vislok_ensure_schema(PDO $pdo): void {
@@ -103,129 +52,217 @@ function vislok_ensure_schema(PDO $pdo): void {
     vislok_migrate_legacy_spots($pdo);
 }
 
-// Socket autodetectie is verwijderd: gebruik expliciet DB_SOCKET om de gewenste socket te kiezen.
-
-
 function vislok_create_waters_table(PDO $pdo): void {
     $pdo->exec('CREATE TABLE IF NOT EXISTS waters (
-        id VARCHAR(64) PRIMARY KEY,
-        name VARCHAR(255) NOT NULL,
-        lat DOUBLE NOT NULL,
-        lng DOUBLE NOT NULL,
-        val DOUBLE NULL,
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        lat REAL NOT NULL,
+        lng REAL NOT NULL,
+        val REAL NULL,
         note TEXT NULL,
-        polygon LONGTEXT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        INDEX idx_waters_coords (lat, lng)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+        polygon TEXT NULL,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )');
+    $pdo->exec('CREATE INDEX IF NOT EXISTS idx_waters_coords ON waters(lat, lng)');
 }
 
 function vislok_create_stekken_table(PDO $pdo): void {
     $pdo->exec('CREATE TABLE IF NOT EXISTS stekken (
-        id VARCHAR(64) PRIMARY KEY,
-        water_id VARCHAR(64) NULL,
-        name VARCHAR(255) NOT NULL,
-        lat DOUBLE NOT NULL,
-        lng DOUBLE NOT NULL,
-        val DOUBLE NULL,
+        id TEXT PRIMARY KEY,
+        water_id TEXT NULL,
+        name TEXT NOT NULL,
+        lat REAL NOT NULL,
+        lng REAL NOT NULL,
+        val REAL NULL,
         note TEXT NULL,
-        polygon LONGTEXT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        INDEX idx_stek_water (water_id),
-        INDEX idx_stek_coords (lat, lng),
-        CONSTRAINT fk_stek_water FOREIGN KEY (water_id) REFERENCES waters(id) ON DELETE SET NULL
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+        polygon TEXT NULL,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (water_id) REFERENCES waters(id) ON DELETE SET NULL
+    )');
+    $pdo->exec('CREATE INDEX IF NOT EXISTS idx_stek_water ON stekken(water_id)');
+    $pdo->exec('CREATE INDEX IF NOT EXISTS idx_stek_coords ON stekken(lat, lng)');
 }
 
 function vislok_create_rigs_table(PDO $pdo): void {
     $pdo->exec('CREATE TABLE IF NOT EXISTS rigs (
-        id VARCHAR(64) PRIMARY KEY,
-        stek_id VARCHAR(64) NULL,
-        water_id VARCHAR(64) NULL,
-        name VARCHAR(255) NOT NULL,
-        lat DOUBLE NOT NULL,
-        lng DOUBLE NOT NULL,
-        val DOUBLE NULL,
+        id TEXT PRIMARY KEY,
+        stek_id TEXT NULL,
+        water_id TEXT NULL,
+        name TEXT NOT NULL,
+        lat REAL NOT NULL,
+        lng REAL NOT NULL,
+        val REAL NULL,
         note TEXT NULL,
-        polygon LONGTEXT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        INDEX idx_rig_stek (stek_id),
-        INDEX idx_rig_water (water_id),
-        INDEX idx_rig_coords (lat, lng),
-        CONSTRAINT fk_rig_stek FOREIGN KEY (stek_id) REFERENCES stekken(id) ON DELETE CASCADE,
-        CONSTRAINT fk_rig_water FOREIGN KEY (water_id) REFERENCES waters(id) ON DELETE SET NULL
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+        polygon TEXT NULL,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (stek_id) REFERENCES stekken(id) ON DELETE CASCADE,
+        FOREIGN KEY (water_id) REFERENCES waters(id) ON DELETE SET NULL
+    )');
+    $pdo->exec('CREATE INDEX IF NOT EXISTS idx_rig_stek ON rigs(stek_id)');
+    $pdo->exec('CREATE INDEX IF NOT EXISTS idx_rig_water ON rigs(water_id)');
+    $pdo->exec('CREATE INDEX IF NOT EXISTS idx_rig_coords ON rigs(lat, lng)');
 }
 
 function vislok_create_bathy_tables(PDO $pdo): void {
     $pdo->exec('CREATE TABLE IF NOT EXISTS bathy_imports (
-        id VARCHAR(64) PRIMARY KEY,
-        source VARCHAR(255) NULL,
-        file_name VARCHAR(255) NULL,
-        total_points INT DEFAULT 0,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+        id TEXT PRIMARY KEY,
+        source TEXT NULL,
+        file_name TEXT NULL,
+        total_points INTEGER DEFAULT 0,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )');
 
     $pdo->exec('CREATE TABLE IF NOT EXISTS bathy_points (
-        id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-        import_id VARCHAR(64) NOT NULL,
-        lat DOUBLE NOT NULL,
-        lng DOUBLE NOT NULL,
-        depth DOUBLE NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        INDEX idx_import (import_id),
-        CONSTRAINT fk_bathy_import FOREIGN KEY (import_id) REFERENCES bathy_imports(id) ON DELETE CASCADE
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
-
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        import_id TEXT NOT NULL,
+        lat REAL NOT NULL,
+        lng REAL NOT NULL,
+        depth REAL NULL,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (import_id) REFERENCES bathy_imports(id) ON DELETE CASCADE
+    )');
+    $pdo->exec('CREATE INDEX IF NOT EXISTS idx_import ON bathy_points(import_id)');
 }
 
 function vislok_create_catches_table(PDO $pdo): void {
     $pdo->exec('CREATE TABLE IF NOT EXISTS catches (
-        id VARCHAR(64) PRIMARY KEY,
-        spot_id VARCHAR(64) NOT NULL,
-        rig_id VARCHAR(64) NULL,
-        title VARCHAR(255) NULL,
-        species VARCHAR(255) NULL,
-        weight_kg DOUBLE NULL,
-        length_cm DOUBLE NULL,
-        bait VARCHAR(255) NULL,
+        id TEXT PRIMARY KEY,
+        spot_id TEXT NOT NULL,
+        rig_id TEXT NULL,
+        title TEXT NULL,
+        species TEXT NULL,
+        weight_kg REAL NULL,
+        length_cm REAL NULL,
+        bait TEXT NULL,
         note TEXT NULL,
-        photo_path VARCHAR(255) NULL,
-        water_temp DOUBLE NULL,
-        air_temp DOUBLE NULL,
-        wind_dir VARCHAR(12) NULL,
-        wind_speed DOUBLE NULL,
-        pressure_hpa DOUBLE NULL,
-        moon_phase VARCHAR(64) NULL,
-        caught_at TIMESTAMP NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP NULL,
-        INDEX idx_spot (spot_id),
-        INDEX idx_rig (rig_id),
-        CONSTRAINT fk_catch_stek FOREIGN KEY (spot_id) REFERENCES stekken(id) ON DELETE CASCADE,
-        CONSTRAINT fk_catch_rig FOREIGN KEY (rig_id) REFERENCES rigs(id) ON DELETE SET NULL
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+        photo_path TEXT NULL,
+        water_temp REAL NULL,
+        air_temp REAL NULL,
+        wind_dir TEXT NULL,
+        wind_speed REAL NULL,
+        pressure_hpa REAL NULL,
+        moon_phase TEXT NULL,
+        caught_at TEXT NULL,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NULL,
+        FOREIGN KEY (spot_id) REFERENCES stekken(id) ON DELETE CASCADE,
+        FOREIGN KEY (rig_id) REFERENCES rigs(id) ON DELETE SET NULL
+    )');
 
     vislok_ensure_catch_alters($pdo);
 }
 
 function vislok_ensure_catch_alters(PDO $pdo): void {
-    $statements = [
-        'ALTER TABLE catches ADD COLUMN rig_id VARCHAR(64) NULL',
-        'ALTER TABLE catches ADD INDEX idx_rig (rig_id)',
-        'ALTER TABLE catches DROP FOREIGN KEY fk_catch_spot',
-        'ALTER TABLE catches DROP FOREIGN KEY fk_catch_rig',
-        'ALTER TABLE catches ADD CONSTRAINT fk_catch_stek FOREIGN KEY (spot_id) REFERENCES stekken(id) ON DELETE CASCADE',
-        'ALTER TABLE catches ADD CONSTRAINT fk_catch_rig FOREIGN KEY (rig_id) REFERENCES rigs(id) ON DELETE SET NULL'
-    ];
+    // Aanvullende kolommen/indexen toevoegen zonder data te verliezen.
+    try {
+        $pdo->exec('ALTER TABLE catches ADD COLUMN rig_id TEXT NULL');
+    } catch (Throwable $e) {
+    }
+    try {
+        $pdo->exec('ALTER TABLE catches ADD COLUMN water_temp REAL NULL');
+    } catch (Throwable $e) {
+    }
+    try {
+        $pdo->exec('ALTER TABLE catches ADD COLUMN air_temp REAL NULL');
+    } catch (Throwable $e) {
+    }
+    try {
+        $pdo->exec('ALTER TABLE catches ADD COLUMN wind_dir TEXT NULL');
+    } catch (Throwable $e) {
+    }
+    try {
+        $pdo->exec('ALTER TABLE catches ADD COLUMN wind_speed REAL NULL');
+    } catch (Throwable $e) {
+    }
+    try {
+        $pdo->exec('ALTER TABLE catches ADD COLUMN pressure_hpa REAL NULL');
+    } catch (Throwable $e) {
+    }
+    try {
+        $pdo->exec('ALTER TABLE catches ADD COLUMN moon_phase TEXT NULL');
+    } catch (Throwable $e) {
+    }
 
-    foreach ($statements as $sql) {
-        try {
-            $pdo->exec($sql);
-        } catch (Throwable $e) {
-            // kolom, index of constraint bestaat al
+    $pdo->exec('CREATE INDEX IF NOT EXISTS idx_spot ON catches(spot_id)');
+    $pdo->exec('CREATE INDEX IF NOT EXISTS idx_rig ON catches(rig_id)');
+}
+
+function vislok_table_exists(PDO $pdo, string $table): bool {
+    $stmt = $pdo->prepare("SELECT name FROM sqlite_master WHERE type='table' AND name = :name LIMIT 1");
+    $stmt->execute([':name' => $table]);
+    return (bool)$stmt->fetchColumn();
+}
+
+function vislok_migrate_legacy_spots(PDO $pdo): void {
+    if (!vislok_table_exists($pdo, 'spots')) {
+        return;
+    }
+
+    $count = (int)$pdo->query('SELECT COUNT(*) FROM spots')->fetchColumn();
+    if ($count === 0) {
+        $pdo->exec('DROP TABLE spots');
+        return;
+    }
+
+    $existing = (int)$pdo->query('SELECT COUNT(*) FROM waters')->fetchColumn()
+        + (int)$pdo->query('SELECT COUNT(*) FROM stekken')->fetchColumn()
+        + (int)$pdo->query('SELECT COUNT(*) FROM rigs')->fetchColumn();
+    if ($existing > 0) {
+        return;
+    }
+
+    $stmt = $pdo->query('SELECT id, type, name, lat, lng, val, note, polygon, water_id, stek_id, created_at FROM spots ORDER BY created_at ASC');
+    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+        $polygon = $row['polygon'] ?? null;
+        $waterId = $row['water_id'] ?? null;
+        $stekId = $row['stek_id'] ?? null;
+        switch ($row['type']) {
+            case 'water':
+                $insert = $pdo->prepare('INSERT OR IGNORE INTO waters (id, name, lat, lng, val, note, polygon, created_at) VALUES (:id, :name, :lat, :lng, :val, :note, :polygon, :created_at)');
+                $insert->execute([
+                    ':id' => $row['id'],
+                    ':name' => $row['name'],
+                    ':lat' => $row['lat'],
+                    ':lng' => $row['lng'],
+                    ':val' => $row['val'],
+                    ':note' => $row['note'],
+                    ':polygon' => $polygon,
+                    ':created_at' => $row['created_at'],
+                ]);
+                break;
+            case 'stek':
+                $insert = $pdo->prepare('INSERT OR IGNORE INTO stekken (id, water_id, name, lat, lng, val, note, polygon, created_at) VALUES (:id, :water_id, :name, :lat, :lng, :val, :note, :polygon, :created_at)');
+                $insert->execute([
+                    ':id' => $row['id'],
+                    ':water_id' => $waterId,
+                    ':name' => $row['name'],
+                    ':lat' => $row['lat'],
+                    ':lng' => $row['lng'],
+                    ':val' => $row['val'],
+                    ':note' => $row['note'],
+                    ':polygon' => $polygon,
+                    ':created_at' => $row['created_at'],
+                ]);
+                break;
+            case 'rig':
+                $insert = $pdo->prepare('INSERT OR IGNORE INTO rigs (id, stek_id, water_id, name, lat, lng, val, note, polygon, created_at) VALUES (:id, :stek_id, :water_id, :name, :lat, :lng, :val, :note, :polygon, :created_at)');
+                $insert->execute([
+                    ':id' => $row['id'],
+                    ':stek_id' => $stekId,
+                    ':water_id' => $waterId,
+                    ':name' => $row['name'],
+                    ':lat' => $row['lat'],
+                    ':lng' => $row['lng'],
+                    ':val' => $row['val'],
+                    ':note' => $row['note'],
+                    ':polygon' => $polygon,
+                    ':created_at' => $row['created_at'],
+                ]);
+                break;
         }
     }
+
+    $pdo->exec('DROP TABLE spots');
 }
 
 function vislok_table_exists(PDO $pdo, string $table): bool {
