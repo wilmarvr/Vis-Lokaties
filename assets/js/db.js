@@ -10,15 +10,30 @@ function callApi(endpoint, options = {}) {
     headers: { "Content-Type": "application/json" },
     ...options
   })
-    .then(response => {
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      return response.text();
+    .then(async response => {
+      const bodyText = await response.text();
+      const bodyJson = bodyText ? safeJson(bodyText) : null;
+
+      if (!response.ok) {
+        const apiMessage = bodyJson?.error || bodyJson?.message;
+        const statusText = `HTTP ${response.status}`;
+        throw new Error(apiMessage ? `${statusText}: ${apiMessage}` : statusText);
+      }
+
+      return bodyJson;
     })
-    .then(text => (text ? JSON.parse(text) : null))
     .catch(err => {
       console.warn(`API ${endpoint} faalde`, err);
       throw err;
     });
+}
+
+function safeJson(text) {
+  try {
+    return JSON.parse(text);
+  } catch (_) {
+    return null;
+  }
 }
 
 export function fetchSpots() {
