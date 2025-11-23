@@ -1,21 +1,26 @@
 <?php
-require_once __DIR__ . '/db.php';
+require __DIR__ . '/db.php';
 
 try {
-    $pdo = vislok_get_connection();
-    $stmt = $pdo->query('SELECT id, source, file_name, total_points, created_at FROM bathy_imports ORDER BY created_at DESC');
-    $imports = $stmt->fetchAll();
+    $pdo = vislok_bootstrap();
+    $imports = $pdo->query('SELECT id, source, file, created_at FROM bathy_imports ORDER BY created_at DESC')->fetchAll();
+    $countsStmt = $pdo->query('SELECT import_id, COUNT(*) AS cnt FROM bathy_points GROUP BY import_id');
+    $counts = [];
+    foreach ($countsStmt as $row) {
+        $counts[$row['import_id']] = (int)$row['cnt'];
+    }
+    $list = array_map(function ($row) use ($counts) {
+        return [
+            'id' => $row['id'],
+            'source' => $row['source'],
+            'file' => $row['file'],
+            'created' => $row['created_at'],
+            'count' => $counts[$row['id']] ?? 0,
+        ];
+    }, $imports);
 
-    $countStmt = $pdo->query('SELECT COUNT(*) AS total_records FROM bathy_points');
-    $pointsTotal = (int)$countStmt->fetch()['total_records'];
-
-    vislok_json_response([
-        'data' => $imports,
-        'summary' => [
-            'batches' => count($imports),
-            'points' => $pointsTotal,
-        ],
-    ]);
+    $totalPoints = array_sum($counts);
+    vislok_json_response(['imports' => $list, 'summary' => ['batches' => count($list), 'points' => $totalPoints]]);
 } catch (Throwable $e) {
-    vislok_json_response(['error' => $e->getMessage()], 500);
+    vislok_error('Imports ophalen mislukt', 500, ['detail' => $e->getMessage()]);
 }
