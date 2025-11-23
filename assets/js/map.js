@@ -2143,7 +2143,9 @@ function buildSpotPopupContent(item, type) {
     : "";
   const labelRename = t("spot_popup_rename", "Hernoem");
   const labelDelete = t("spot_popup_delete", "Verwijderen");
+  const labelCatch = t("action_add_catch", "Vangst");
   const actionButtons = [
+    { action: "catch", label: labelCatch },
     { action: "rename", label: labelRename },
     { action: "delete", label: labelDelete }
   ];
@@ -2193,6 +2195,12 @@ function handleSpotPopupAction(e) {
     : type === "stek"
       ? findStekById(id)
       : findRigById(id);
+  if (action === "catch") {
+    const detail = { stekId: type === "stek" ? id : null, rigId: type === "rig" ? id : null, scroll: true };
+    document.dispatchEvent(new CustomEvent("vislok:focus-catch-form", { detail }));
+    closeSpotPopup();
+    return;
+  }
   closeSpotPopup();
   document.dispatchEvent(
     new CustomEvent("vislok:spot-action", {

@@ -134,6 +134,23 @@ function vislok_ensure_schema(PDO $pdo): void
         CONSTRAINT fk_rig_stek FOREIGN KEY (stek_id) REFERENCES stekken(id) ON DELETE SET NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci');
 
+    $pdo->exec('CREATE TABLE IF NOT EXISTS catches (
+        id VARCHAR(64) PRIMARY KEY,
+        water_id VARCHAR(64) NULL,
+        stek_id VARCHAR(64) NULL,
+        rig_id VARCHAR(64) NULL,
+        weight_kg DOUBLE NULL,
+        weight_lbs DOUBLE NULL,
+        length_cm DOUBLE NULL,
+        notes TEXT NULL,
+        photo VARCHAR(255) NULL,
+        caught_at DATETIME NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT fk_catch_water FOREIGN KEY (water_id) REFERENCES waters(id) ON DELETE SET NULL,
+        CONSTRAINT fk_catch_stek FOREIGN KEY (stek_id) REFERENCES stekken(id) ON DELETE SET NULL,
+        CONSTRAINT fk_catch_rig FOREIGN KEY (rig_id) REFERENCES rigs(id) ON DELETE SET NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci');
+
     $pdo->exec('CREATE TABLE IF NOT EXISTS bathy_imports (
         id VARCHAR(64) PRIMARY KEY,
         source VARCHAR(50) NULL,

@@ -33,7 +33,10 @@ import {
   saveBathyBatch,
   fetchBathyImports,
   clearBathyImports,
-  fetchBathyPoints
+  fetchBathyPoints,
+  fetchCatches,
+  saveCatch,
+  deleteCatch
 } from "./db.js?v=20250715";
 import { uid, distanceM, escapeHtml } from "./helpers.js?v=20250715";
 import { t } from "./i18n.js?v=20250715";
@@ -49,6 +52,7 @@ let importProcessed = 0;
 let importHistory = [];
 let serverImports = [];
 let serverImportSummary = { batches: 0, points: 0 };
+let catchFormEls = {};
 const importEntryMap = new WeakMap();
 let currentImportName = null;
 let waterDrawActive = false;
@@ -568,6 +572,23 @@ function bindEvents() {
       }
     });
   });
+
+  catchFormEls = {
+    form: document.getElementById("catchForm"),
+    stek: document.getElementById("catchStek"),
+    rig: document.getElementById("catchRig"),
+    weightKg: document.getElementById("catchWeightKg"),
+    weightLbs: document.getElementById("catchWeightLbs"),
+    length: document.getElementById("catchLength"),
+    notes: document.getElementById("catchNotes"),
+    photo: document.getElementById("catchPhoto"),
+    reset: document.getElementById("btnResetCatch"),
+    selectionLabel: document.getElementById("catchSelectionLabel"),
+    list: document.getElementById("catchList")
+  };
+  bindCatchForm();
+
+  document.addEventListener("vislok:focus-catch-form", e => focusCatchForm(e.detail));
 
   setInterval(populateTables, 10000);
   setInterval(autoSave, 60000);
@@ -2414,6 +2435,11 @@ function syncWithServer(pushLocal) {
         mergeServerData(spots);
         setStatus(`${t("status_sync_done", "Lokale opslag geladen")} (${spots.length})`, "ok");
       }
+      if (Array.isArray(catches)) {
+        state.catches = catches;
+        updateCatchList();
+        saveState();
+      }
 
       if (!pushLocal) return;
       const all = [...state.waters, ...state.stekken, ...state.rigs];
@@ -2475,6 +2501,7 @@ function resetServerData() {
       state.waters = [];
       state.stekken = [];
       state.rigs = [];
+      state.catches = [];
       state.imports = [];
       state.importsMeta = { stored: 0, total: 0 };
       saveState();
@@ -2631,6 +2658,73 @@ function ensureManageUI() {
   });
 }
 
+async function readPhotoInput(input) {
+  if (!input?.files?.length) return null;
+  const file = input.files[0];
+  return new Promise(resolve => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => resolve(null);
+    reader.readAsDataURL(file);
+  });
+}
+
+async function handleCatchSubmit(e) {
+  e.preventDefault();
+  if (!catchFormEls.form) return;
+  const stekId = catchFormEls.stek?.value || "";
+  let rigId = catchFormEls.rig?.value || "";
+  if (rigId && !stekId) {
+    const rig = findSpot("rig", rigId);
+    if (rig?.stekId) {
+      catchFormEls.stek.value = rig.stekId;
+    }
+  }
+  const finalStek = catchFormEls.stek?.value || "";
+  if (!finalStek) {
+    setStatus(t("error_stek_required", "Kies eerst een stek"), "error");
+    return;
+  }
+  const payload = {
+    stekId: finalStek,
+    rigId: rigId || null,
+    waterId: findSpot("stek", finalStek)?.waterId || null,
+    weightKg: parseFloat(catchFormEls.weightKg?.value || ""),
+    weightLbs: parseFloat(catchFormEls.weightLbs?.value || ""),
+    lengthCm: parseFloat(catchFormEls.length?.value || ""),
+    notes: catchFormEls.notes?.value || "",
+    caughtAt: new Date().toISOString().slice(0, 19).replace('T', ' ')
+  };
+  if (!Number.isFinite(payload.weightKg)) payload.weightKg = null;
+  if (!Number.isFinite(payload.weightLbs)) payload.weightLbs = null;
+  if (!Number.isFinite(payload.lengthCm)) payload.lengthCm = null;
+  payload.photo = await readPhotoInput(catchFormEls.photo);
+
+  return saveCatch(payload)
+    .then(saved => {
+      upsertCatch(saved);
+      resetCatchForm();
+      updateCatchList();
+      setStatus(t("status_catch_saved", "Vangst opgeslagen"), "ok");
+    })
+    .catch(err => {
+      console.warn("Catch save failed", err);
+      setStatus(t("status_catch_save_error", "Vangst opslaan mislukt"), "error");
+    });
+}
+
+function upsertCatch(entry) {
+  if (!entry) return;
+  if (!state.catches) state.catches = [];
+  const idx = state.catches.findIndex(c => c.id === entry.id);
+  if (idx >= 0) {
+    state.catches[idx] = { ...state.catches[idx], ...entry };
+  } else {
+    state.catches.push(entry);
+  }
+  saveState();
+}
+
 function updateManageTable() {
   const container = document.getElementById("manageTabs");
   const table = container?.querySelector("#manageTable tbody");
@@ -2755,6 +2849,108 @@ function buildLinkCell(item, type) {
     `;
   }
   return "";
+}
+
+function renderCatchSelects(selectedStek, selectedRig) {
+  if (!catchFormEls.stek || !catchFormEls.rig) return;
+  catchFormEls.stek.innerHTML = renderStekOptions(selectedStek || "");
+  const rigOptions = [`<option value="">${t("option_unlinked", "(geen)")}</option>`];
+  [...(state.rigs || [])]
+    .sort((a, b) => (a?.name || "").localeCompare(b?.name || ""))
+    .forEach(rig => {
+      const selected = rig.id === selectedRig ? " selected" : "";
+      rigOptions.push(`<option value="${escapeHtml(rig.id)}"${selected}>${escapeHtml(rig.name || rig.id)}</option>`);
+    });
+  catchFormEls.rig.innerHTML = rigOptions.join("");
+}
+
+function bindCatchForm() {
+  if (!catchFormEls.form) return;
+  renderCatchSelects();
+  updateCatchList();
+  catchFormEls.form.addEventListener("submit", handleCatchSubmit);
+  catchFormEls.reset?.addEventListener("click", resetCatchForm);
+  catchFormEls.stek?.addEventListener("change", updateCatchSelectionLabel);
+  catchFormEls.rig?.addEventListener("change", () => {
+    const rigId = catchFormEls.rig.value;
+    if (rigId) {
+      const rig = findSpot("rig", rigId);
+      if (rig?.stekId && catchFormEls.stek) catchFormEls.stek.value = rig.stekId;
+    }
+    updateCatchSelectionLabel();
+  });
+  const syncWeights = (source, target, factor) => {
+    source?.addEventListener("input", () => {
+      const val = parseFloat(source.value);
+      if (!Number.isFinite(val)) {
+        target.value = "";
+        return;
+      }
+      target.value = (val * factor).toFixed(1);
+    });
+  };
+  syncWeights(catchFormEls.weightKg, catchFormEls.weightLbs, 2.20462);
+  syncWeights(catchFormEls.weightLbs, catchFormEls.weightKg, 0.453592);
+}
+
+function focusCatchForm(detail = {}) {
+  if (!catchFormEls.form) return;
+  renderCatchSelects(detail.stekId, detail.rigId);
+  if (detail.stekId && catchFormEls.stek) catchFormEls.stek.value = detail.stekId;
+  if (detail.rigId && catchFormEls.rig) catchFormEls.rig.value = detail.rigId;
+  updateCatchSelectionLabel();
+  if (detail.scroll) catchFormEls.form.scrollIntoView({ behavior: "smooth" });
+}
+
+function resetCatchForm() {
+  if (!catchFormEls.form) return;
+  catchFormEls.form.reset();
+  renderCatchSelects();
+  updateCatchSelectionLabel();
+}
+
+function updateCatchSelectionLabel() {
+  if (!catchFormEls.selectionLabel) return;
+  const stekId = catchFormEls.stek?.value || "";
+  const rigId = catchFormEls.rig?.value || "";
+  const stek = stekId ? findSpot("stek", stekId) : null;
+  const rig = rigId ? findSpot("rig", rigId) : null;
+  if (rig && !stek && rig.stekId) {
+    const parent = findSpot("stek", rig.stekId);
+    if (parent) {
+      catchFormEls.stek.value = parent.id;
+    }
+  }
+  const label = rig
+    ? t("catch_selected_rig", "Rig: {rig} (stek {stek})")
+        .replace("{rig}", rig.name || rig.id)
+        .replace("{stek}", (stek || findSpot("stek", rig?.stekId || ""))?.name || "-")
+    : stek
+    ? t("catch_selected_stek", "Stek: {stek}").replace("{stek}", stek.name || stek.id)
+    : t("catch_selection_placeholder", "Kies een stek of rig om een vangst vast te leggen.");
+  catchFormEls.selectionLabel.textContent = label;
+}
+
+function updateCatchList() {
+  const listEl = catchFormEls.list;
+  if (!listEl) return;
+  if (!state.catches?.length) {
+    listEl.textContent = t("catch_list_empty", "Nog geen vangsten.");
+    return;
+  }
+  const rows = state.catches
+    .slice()
+    .sort((a, b) => (b.caught_at || b.created_at || "").localeCompare(a.caught_at || a.created_at || ""))
+    .map(c => {
+      const stek = findSpot("stek", c.stek_id || "");
+      const rig = findSpot("rig", c.rig_id || "");
+      const name = rig?.name || stek?.name || c.stek_id || c.rig_id || c.id;
+      const weight = Number.isFinite(c.weight_kg)
+        ? `${c.weight_kg.toFixed(1)} kg / ${(c.weight_lbs ?? 0).toFixed(1)} lbs`
+        : "-";
+      return `<div class="catch-row"><strong>${escapeHtml(name || "-" )}</strong> – ${weight}</div>`;
+    });
+  listEl.innerHTML = rows.join("");
 }
 
 function reassignStekWater(id, waterId) {

@@ -124,6 +124,43 @@
         </div>
       </details>
 
+      <details data-panel="catches" class="ui-panel" open>
+        <summary data-i18n="tab_catches">🎣 Vangsten</summary>
+        <div class="group">
+          <div id="catchSelectionLabel" class="panel-note" data-i18n="catch_selection_placeholder">
+            Kies een stek of rig om een vangst vast te leggen.
+          </div>
+        </div>
+        <form id="catchForm" class="group catch-form">
+          <label data-i18n="label_catch_stek">Stek
+            <select id="catchStek"></select>
+          </label>
+          <label data-i18n="label_catch_rig">Rig
+            <select id="catchRig"></select>
+          </label>
+          <label data-i18n="label_catch_weight_kg">Gewicht (kg)
+            <input type="number" id="catchWeightKg" step="0.1" min="0" />
+          </label>
+          <label data-i18n="label_catch_weight_lbs">Gewicht (lbs)
+            <input type="number" id="catchWeightLbs" step="0.1" min="0" />
+          </label>
+          <label data-i18n="label_catch_length">Lengte (cm)
+            <input type="number" id="catchLength" step="1" min="0" />
+          </label>
+          <label data-i18n="label_catch_notes">Notities
+            <textarea id="catchNotes" rows="2"></textarea>
+          </label>
+          <label data-i18n="label_catch_photo">Foto
+            <input type="file" id="catchPhoto" accept="image/*" />
+          </label>
+          <div class="catch-actions">
+            <button type="submit" id="btnSaveCatch" data-i18n="btn_save_catch">💾 Opslaan</button>
+            <button type="button" id="btnResetCatch" data-i18n="btn_reset_catch">♻️ Reset</button>
+          </div>
+        </form>
+        <div id="catchList" class="panel-note" data-i18n="catch_list_empty">Nog geen vangsten.</div>
+      </details>
+
       <details data-panel="data" class="ui-panel" open>
         <summary data-i18n="tab_data">🌊 Data &amp; detectie</summary>
         <h4 class="group-title" data-i18n="group_import_heading">Imports</h4>
