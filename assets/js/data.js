@@ -601,12 +601,31 @@ function bindEvents() {
   catchRigSelect?.addEventListener("change", () => {
     const current = catchRigSelect.value || "";
     catchRigSelect.dataset.selectedRig = current;
-    if (!current) return;
-    const rig = (state.rigs || []).find(item => item.id === current);
-    if (rig) {
-      const message = t("catch_hint_selected_rig", "Rig {name} geselecteerd. Vul de velden in.")
-        .replace("{name}", rig.name || rig.id);
-      setCatchStatus("catch_hint_selected_rig", message, "info");
+    if (current) {
+      const parentStek = resolveStekForRig(current);
+      if (parentStek && catchStekSelect) {
+        catchStekSelect.dataset.selectedStek = parentStek;
+        catchStekSelect.value = parentStek;
+        updateCatchStekOptions(parentStek, current);
+        return;
+      }
+      const rig = (state.rigs || []).find(item => item.id === current);
+      if (rig) {
+        const message = t("catch_hint_selected_rig", "Rig {name} geselecteerd. Vul de velden in.")
+          .replace("{name}", rig.name || rig.id);
+        setCatchStatus("catch_hint_selected_rig", message, "info");
+      }
+    } else if (catchStekSelect?.value) {
+      const stek = (state.stekken || []).find(item => item.id === catchStekSelect.value);
+      const message = t("catch_hint_selected", "Stek {name} geselecteerd. Vul de velden in.")
+        .replace("{name}", stek?.name || stek?.id || "stek");
+      setCatchStatus("catch_hint_selected", message, "info");
+    } else {
+      setCatchStatus(
+        "catch_hint_ready",
+        t("catch_hint_ready", "Selecteer een stek (en eventueel een rig) en vul de velden in."),
+        "info"
+      );
     }
   });
 
@@ -2500,6 +2519,14 @@ function handleCatchPhotoSelect(e) {
 function addCatchFromForm() {
   const stekSelect = document.getElementById("catchStekSelect");
   const rigSelect = document.getElementById("catchRigSelect");
+  if (!stekSelect?.value && rigSelect?.value) {
+    const parent = resolveStekForRig(rigSelect.value);
+    if (parent) {
+      stekSelect.value = parent;
+      stekSelect.dataset.selectedStek = parent;
+      updateCatchRigOptions(parent, rigSelect.value);
+    }
+  }
   if (!stekSelect || !stekSelect.value) {
     setCatchStatus("catch_error_stek", "Kies eerst een stek", "error");
     return;
@@ -2576,8 +2603,17 @@ function setCatchStatus(key, fallback, type = "info") {
   }
 }
 
+function resolveStekForRig(rigId) {
+  if (!rigId) return "";
+  const rig = (state.rigs || []).find(item => item.id === rigId);
+  return rig?.stekId || rig?.stek_id || "";
+}
+
 function focusCatchForm(options = {}) {
-  const { stekId = "", rigId = "", scroll = false, highlight = false } = options || {};
+  let { stekId = "", rigId = "", scroll = false, highlight = false } = options || {};
+  if (!stekId && rigId) {
+    stekId = resolveStekForRig(rigId) || stekId;
+  }
   const panel = document.querySelector('details[data-panel="catches"]');
   if (panel) {
     panel.open = true;
@@ -2656,6 +2692,9 @@ function updateCatchStekOptions(preferredStek, preferredRig) {
   let desired = select.dataset.selectedStek || select.value || "";
   if (preferredStek !== undefined) {
     desired = preferredStek || "";
+  }
+  if (!desired && preferredRig) {
+    desired = resolveStekForRig(preferredRig) || "";
   }
 
   select.innerHTML = "";
