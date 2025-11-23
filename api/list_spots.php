@@ -1,17 +1,47 @@
 <?php
-require_once __DIR__ . '/db.php';
+require __DIR__ . '/db.php';
 
 try {
-    $pdo = vislok_get_connection();
-    $stmt = $pdo->query('SELECT id, type, name, lat, lng, val, note, polygon, water_id, stek_id, created_at FROM spots ORDER BY created_at DESC');
-    $rows = $stmt->fetchAll();
-    foreach ($rows as &$row) {
-        if (isset($row['polygon'])) {
-            $decoded = json_decode($row['polygon'], true);
-            $row['polygon'] = $decoded ?: null;
-        }
+    $pdo = vislok_bootstrap();
+    $waters = $pdo->query('SELECT id, name, lat, lng, polygon, val, depth_stats FROM waters')->fetchAll();
+    $stekken = $pdo->query('SELECT id, water_id, name, lat, lng FROM stekken')->fetchAll();
+    $rigs = $pdo->query('SELECT id, stek_id, name, lat, lng FROM rigs')->fetchAll();
+
+    $result = [];
+    foreach ($waters as $row) {
+        $result[] = [
+            'id' => $row['id'],
+            'type' => 'water',
+            'name' => $row['name'],
+            'lat' => (float)$row['lat'],
+            'lng' => (float)$row['lng'],
+            'polygon' => $row['polygon'] ? json_decode($row['polygon'], true) : null,
+            'val' => $row['val'] !== null ? (float)$row['val'] : null,
+            'depthStats' => $row['depth_stats'] ? json_decode($row['depth_stats'], true) : null,
+        ];
     }
-    vislok_json_response(['data' => $rows]);
+    foreach ($stekken as $row) {
+        $result[] = [
+            'id' => $row['id'],
+            'type' => 'stek',
+            'waterId' => $row['water_id'],
+            'name' => $row['name'],
+            'lat' => (float)$row['lat'],
+            'lng' => (float)$row['lng'],
+        ];
+    }
+    foreach ($rigs as $row) {
+        $result[] = [
+            'id' => $row['id'],
+            'type' => 'rig',
+            'stekId' => $row['stek_id'],
+            'name' => $row['name'],
+            'lat' => (float)$row['lat'],
+            'lng' => (float)$row['lng'],
+        ];
+    }
+
+    vislok_json_response(['spots' => $result]);
 } catch (Throwable $e) {
-    vislok_json_response(['error' => $e->getMessage()], 500);
+    vislok_error('Spots ophalen mislukt', 500, ['detail' => $e->getMessage()]);
 }

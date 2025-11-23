@@ -4,8 +4,8 @@
    Versie: 0.0.0
    ======================================================= */
 
-import { setStatus, log, state, saveState } from "./core.js?v=20250611";
-import { t } from "./i18n.js?v=20250611";
+import { setStatus, log, state, saveState } from "./core.js?v=20250715";
+import { t } from "./i18n.js?v=20250715";
 
 let map;
 let windLayer = L.layerGroup();

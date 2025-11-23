@@ -1,53 +1,36 @@
 <?php
-require_once __DIR__ . '/db.php';
+require __DIR__ . '/db.php';
+
+$bounds = [
+    'south' => isset($_GET['south']) ? (float)$_GET['south'] : null,
+    'north' => isset($_GET['north']) ? (float)$_GET['north'] : null,
+    'west' => isset($_GET['west']) ? (float)$_GET['west'] : null,
+    'east' => isset($_GET['east']) ? (float)$_GET['east'] : null,
+];
 
 try {
-    $data = vislok_read_json();
-    $south = isset($data['south']) ? (float)$data['south'] : null;
-    $west = isset($data['west']) ? (float)$data['west'] : null;
-    $north = isset($data['north']) ? (float)$data['north'] : null;
-    $east = isset($data['east']) ? (float)$data['east'] : null;
-
-    if (!is_finite($south) || !is_finite($west) || !is_finite($north) || !is_finite($east)) {
-        vislok_json_response(['error' => 'Ongeldige grenzen'], 400);
+    $pdo = vislok_bootstrap();
+    $hasBounds = $bounds['south'] !== null && $bounds['north'] !== null && $bounds['west'] !== null && $bounds['east'] !== null;
+    if ($hasBounds) {
+        $stmt = $pdo->prepare('SELECT lat, lng, val FROM bathy_points WHERE lat BETWEEN :south AND :north AND lng BETWEEN :west AND :east');
+        $stmt->execute([
+            ':south' => $bounds['south'],
+            ':north' => $bounds['north'],
+            ':west' => $bounds['west'],
+            ':east' => $bounds['east'],
+        ]);
+    } else {
+        $stmt = $pdo->query('SELECT lat, lng, val FROM bathy_points LIMIT 5000');
     }
-
-    if ($south > $north) {
-        [$south, $north] = [$north, $south];
-    }
-    if ($west > $east) {
-        [$west, $east] = [$east, $west];
-    }
-
-    $pdo = vislok_get_connection();
-    $sql = 'SELECT lat, lng, depth FROM bathy_points WHERE lat BETWEEN :south AND :north AND lng BETWEEN :west AND :east';
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute([
-        ':south' => $south,
-        ':north' => $north,
-        ':west' => $west,
-        ':east' => $east,
-    ]);
-
-    $points = [];
-    while ($row = $stmt->fetch()) {
-        $points[] = [
-            'lat' => isset($row['lat']) ? (float)$row['lat'] : null,
-            'lng' => isset($row['lng']) ? (float)$row['lng'] : null,
-            'depth' => isset($row['depth']) ? (float)$row['depth'] : null,
+    $points = array_map(function ($row) {
+        return [
+            'lat' => (float)$row['lat'],
+            'lng' => (float)$row['lng'],
+            'val' => $row['val'] !== null ? (float)$row['val'] : null,
         ];
-    }
+    }, $stmt->fetchAll());
 
-    vislok_json_response([
-        'points' => $points,
-        'count' => count($points),
-        'bounds' => [
-            'south' => $south,
-            'west' => $west,
-            'north' => $north,
-            'east' => $east,
-        ],
-    ]);
+    vislok_json_response(['points' => $points]);
 } catch (Throwable $e) {
-    vislok_json_response(['error' => $e->getMessage()], 500);
+    vislok_error('Importpunten ophalen mislukt', 500, ['detail' => $e->getMessage()]);
 }
