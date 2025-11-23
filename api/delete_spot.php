@@ -1,15 +1,30 @@
 <?php
-require_once __DIR__ . '/db.php';
+require __DIR__ . '/db.php';
+
+$input = vislok_json_input();
+$id = $input['id'] ?? null;
+$type = $input['type'] ?? null;
+if (!$id || !$type) {
+    vislok_error('ID of type ontbreekt', 400);
+}
 
 try {
-    $data = vislok_read_json();
-    if (empty($data['id'])) {
-        vislok_json_response(['error' => 'ID vereist'], 400);
+    $pdo = vislok_bootstrap();
+    switch ($type) {
+        case 'water':
+            $stmt = $pdo->prepare('DELETE FROM waters WHERE id = :id');
+            break;
+        case 'stek':
+            $stmt = $pdo->prepare('DELETE FROM stekken WHERE id = :id');
+            break;
+        case 'rig':
+            $stmt = $pdo->prepare('DELETE FROM rigs WHERE id = :id');
+            break;
+        default:
+            vislok_error('Onbekend spottype', 400);
     }
-    $pdo = vislok_get_connection();
-    $stmt = $pdo->prepare('DELETE FROM spots WHERE id = :id');
-    $stmt->execute([':id' => $data['id']]);
-    vislok_json_response(['status' => 'ok']);
+    $stmt->execute([':id' => $id]);
+    vislok_json_response(['ok' => true]);
 } catch (Throwable $e) {
-    vislok_json_response(['error' => $e->getMessage()], 500);
+    vislok_error('Spot verwijderen mislukt', 500, ['detail' => $e->getMessage()]);
 }

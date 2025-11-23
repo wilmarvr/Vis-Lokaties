@@ -4,38 +4,66 @@
    Versie: 0.0.0
    ======================================================= */
 
-import { setStatus, state, saveState, loadVersionInfo } from "./core.js?v=20250611";
-import { t } from "./i18n.js?v=20250611";
-import { escapeHtml } from "./helpers.js?v=20250611";
+import { setStatus, state, saveState, loadVersionInfo, applyVersionInfo } from "./core.js?v=20250715";
+import { t } from "./i18n.js?v=20250715";
+import { escapeHtml } from "./helpers.js?v=20250715";
 
 const FEATURE_DEFAULTS = {
   showData: true,
   showWeather: true,
   showContours: true,
-  showCatches: true,
   showManage: true,
   showOverview: true,
   showChangelog: true,
   allowManualWater: true,
   autoLink: true,
-  toolbarDrag: true
+  toolbarDrag: true,
+  cluster: true,
+  showImports: false,
+  saveBathy: true,
+  autoSync: true,
+  heatmapInvert: false,
+  heatmapClamp: false
+};
+
+const SETTING_DEFAULTS = {
+  detectionRadius: 200,
+  maxEdge: 60,
+  heatmapRadius: 25,
+  heatmapBlur: 15,
+  heatmapMin: 0,
+  heatmapMax: 10
+};
+
+const DB_DEFAULTS = {
+  host: "127.0.0.1",
+  port: 3306,
+  database: "vislok",
+  user: "vislok_app",
+  pass: "vislok_app",
+  admin_user: "root",
+  admin_pass: ""
 };
 
 function initAdmin() {
   const form = document.getElementById("adminConfigForm");
+  const dbForm = document.getElementById("adminDbForm");
   const versionForm = document.getElementById("adminVersionForm");
-  if (!form && !versionForm) return;
+  if (!form && !dbForm && !versionForm) return;
 
-  const host = document.getElementById("adminDbHost");
-  const port = document.getElementById("adminDbPort");
-  const name = document.getElementById("adminDbName");
-  const user = document.getElementById("adminDbUser");
-  const pass = document.getElementById("adminDbPass");
   const statusEl = document.getElementById("adminStatus");
-  const btnTest = document.getElementById("btnAdminTest");
-  const autoSync = document.getElementById("adminAutoSync");
-  const autoBathy = document.getElementById("adminForceBathy");
+  const dbStatusEl = document.getElementById("adminDbStatus");
   const optionInputs = Array.from(document.querySelectorAll("[data-option]"));
+  const settingInputs = Array.from(document.querySelectorAll("[data-setting]"));
+
+  const dbHost = document.getElementById("adminDbHost");
+  const dbPort = document.getElementById("adminDbPort");
+  const dbName = document.getElementById("adminDbName");
+  const dbUser = document.getElementById("adminDbUser");
+  const dbPass = document.getElementById("adminDbPass");
+  const dbAdminUser = document.getElementById("adminDbAdminUser");
+  const dbAdminPass = document.getElementById("adminDbAdminPass");
+  const btnDbTest = document.getElementById("btnDbTest");
 
   const versionCurrent = document.getElementById("adminVersionCurrent");
   const versionDate = document.getElementById("adminVersionDate");
@@ -54,6 +82,16 @@ function initAdmin() {
       if (type === "ok" || type === "success") statusEl.classList.add("success");
     }
     setStatus(message, type === "error" ? "error" : type === "success" || type === "ok" ? "ok" : "info");
+  }
+
+  function setDbMessage(key, fallback, type = "info") {
+    if (!dbStatusEl) return;
+    const message = t(key, fallback);
+    dbStatusEl.textContent = message;
+    dbStatusEl.classList.remove("error", "success");
+    if (type === "error") dbStatusEl.classList.add("error");
+    if (type === "ok" || type === "success") dbStatusEl.classList.add("success");
+    if (type === "error") setStatus(message, "error");
   }
 
   function setVersionMessage(key, fallback, type = "info") {
@@ -155,6 +193,17 @@ function initAdmin() {
     return values;
   }
 
+  function readSettings() {
+    const values = { ...SETTING_DEFAULTS };
+    settingInputs.forEach(input => {
+      const key = input.dataset.setting;
+      if (!key) return;
+      const parsed = parseFloat(input.value);
+      values[key] = Number.isFinite(parsed) ? parsed : SETTING_DEFAULTS[key];
+    });
+    return values;
+  }
+
   function applyOptions(options = {}) {
     const normalized = { ...FEATURE_DEFAULTS, ...(options || {}) };
     optionInputs.forEach(input => {
@@ -169,193 +218,187 @@ function initAdmin() {
     saveState();
   }
 
+  function applySettings(settings = {}) {
+    const normalized = { ...SETTING_DEFAULTS, ...(settings || {}) };
+    settingInputs.forEach(input => {
+      const key = input.dataset.setting;
+      if (!key) return;
+      const value = normalized[key];
+      if (input.type === "number") {
+        input.value = value;
+      }
+    });
+    if (!state.settings) state.settings = {};
+    Object.keys(SETTING_DEFAULTS).forEach(key => {
+      const val = normalized[key];
+      state.settings[key] = Number.isFinite(val) ? val : SETTING_DEFAULTS[key];
+    });
+    saveState();
+  }
+
+  function applyDbConfig(cfg = {}) {
+    const normalized = { ...DB_DEFAULTS, ...(cfg || {}) };
+    if (dbHost) dbHost.value = normalized.host || "";
+    if (dbPort) dbPort.value = normalized.port || 3306;
+    if (dbName) dbName.value = normalized.database || "vislok";
+    if (dbUser) dbUser.value = normalized.user || "";
+    if (dbPass) dbPass.value = normalized.pass || "";
+    if (dbAdminUser) dbAdminUser.value = normalized.admin_user || "";
+    if (dbAdminPass) dbAdminPass.value = normalized.admin_pass || "";
+  }
+
+  function readDbConfig() {
+    return {
+      host: dbHost?.value?.trim() || DB_DEFAULTS.host,
+      port: Number.parseInt(dbPort?.value, 10) || DB_DEFAULTS.port,
+      database: dbName?.value?.trim() || DB_DEFAULTS.database,
+      user: dbUser?.value?.trim() || DB_DEFAULTS.user,
+      pass: dbPass?.value || DB_DEFAULTS.pass,
+      admin_user: dbAdminUser?.value?.trim() || DB_DEFAULTS.admin_user,
+      admin_pass: dbAdminPass?.value || DB_DEFAULTS.admin_pass,
+    };
+  }
+
+  async function loadDbConfig() {
+    if (!dbForm) return;
+    try {
+      const res = await fetch("api/get_config.php");
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || res.statusText);
+      applyDbConfig(data.config || {});
+      setDbMessage("admin_db_loaded", "Databaseconfiguratie geladen", "ok");
+    } catch (err) {
+      setDbMessage("admin_db_load_fail", `Config laden mislukt: ${err.message}`, "error");
+      applyDbConfig();
+    }
+  }
+
   function readFormConfig() {
     return {
-      host: host?.value?.trim() || "",
-      port: port?.value?.trim() || "",
-      name: name?.value?.trim() || "",
-      user: user?.value?.trim() || "",
-      pass: pass?.value || "",
-      options: readOptions()
+      options: readOptions(),
+      settings: readSettings()
     };
   }
 
   function applyConfig(config = {}) {
-    if (host) host.value = config.host || "";
-    if (port) port.value = config.port || "";
-    if (name) name.value = config.name || "";
-    if (user) user.value = config.user || "";
-    if (pass) pass.value = "";
     if (config.options) {
       applyOptions(config.options);
     } else {
       applyOptions();
     }
+    if (config.settings) {
+      applySettings(config.settings);
+    } else {
+      applySettings();
+    }
   }
 
   function loadConfig() {
     if (!form) return;
-    fetch("api/get_config.php")
-      .then(response => {
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        return response.json();
-      })
-      .then(data => {
-        if (data?.config) {
-          applyConfig(data.config);
-          setPanelMessage("admin_status_loaded", "Configuratie geladen", "ok");
-        } else {
-          throw new Error("config ontbreekt");
-        }
-      })
-      .catch(err => {
-        console.error("Admin config laden mislukt", err);
-        setPanelMessage("admin_status_error", "Configuratie kon niet worden geladen", "error");
-      });
+    applyConfig({ options: state.settings || FEATURE_DEFAULTS, settings: state.settings || SETTING_DEFAULTS });
+    setPanelMessage("admin_status_loaded", "Configuratie geladen", "ok");
   }
 
-  if (form) {
-    optionInputs.forEach(input => {
-      input.addEventListener("change", () => {
-        const key = input.dataset.option;
-        const checked = input.checked;
-        if (key) {
-          if (!state.settings) state.settings = {};
-          state.settings[key] = checked;
-          saveState();
-        }
-        setPanelMessage(
-          "admin_status_option_changed",
-          "Opties bijgewerkt. Klik Opslaan om te bewaren.",
-          "info"
-        );
-      });
-    });
-
-    form.addEventListener("submit", e => {
-      e.preventDefault();
-      const payload = readFormConfig();
-      setPanelMessage("admin_status_saving", "Configuratie opslaan...", "info");
-      fetch("api/save_config.php", {
+  async function saveDbConfig(event) {
+    if (event) event.preventDefault();
+    if (!dbForm) return;
+    const cfg = readDbConfig();
+    try {
+      const res = await fetch("api/save_config.php", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      })
-        .then(response => {
-          if (!response.ok) return response.json().then(err => Promise.reject(err));
-          return response.json();
-        })
-        .then(result => {
-          if (result?.config) {
-            applyConfig(result.config);
-            setPanelMessage("admin_status_saved", "Configuratie opgeslagen", "ok");
-            if (autoSync?.checked) {
-              triggerSync().catch(err => console.warn("Auto-sync na opslaan mislukt", err));
-            }
-          } else {
-            throw new Error("config ontbreekt");
+        body: JSON.stringify(cfg)
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.detail || data?.error || res.statusText);
+      applyDbConfig(data.config || cfg);
+      setDbMessage("admin_db_saved", "Databaseconfiguratie opgeslagen en toegepast", "success");
+    } catch (err) {
+      setDbMessage("admin_db_save_fail", `Opslaan mislukt: ${err.message}`, "error");
+    }
+  }
+
+  async function testDbConfig(event) {
+    if (event) event.preventDefault();
+    if (!dbForm) return;
+    const cfg = readDbConfig();
+    try {
+      const res = await fetch("api/test_connection.php", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ config: cfg })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.detail || data?.error || res.statusText);
+      setDbMessage("admin_db_test_ok", "Verbinding en schema in orde", "success");
+    } catch (err) {
+      setDbMessage("admin_db_test_fail", `Verbinding faalde: ${err.message}`, "error");
+    }
+  }
+
+    if (dbForm) {
+      loadDbConfig();
+      dbForm.addEventListener("submit", saveDbConfig);
+      if (btnDbTest) btnDbTest.addEventListener("click", testDbConfig);
+    }
+
+    if (form) {
+      optionInputs.forEach(input => {
+        input.addEventListener("change", () => {
+          const key = input.dataset.option;
+          const checked = input.checked;
+          if (key) {
+            if (!state.settings) state.settings = {};
+            state.settings[key] = checked;
+            saveState();
           }
-        })
-        .catch(err => {
-          console.error("Configuratie opslaan mislukt", err);
-          const msg = err?.error || err?.message || "Onbekende fout";
-          setPanelMessage("admin_status_save_error", msg, "error");
-        });
-    });
-
-    btnTest?.addEventListener("click", () => {
-      const payload = readFormConfig();
-      setPanelMessage("admin_status_testing", "Verbinding testen...", "info");
-      fetch("api/test_connection.php", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      })
-        .then(response => {
-          if (!response.ok) return response.json().then(err => Promise.reject(err));
-          return response.json();
-        })
-        .then(() => {
-          setPanelMessage("admin_status_test_ok", "Verbinding geslaagd", "ok");
-        })
-        .catch(err => {
-          console.error("Verbindingstest mislukt", err);
-          const msg = err?.error || err?.message || "Onbekende fout";
-          setPanelMessage("admin_status_test_error", msg, "error");
-        });
-    });
-
-    if (autoSync) {
-      autoSync.checked = state.settings?.autoSync !== false;
-      autoSync.addEventListener("change", () => {
-        state.settings.autoSync = autoSync.checked;
-        saveState();
-        const key = autoSync.checked ? "admin_status_auto_sync_on" : "admin_status_auto_sync_off";
-        const fallback = autoSync.checked ? "Auto-sync geactiveerd" : "Auto-sync gedeactiveerd";
-        setPanelMessage(key, fallback, autoSync.checked ? "ok" : "warning");
-        if (autoSync.checked) {
-          triggerSync().catch(err => console.warn("Auto-sync activatie faalde", err));
-        }
-      });
-    }
-
-    if (autoBathy) {
-      autoBathy.checked = state.settings?.saveBathy !== false;
-      autoBathy.addEventListener("change", () => {
-        const enabled = !!autoBathy.checked;
-        state.settings.saveBathy = enabled;
-        saveState();
-        const dataCheckbox = document.getElementById("saveBathy");
-        if (dataCheckbox && dataCheckbox.checked !== enabled) {
-          dataCheckbox.checked = enabled;
-          dataCheckbox.dispatchEvent(new Event("change"));
-        } else {
-          const key = enabled ? "status_bathy_db_enabled" : "status_bathy_db_disabled";
-          setStatus(
-            t(
-              key,
-              enabled
-                ? "Nieuwe imports worden in de database opgeslagen"
-                : "Nieuwe imports worden alleen lokaal opgeslagen"
-            ),
-            enabled ? "info" : "warning"
+          setPanelMessage(
+            "admin_status_option_changed",
+            "Opties bijgewerkt. Klik Opslaan om te bewaren.",
+            "info"
           );
-        }
-        const key = enabled ? "admin_status_auto_bathy_on" : "admin_status_auto_bathy_off";
-        const fallback = enabled
-          ? "Bathymetrie wordt nu standaard opgeslagen in de database"
-          : "Bathymetrie wordt niet meer automatisch opgeslagen in de database";
-        setPanelMessage(key, fallback, enabled ? "ok" : "warning");
+        });
       });
-    }
 
-    loadConfig();
-  }
+      settingInputs.forEach(input => {
+        input.addEventListener("change", () => {
+          const key = input.dataset.setting;
+          if (!key) return;
+          const val = parseFloat(input.value);
+          const normalized = Number.isFinite(val) ? val : SETTING_DEFAULTS[key];
+          if (!state.settings) state.settings = {};
+          state.settings[key] = normalized;
+          saveState();
+          setPanelMessage(
+            "admin_status_option_changed",
+            "Opties bijgewerkt. Klik Opslaan om te bewaren.",
+            "info"
+          );
+        });
+      });
+
+      form.addEventListener("submit", e => {
+        e.preventDefault();
+        const payload = readFormConfig();
+        applyConfig(payload);
+        setPanelMessage("admin_status_saved", "Configuratie opgeslagen", "ok");
+      });
+
+      setPanelMessage("admin_status_test_ok", "Lokale opslag actief", "ok");
+
+      loadConfig();
+    }
 
   if (versionForm) {
     versionForm.addEventListener("submit", e => {
       e.preventDefault();
       const { payload } = buildVersionPayload();
       setVersionMessage("admin_version_saving", "Versie opslaan...", "info");
-      fetch("api/save_version.php", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      })
-        .then(response => {
-          if (!response.ok) return response.json().then(err => Promise.reject(err));
-          return response.json();
-        })
-        .then(() => loadVersionInfo(true))
-        .then(() => {
-          refreshVersionForm();
-          setVersionMessage("admin_version_saved", "Versiedetails opgeslagen", "ok");
-        })
-        .catch(err => {
-          console.error("Versiegegevens opslaan mislukt", err);
-          const msg = err?.error || err?.message || "Onbekende fout";
-          setVersionMessage("admin_version_error", msg, "error");
-        });
+      state.version = payload;
+      saveState();
+      applyVersionInfo(state.version);
+      refreshVersionForm();
+      setVersionMessage("admin_version_saved", "Versiedetails opgeslagen", "ok");
     });
   }
 
@@ -369,14 +412,6 @@ function initAdmin() {
       console.error("Versiegegevens laden mislukt", err);
       setVersionMessage("admin_version_error", "Versiegegevens konden niet worden geladen", "error");
     });
-}
-
-function triggerSync() {
-  const syncFn = window.VisLokData?.forceServerSync;
-  if (typeof syncFn === "function") {
-    return syncFn(true);
-  }
-  return Promise.resolve();
 }
 
 document.addEventListener("DOMContentLoaded", initAdmin);

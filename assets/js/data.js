@@ -10,8 +10,8 @@ import {
   state,
   saveState,
   loadState
-} from "./core.js?v=20250611";
-import { updateOverview, applyFeatureVisibility } from "./ui.js?v=20250611";
+} from "./core.js?v=20250715";
+import { updateOverview, applyFeatureVisibility } from "./ui.js?v=20250715";
 import {
   refreshDataLayers,
   refreshImportLayer,
@@ -24,7 +24,7 @@ import {
   startWaterDrawing,
   finishWaterDrawing,
   cancelWaterDrawing
-} from "./map.js?v=20250611";
+} from "./map.js?v=20250715";
 import {
   saveSpot,
   fetchSpots,
@@ -33,13 +33,10 @@ import {
   saveBathyBatch,
   fetchBathyImports,
   clearBathyImports,
-  fetchCatches,
-  saveCatch,
-  deleteCatch,
   fetchBathyPoints
-} from "./db.js?v=20250611";
-import { uid, distanceM, escapeHtml } from "./helpers.js?v=20250611";
-import { t } from "./i18n.js?v=20250611";
+} from "./db.js?v=20250715";
+import { uid, distanceM, escapeHtml } from "./helpers.js?v=20250715";
+import { t } from "./i18n.js?v=20250715";
 
 let rawImports = [];
 let rawImportKeys = new Set();
@@ -54,9 +51,6 @@ let serverImports = [];
 let serverImportSummary = { batches: 0, points: 0 };
 const importEntryMap = new WeakMap();
 let currentImportName = null;
-let catchPhotoData = null;
-let catchStekSelectEl = null;
-let catchRigSelectEl = null;
 let waterDrawActive = false;
 let btnDrawWater = null;
 let btnFinishWater = null;
@@ -71,7 +65,6 @@ const FEATURE_KEYS = [
   "showData",
   "showWeather",
   "showContours",
-  "showCatches",
   "showManage",
   "showOverview",
   "showChangelog",
@@ -79,7 +72,6 @@ const FEATURE_KEYS = [
   "autoLink",
   "toolbarDrag"
 ];
-
 function ensureFeatureDefaults() {
   if (!state.settings) state.settings = {};
   FEATURE_KEYS.forEach(key => {
@@ -89,6 +81,9 @@ function ensureFeatureDefaults() {
   });
   if (!Array.isArray(state.settings.panelOrder)) {
     state.settings.panelOrder = [];
+  }
+  if (!state.settings.panelOpen || typeof state.settings.panelOpen !== "object") {
+    state.settings.panelOpen = {};
   }
 }
 
@@ -128,22 +123,8 @@ function applyFeatureSettings(options = {}) {
 }
 
 function loadRemoteConfigOptions() {
-  return fetch("api/get_config.php")
-    .then(response => {
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      return response.json();
-    })
-    .then(data => {
-      if (data?.config?.options) {
-        applyFeatureSettings(data.config.options);
-      } else {
-        applyFeatureVisibility();
-      }
-    })
-    .catch(err => {
-      console.warn("Kon configuratie-opties niet laden", err);
-      applyFeatureVisibility();
-    });
+  applyFeatureSettings(state.settings || {});
+  return Promise.resolve();
 }
 
 function setImportMeta({ stored, total, truncated = false, dropped = false } = {}) {
@@ -401,7 +382,6 @@ export function initData() {
   if (!state.waters) state.waters = [];
   if (!state.stekken) state.stekken = [];
   if (!state.rigs) state.rigs = [];
-  if (!state.catches) state.catches = [];
   if (!state.filters) state.filters = { depthMin: 0, depthMax: 10 };
   applyFeatureVisibility();
   normalizeImportMeta();
@@ -434,10 +414,7 @@ export function initData() {
   updateOverview();
   updateImportStats();
   updateImportTable();
-  updateCatchStekOptions();
-  updateCatchTable();
   updateToolbarLinks();
-  focusCatchForm({ scroll: false });
   clearDetectionSummary();
   loadRemoteConfigOptions();
   log("Data-init voltooid");
@@ -459,6 +436,9 @@ function bindEvents() {
   const btnGeo = document.getElementById("btnImportGeoJSON");
   const btnSaveHtml = document.getElementById("btnSaveHtml");
   const btnSaveHtmlData = document.getElementById("btnSaveHtmlData");
+  const btnLocalSave = document.getElementById("btnLocalSave");
+  const btnLocalLoad = document.getElementById("btnLocalLoad");
+  const btnLocalReset = document.getElementById("btnLocalReset");
   const btnExportJSON = document.getElementById("btnExportGeoJSON");
   const btnExportZIP = document.getElementById("btnExportZIP");
   const btnFilterDepth = document.getElementById("btnFilterDepth");
@@ -477,9 +457,6 @@ function bindEvents() {
   const btnClearBathyServer = document.getElementById("btnClearBathyServer");
   const btnExportAll = document.getElementById("btnExportAll");
   const chkShowImports = document.getElementById("toggleImports");
-  const btnAddCatch = document.getElementById("btnAddCatch");
-  const catchPhotoInput = document.getElementById("catchPhoto");
-  const catchTable = document.getElementById("catchTable");
   btnDrawWater = document.getElementById("btnDrawWaterPoly");
   btnFinishWater = document.getElementById("btnFinishWaterPoly");
   btnCancelWater = document.getElementById("btnCancelWaterPoly");
@@ -501,6 +478,9 @@ function bindEvents() {
   btnGeo?.addEventListener("click", openGeoJSONDialog);
   btnSaveHtml?.addEventListener("click", exportHTML);
   btnSaveHtmlData?.addEventListener("click", exportHTMLWithData);
+  btnLocalSave?.addEventListener("click", localSave);
+  btnLocalLoad?.addEventListener("click", localLoad);
+  btnLocalReset?.addEventListener("click", localReset);
   btnExportJSON?.addEventListener("click", exportGeoJSON);
   btnExportZIP?.addEventListener("click", exportZIP);
   btnFilterDepth?.addEventListener("click", applyDepthFilter);
@@ -570,61 +550,6 @@ function bindEvents() {
     });
   }
   btnExportAll?.addEventListener("click", exportAll);
-
-  btnAddCatch?.addEventListener("click", e => {
-    e.preventDefault();
-    addCatchFromForm();
-  });
-
-  catchStekSelectEl = document.getElementById("catchStekSelect");
-  catchRigSelectEl = document.getElementById("catchRigSelect");
-  const catchStekSelect = catchStekSelectEl;
-  const catchRigSelect = catchRigSelectEl;
-
-  catchPhotoInput?.addEventListener("change", handleCatchPhotoSelect);
-
-  catchStekSelect?.addEventListener("change", () => {
-    const current = catchStekSelect.value || "";
-    catchStekSelect.dataset.selectedStek = current;
-    updateCatchRigOptions(current);
-    if (current) {
-      const stek = (state.stekken || []).find(item => item.id === current);
-      if (stek) {
-        const message = t("catch_hint_selected", "Stek {name} geselecteerd. Vul de velden in.")
-          .replace("{name}", stek.name || stek.id);
-        setCatchStatus("catch_hint_selected", message, "info");
-        return;
-      }
-    }
-    setCatchStatus(
-      "catch_hint_ready",
-      t("catch_hint_ready", "Selecteer een stek (en eventueel een rig) en vul de velden in."),
-      "info"
-    );
-  });
-
-  catchRigSelect?.addEventListener("change", () => {
-    const current = catchRigSelect.value || "";
-    catchRigSelect.dataset.selectedRig = current;
-    if (!current) return;
-    const rig = (state.rigs || []).find(item => item.id === current);
-    if (rig) {
-      const message = t("catch_hint_selected_rig", "Rig {name} geselecteerd. Vul de velden in.")
-        .replace("{name}", rig.name || rig.id);
-      setCatchStatus("catch_hint_selected_rig", message, "info");
-    }
-  });
-
-  catchTable?.addEventListener("click", e => {
-    const target = e.target.closest("button[data-catch-action]");
-    if (!target) return;
-    const id = target.dataset.id;
-    if (!id) return;
-    if (target.dataset.catchAction === "delete") {
-      deleteCatchEntry(id);
-    }
-  });
-
   setWaterDrawButtons(false);
 
   const langSelect = document.getElementById("langSelect");
@@ -659,7 +584,6 @@ function bindEvents() {
   document.addEventListener("vislok:bathy-stats", e => updateBathyPanel(e.detail));
   document.addEventListener("vislok:storage-truncated", handleStorageTruncated);
   document.addEventListener("vislok:storage-error", handleStorageError);
-  document.addEventListener("vislok:focus-catch-form", e => focusCatchForm(e?.detail || {}));
   document.addEventListener("vislok:map-bounds", e => scheduleBathyViewportFetch(e?.detail || e));
 }
 
@@ -720,16 +644,6 @@ function onMapNewSpot(e) {
     if (!action || !id || !type) return;
     const spot = findSpot(type, id);
     if (!spot) return;
-    if (action === "catch") {
-      if (type === "stek") {
-        focusCatchForm({ stekId: spot.id, scroll: true });
-      } else if (type === "rig") {
-        const stekId = spot.stekId || spot.stek_id || findNearestStekId(spot);
-        focusCatchForm({ stekId: stekId || "", rigId: spot.id, scroll: true });
-      }
-      return;
-    }
-
     if (action === "rename") {
     const newName = window.prompt(t("prompt_rename", "Nieuwe naam"), spot.name || "");
     if (newName === null) return;
@@ -1255,13 +1169,6 @@ function removeSpotFromState(type, id) {
     });
     if (dirty) saveState();
   }
-  if (type === "stek" && Array.isArray(state.catches)) {
-    const originalLength = state.catches.length;
-    state.catches = state.catches.filter(item => item.spot_id !== id);
-    if (state.catches.length !== originalLength) {
-      updateCatchTable();
-    }
-  }
   if (type === "stek") {
     let dirty = false;
     (state.rigs || []).forEach(rig => {
@@ -1415,14 +1322,14 @@ function formatDate(value) {
           scheduleBathyViewportFetch(lastViewportDetail);
         }
         if (showStatus) {
-          setStatus(t("status_imports_synced", "Serverimporten bijgewerkt"), "ok");
+          setStatus(t("status_imports_synced", "Lokale imports bijgewerkt"), "ok");
         }
       })
       .catch(err => {
-        console.warn("Kon serverimporten niet laden", err);
+        console.warn("Kon lokale imports niet laden", err);
         bathyServerAvailable = false;
         if (showStatus) {
-          setStatus(t("status_imports_sync_error", "Serverimporten konden niet geladen worden"), "error");
+          setStatus(t("status_imports_sync_error", "Imports konden niet geladen worden"), "error");
         }
       });
   }
@@ -1950,7 +1857,8 @@ function mergeImportPoints(points, options = {}) {
     setImportMeta({ stored: state.imports.length, total: state.imports.length, truncated: false, dropped: false });
   }
 
-  if (options.save !== false) {
+  const shouldSaveState = options.save === true;
+  if (shouldSaveState) {
     saveState();
   }
 
@@ -2445,415 +2353,6 @@ function normalizeDatabase() {
   setStatus(t("status_normalized", "Database genormaliseerd"), "ok");
 }
 
-function clearCatchForm(preserveStek = true) {
-  const stekSelect = document.getElementById("catchStekSelect");
-  const rigSelect = document.getElementById("catchRigSelect");
-  if (!preserveStek && stekSelect) {
-    stekSelect.value = "";
-    stekSelect.dataset.selectedStek = "";
-  }
-  if (rigSelect) {
-    if (!preserveStek || !stekSelect?.value) {
-      rigSelect.value = "";
-    }
-    rigSelect.dataset.selectedRig = rigSelect.value || "";
-    if (!stekSelect?.value) {
-      rigSelect.disabled = true;
-    }
-  }
-  const title = document.getElementById("catchTitle");
-  const species = document.getElementById("catchSpecies");
-  const weight = document.getElementById("catchWeight");
-  const length = document.getElementById("catchLength");
-  const date = document.getElementById("catchDate");
-  const notes = document.getElementById("catchNotes");
-  const photo = document.getElementById("catchPhoto");
-  if (title) title.value = "";
-  if (species) species.value = "";
-  if (weight) weight.value = "";
-  if (length) length.value = "";
-  if (date) date.value = "";
-  if (notes) notes.value = "";
-  if (photo) photo.value = "";
-  catchPhotoData = null;
-  updateCatchRigOptions(stekSelect?.value || "");
-}
-
-function handleCatchPhotoSelect(e) {
-  const file = e.target?.files?.[0];
-  if (!file) {
-    catchPhotoData = null;
-    return;
-  }
-  if (!file.type.startsWith("image/")) {
-    setCatchStatus("catch_error_photo", "Selecteer een geldig beeldbestand", "error");
-    e.target.value = "";
-    catchPhotoData = null;
-    return;
-  }
-  const reader = new FileReader();
-  reader.onload = evt => {
-    catchPhotoData = typeof evt.target?.result === "string" ? evt.target.result : null;
-  };
-  reader.onerror = () => {
-    catchPhotoData = null;
-    setCatchStatus("catch_error_photo", "Selecteer een geldig beeldbestand", "error");
-  };
-  reader.readAsDataURL(file);
-}
-
-function addCatchFromForm() {
-  const stekSelect = document.getElementById("catchStekSelect");
-  const rigSelect = document.getElementById("catchRigSelect");
-  if (!stekSelect || !stekSelect.value) {
-    setCatchStatus("catch_error_stek", "Kies eerst een stek", "error");
-    return;
-  }
-  const rigValue = rigSelect && !rigSelect.disabled ? rigSelect.value : "";
-  if (rigSelect) {
-    rigSelect.dataset.selectedRig = rigValue || "";
-  }
-  const payload = {
-    spot_id: stekSelect.value,
-    title: document.getElementById("catchTitle")?.value?.trim() || "",
-    species: document.getElementById("catchSpecies")?.value?.trim() || "",
-    weight_kg: parseFloat(document.getElementById("catchWeight")?.value),
-    length_cm: parseFloat(document.getElementById("catchLength")?.value),
-    caught_at: document.getElementById("catchDate")?.value || null,
-    notes: document.getElementById("catchNotes")?.value?.trim() || ""
-  };
-  if (rigValue) {
-    payload.rig_id = rigValue;
-  }
-  if (!Number.isFinite(payload.weight_kg)) payload.weight_kg = null;
-  if (!Number.isFinite(payload.length_cm)) payload.length_cm = null;
-  if (!payload.notes) payload.notes = null;
-  if (catchPhotoData) payload.photo = catchPhotoData;
-
-  setCatchStatus("status_catch_saving", "Vangst wordt opgeslagen...", "info");
-  saveCatch(payload)
-    .then(saved => {
-      if (!saved) throw new Error("Geen antwoord");
-      upsertCatch(saved);
-      saveState();
-      updateCatchTable();
-      clearCatchForm();
-      setCatchStatus("status_catch_saved", "Vangst opgeslagen", "ok");
-    })
-    .catch(err => {
-      console.error("Vangst opslaan mislukt", err);
-      setCatchStatus("status_catch_error", "Vangst kon niet worden opgeslagen", "error");
-    });
-}
-
-function deleteCatchEntry(id) {
-  if (!window.confirm(t("confirm_delete_catch", "Vangst verwijderen?"))) return;
-  deleteCatch(id)
-    .then(() => {
-      state.catches = (state.catches || []).filter(item => item.id !== id);
-      saveState();
-      updateCatchTable();
-      setCatchStatus("status_catch_deleted", "Vangst verwijderd", "ok");
-    })
-    .catch(err => {
-      console.warn("Vangst verwijderen mislukt", err);
-      setCatchStatus("status_catch_delete_error", "Vangst kon niet worden verwijderd", "error");
-    });
-}
-
-function setCatchStatus(key, fallback, type = "info") {
-  const statusEl = document.getElementById("catchStatus");
-  const message = t(key, fallback);
-  if (statusEl) {
-    statusEl.textContent = message;
-    statusEl.classList.remove("error", "success");
-    if (type === "error") statusEl.classList.add("error");
-    if (type === "ok" || type === "success") statusEl.classList.add("success");
-  }
-  if (type === "error") {
-    setStatus(message, "error");
-  } else if (type === "ok" || type === "success") {
-    setStatus(message, "ok");
-  } else if (type === "warn" || type === "warning") {
-    setStatus(message, "warn");
-  } else if (type === "debug" && message) {
-    log(`[catch] ${message}`);
-  }
-}
-
-function focusCatchForm(options = {}) {
-  const { stekId = "", rigId = "", scroll = false } = options || {};
-  const panel = document.querySelector('details[data-panel="catches"]');
-  if (panel) {
-    panel.open = true;
-    if (scroll && typeof panel.scrollIntoView === "function") {
-      panel.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
-  }
-
-  if (catchStekSelectEl && stekId) {
-    catchStekSelectEl.dataset.selectedStek = stekId;
-  }
-  if (catchRigSelectEl && rigId) {
-    catchRigSelectEl.dataset.selectedRig = rigId;
-  }
-
-  updateCatchStekOptions(stekId, rigId);
-
-  const select = catchStekSelectEl || document.getElementById("catchStekSelect");
-  if (select && typeof select.focus === "function") {
-    select.focus();
-  }
-
-  const rigSelect = catchRigSelectEl || document.getElementById("catchRigSelect");
-  if (rigSelect && rigId && !rigSelect.disabled) {
-    rigSelect.value = rigId;
-    rigSelect.dataset.selectedRig = rigId;
-  }
-
-  const title = document.getElementById("catchTitle");
-  if (stekId && title && typeof title.focus === "function") {
-    title.focus();
-  }
-
-  setCatchStatus(
-    "catch_hint_ready",
-    t("catch_hint_ready", "Selecteer een stek (en eventueel een rig) en vul de velden in."),
-    "info"
-  );
-}
-
-function upsertCatch(entry) {
-  const normalized = normalizeCatchEntry(entry);
-  if (!normalized?.id) return;
-  if (!state.catches) state.catches = [];
-  const idx = state.catches.findIndex(item => item.id === normalized.id);
-  if (idx >= 0) {
-    state.catches[idx] = { ...state.catches[idx], ...normalized };
-  } else {
-    state.catches.push(normalized);
-  }
-  state.catches.sort(compareCatches);
-}
-
-function compareCatches(a, b) {
-  const aDate = a?.caught_at || a?.created_at || "";
-  const bDate = b?.caught_at || b?.created_at || "";
-  if (aDate === bDate) return (b.created_at || "").localeCompare(a.created_at || "");
-  return (bDate || "").localeCompare(aDate || "");
-}
-
-function updateCatchStekOptions(preferredStek, preferredRig) {
-  const select = catchStekSelectEl || document.getElementById("catchStekSelect");
-  if (!select) return;
-
-  let desired = select.dataset.selectedStek || select.value || "";
-  if (preferredStek !== undefined) {
-    desired = preferredStek || "";
-  }
-
-  select.innerHTML = "";
-
-  const items = (state.stekken || [])
-    .slice()
-    .sort((a, b) => (a.name || "").localeCompare(b.name || ""));
-
-  const placeholder = document.createElement("option");
-  placeholder.value = "";
-  placeholder.textContent = t("catch_option_select", "Kies een stek");
-  if (items.length) {
-    placeholder.disabled = true;
-    placeholder.hidden = true;
-  }
-  select.appendChild(placeholder);
-
-  let defaultValue = desired;
-  items.forEach(stek => {
-    const option = document.createElement("option");
-    option.value = stek.id;
-    option.textContent = stek.name || stek.id;
-    if (!defaultValue) {
-      defaultValue = stek.id;
-    }
-    if (stek.id === desired) {
-      defaultValue = desired;
-    }
-    select.appendChild(option);
-  });
-
-  if (defaultValue && items.some(item => item.id === defaultValue)) {
-    select.value = defaultValue;
-  } else if (items.length) {
-    select.value = items[0].id;
-  } else {
-    select.value = "";
-  }
-
-  select.disabled = items.length === 0;
-  select.dataset.selectedStek = select.value || "";
-
-  const addBtn = document.getElementById("btnAddCatch");
-  if (addBtn) {
-    addBtn.disabled = items.length === 0;
-  }
-
-  const statusEl = document.getElementById("catchStatus");
-  const locked = statusEl?.classList.contains("error") || statusEl?.classList.contains("success");
-
-  if (!items.length) {
-    if (!locked) {
-      setCatchStatus(
-        "catch_hint_need_stek",
-        t("catch_hint_need_stek", "Voeg eerst een stek toe om vangsten te registreren."),
-        "info"
-      );
-    }
-    updateCatchRigOptions("", preferredRig);
-    return;
-  }
-
-  updateCatchRigOptions(select.value || "", preferredRig);
-
-  if (!locked) {
-    if (select.value) {
-      const stek = items.find(item => item.id === select.value);
-      const message = t("catch_hint_selected", "Stek {name} geselecteerd. Vul de velden in.")
-        .replace("{name}", stek?.name || stek?.id || "stek");
-      setCatchStatus("catch_hint_selected", message, "info");
-    } else if (!(state.catches && state.catches.length)) {
-      setCatchStatus(
-        "catch_hint_ready",
-        t("catch_hint_ready", "Selecteer een stek (en eventueel een rig) en vul de velden in."),
-        "info"
-      );
-    }
-  }
-}
-
-function updateCatchRigOptions(stekId = "", preferredRig) {
-  const select = catchRigSelectEl || document.getElementById("catchRigSelect");
-  if (!select) return;
-
-  let desired = select.dataset.selectedRig || select.value || "";
-  if (preferredRig !== undefined) {
-    desired = preferredRig || "";
-  }
-
-  select.innerHTML = "";
-
-  const rigs = (state.rigs || [])
-    .filter(rig => !stekId || rig.stekId === stekId)
-    .sort((a, b) => (a.name || "").localeCompare(b.name || ""));
-
-  const baseLabel = rigs.length
-    ? t("catch_option_rig_none", "No rig")
-    : t("catch_option_rig", "Choose a rig (optional)");
-  const placeholder = document.createElement("option");
-  placeholder.value = "";
-  placeholder.textContent = baseLabel;
-  select.appendChild(placeholder);
-
-  rigs.forEach(rig => {
-    const option = document.createElement("option");
-    option.value = rig.id;
-    option.textContent = rig.name || rig.id;
-    select.appendChild(option);
-  });
-
-  if (desired && rigs.some(rig => rig.id === desired)) {
-    select.value = desired;
-  } else {
-    select.value = "";
-  }
-
-  select.disabled = !stekId;
-  select.dataset.selectedRig = select.value || "";
-}
-
-function updateCatchTable() {
-  const tbody = document.querySelector("#catchTable tbody");
-  const empty = document.getElementById("catchTableEmpty");
-  if (!tbody) return;
-  tbody.innerHTML = "";
-  const catches = (state.catches || []).slice().sort(compareCatches);
-  if (!catches.length) {
-    if (empty) empty.style.display = "block";
-    setCatchStatus(
-      "catch_hint_ready",
-      t("catch_hint_ready", "Selecteer een stek (en eventueel een rig) en vul de velden in."),
-      "info"
-    );
-    return;
-  }
-  if (empty) empty.style.display = "none";
-
-  catches.forEach(item => {
-    const tr = document.createElement("tr");
-    const stek = state.stekken?.find(s => s.id === item.spot_id);
-    const rigId = item.rig_id || item.rigId || "";
-    const rig = rigId ? state.rigs?.find(r => r.id === rigId) : null;
-    const stekName = escapeHtml(stek?.name || t("catch_unknown_stek", "Onbekende stek"));
-    const rigName = rig
-      ? escapeHtml(rig.name || rig.id)
-      : rigId
-      ? escapeHtml(t("catch_unknown_rig", "Onbekende rig"))
-      : escapeHtml(t("catch_option_rig_none", "Geen rig"));
-    const photoCell = item.photo_path
-      ? `<a href="${escapeHtml(item.photo_path)}" target="_blank" rel="noopener">${t("catch_view_photo", "Bekijk")}</a>`
-      : "–";
-    const date = item.caught_at || item.created_at || "";
-    tr.innerHTML = `
-      <td>${stekName}</td>
-      <td>${escapeHtml(item.title || "-")}</td>
-      <td>${date ? escapeHtml(date) : "-"}</td>
-      <td>${escapeHtml(item.species || "-")}</td>
-      <td>${rigName}</td>
-      <td>${Number.isFinite(item.weight_kg) ? item.weight_kg.toFixed(2) : "-"}</td>
-      <td>${Number.isFinite(item.length_cm) ? item.length_cm.toFixed(1) : "-"}</td>
-      <td>${photoCell}</td>
-      <td class="table-actions">
-        <button data-catch-action="delete" data-id="${escapeHtml(item.id)}">${t("action_delete", "Verwijder")}</button>
-      </td>
-    `;
-    tbody.appendChild(tr);
-  });
-}
-
-function mergeServerCatches(remote) {
-  if (!Array.isArray(remote)) return;
-  if (!state.catches) state.catches = [];
-  const map = new Map();
-  state.catches.forEach(item => {
-    if (item?.id) map.set(item.id, item);
-  });
-  remote.forEach(item => {
-    const normalized = normalizeCatchEntry(item);
-    if (normalized?.id) map.set(normalized.id, normalized);
-  });
-  state.catches = Array.from(map.values()).sort(compareCatches);
-  saveState();
-}
-
-function normalizeCatchEntry(entry) {
-  if (!entry) return null;
-  const normalized = { ...entry };
-  if (normalized.rigId && !normalized.rig_id) {
-    normalized.rig_id = normalized.rigId;
-  }
-  if (normalized.rig_id && !normalized.rigId) {
-    normalized.rigId = normalized.rig_id;
-  }
-  if (normalized.weight_kg !== undefined) {
-    const weight = Number(normalized.weight_kg);
-    normalized.weight_kg = Number.isFinite(weight) ? weight : null;
-  }
-  if (normalized.length_cm !== undefined) {
-    const length = Number(normalized.length_cm);
-    normalized.length_cm = Number.isFinite(length) ? length : null;
-  }
-  if (normalized.notes === "") normalized.notes = null;
-  return normalized;
-}
 
 function persistSpot(spot, showStatus = true) {
   ensureSpotRelationships(spot);
@@ -2909,33 +2408,24 @@ function persistSpot(spot, showStatus = true) {
 
 /* ---------- SERVER SYNC ---------- */
 function syncWithServer(pushLocal) {
-  return Promise.all([fetchSpots(), fetchCatches()])
-    .then(([spots, catches]) => {
+  return fetchSpots()
+    .then(spots => {
       if (Array.isArray(spots)) {
         mergeServerData(spots);
-        setStatus(`${t("status_sync_done", "Server synchronisatie voltooid")} (${spots.length})`, "ok");
+        setStatus(`${t("status_sync_done", "Lokale opslag geladen")} (${spots.length})`, "ok");
       }
-      if (Array.isArray(catches)) {
-        mergeServerCatches(catches);
-      }
-      updateCatchStekOptions();
-      updateCatchTable();
 
       if (!pushLocal) return;
       const all = [...state.waters, ...state.stekken, ...state.rigs];
-      return all
-        .reduce(
-          (chain, spot) =>
-            chain.then(() =>
-              saveSpot(spot).catch(err => {
-                console.warn("Spot upload faalde", err);
-              })
-            ),
-          Promise.resolve()
-        )
-        .then(() => {
-          setStatus(t("status_sync_push", "Lokale data naar server geschreven"), "ok");
-        });
+      return all.reduce(
+        (chain, spot) =>
+          chain.then(() =>
+            saveSpot(spot).catch(err => {
+              console.warn("Lokale opslag bijwerken faalde", err);
+            })
+          ),
+        Promise.resolve()
+      );
     })
     .then(() => {
       whenMapReady(() => refreshDataLayers());
@@ -2945,8 +2435,8 @@ function syncWithServer(pushLocal) {
       return loadServerImportSummary();
     })
     .catch(err => {
-      console.warn("Server sync faalde", err);
-      setStatus(t("status_sync_error", "Server niet bereikbaar"), "error");
+      console.warn("Lokale sync faalde", err);
+      setStatus(t("status_sync_error", "Lokale opslag niet beschikbaar"), "error");
     });
 }
 
@@ -2982,24 +2472,29 @@ function resetServerData() {
   if (!confirm(t("confirm_reset_server", "Weet je zeker dat je de serverdata wilt resetten?"))) return;
   resetServer()
     .then(() => {
-      setStatus(t("status_server_reset", "Serverdata gewist"), "ok");
-      syncWithServer(false);
+      state.waters = [];
+      state.stekken = [];
+      state.rigs = [];
+      state.imports = [];
+      state.importsMeta = { stored: 0, total: 0 };
+      saveState();
+      setStatus(t("status_server_reset", "Lokale opslag gewist"), "ok");
+      whenMapReady(() => refreshDataLayers());
+      populateTables();
     })
     .catch(err => {
       console.error(err);
-      setStatus(t("status_server_reset_error", "Server reset mislukt"), "error");
+      setStatus(t("status_server_reset_error", "Lokale reset mislukt"), "error");
     });
 }
 
 /* ---------- TABELLEN ---------- */
-export function populateTables() {
-  ensureManageUI();
-  updateManageTable();
-  updateImportStats();
-  updateCatchStekOptions();
-  updateCatchTable();
-  updateToolbarLinks();
-}
+  export function populateTables() {
+    ensureManageUI();
+    updateManageTable();
+    updateImportStats();
+    updateToolbarLinks();
+  }
 
 function updateToolbarLinks() {
   const container = document.getElementById("linkSummaryContent");
@@ -3325,26 +2820,4 @@ window.VisLokData = { forceServerSync };
 /* ---------- EVENTKOPPELINGEN ---------- */
 document.addEventListener("DOMContentLoaded", () => {
   initData();
-
-  const toolbar = document.querySelector(".toolbar-right");
-  if (toolbar && !document.getElementById("btnLocalSave")) {
-    const btnSaveLocal = document.createElement("button");
-    btnSaveLocal.id = "btnLocalSave";
-    btnSaveLocal.textContent = t("btn_local_save", "💾 Opslaan");
-    btnSaveLocal.addEventListener("click", localSave);
-
-    const btnLoadLocal = document.createElement("button");
-    btnLoadLocal.id = "btnLocalLoad";
-    btnLoadLocal.textContent = t("btn_local_load", "📂 Laden");
-    btnLoadLocal.addEventListener("click", localLoad);
-
-    const btnResetLocal = document.createElement("button");
-    btnResetLocal.id = "btnLocalReset";
-    btnResetLocal.textContent = t("btn_local_reset", "🗑️ Reset");
-    btnResetLocal.addEventListener("click", localReset);
-
-    toolbar.appendChild(btnSaveLocal);
-    toolbar.appendChild(btnLoadLocal);
-    toolbar.appendChild(btnResetLocal);
-  }
 });
