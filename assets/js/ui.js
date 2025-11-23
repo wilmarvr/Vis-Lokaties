@@ -4,7 +4,7 @@
    Versie: 0.1.0
    ======================================================= */
 
-import { setStatus, log, state, saveState, setToolbarWidth, TOOLBAR_MIN_WIDTH, TOOLBAR_MAX_WIDTH } from "./core.js?v=20250715";
+import { setStatus, log, state, saveState, setToolbarWidth, TOOLBAR_MIN_WIDTH } from "./core.js?v=20250715";
 import { populateTables } from "./data.js?v=20250715";
 import { setDictionary, t, getLanguage } from "./i18n.js?v=20250715";
 import { escapeHtml } from "./helpers.js?v=20250715";
@@ -74,8 +74,7 @@ function initToolbarResizeHandle() {
     if (!point || typeof point.clientX !== "number") return;
     const rect = main.getBoundingClientRect();
     const desired = rect.right - point.clientX;
-    lastWidth = Math.min(TOOLBAR_MAX_WIDTH, Math.max(TOOLBAR_MIN_WIDTH, desired));
-    setToolbarWidth(lastWidth, false);
+    lastWidth = setToolbarWidth(desired, false);
     event.preventDefault();
   };
 

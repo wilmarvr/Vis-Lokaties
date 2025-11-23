@@ -75,6 +75,7 @@ header small {
   text-decoration: none;
   display: inline-flex;
   align-items: center;
+}
 .toolbar-panel select,
 .toolbar-right select {
   min-width: 90px;
