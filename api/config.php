@@ -6,9 +6,11 @@
 // zodat de waarden via de admin-interface aangepast kunnen worden.
 // =======================================================
 
+const VISLOK_DEFAULT_PATH = __DIR__ . '/../data/vislok.sqlite';
+
 const VISLOK_CONFIG_DEFAULT = [
-    // Standaard SQLite-bestand in de data-map
-    'path' => __DIR__ . '/../data/vislok.sqlite',
+    // Standaard SQLite-bestand in de data-map (niet meer verplicht aan te passen)
+    'path' => VISLOK_DEFAULT_PATH,
     'options' => []
 ];
 
@@ -48,17 +50,29 @@ function vislok_config_path(): string
     return __DIR__ . '/config.local.json';
 }
 
-function vislok_sanitise_config(array $config): array
+function vislok_normalise_path(string $path): string
 {
-    $path = trim((string)($config['path'] ?? VISLOK_CONFIG_DEFAULT['path']));
+    $path = trim($path);
     if ($path === '') {
-        $path = VISLOK_CONFIG_DEFAULT['path'];
+        return VISLOK_DEFAULT_PATH;
     }
 
     // Relative pad -> baseer op project root
     if (!preg_match('~^(/|[A-Za-z]:[\\/])~', $path)) {
         $base = realpath(__DIR__ . '/..') ?: dirname(__DIR__);
         $path = rtrim($base, '/\\') . '/' . ltrim($path, '/\\');
+    }
+
+    return $path;
+}
+
+function vislok_sanitise_config(array $config): array
+{
+    // DB-pad is niet langer verplicht instelbaar; we nemen het over als hij mee komt,
+    // maar vallen altijd terug op het veilige standaardpad.
+    $path = VISLOK_DEFAULT_PATH;
+    if (isset($config['path']) && $config['path'] !== '') {
+        $path = vislok_normalise_path((string)$config['path']);
     }
 
     return [
