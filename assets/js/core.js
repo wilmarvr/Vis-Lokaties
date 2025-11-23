@@ -141,36 +141,12 @@ function applyVersionInfo(info) {
 }
 
 export function loadVersionInfo(showStatus = false) {
-  return fetch('api/get_version.php')
-    .then(async response => {
-      const text = await response.text();
-      let parsed = null;
-      try {
-        parsed = text ? JSON.parse(text) : null;
-      } catch (err) {
-        throw new Error(`HTTP ${response.status}: ongeldige JSON (${text.slice(0, 120) || 'leeg'})`);
-      }
-      if (!response.ok) {
-        const msg = parsed?.error || `HTTP ${response.status}`;
-        throw new Error(msg);
-      }
-      return parsed;
-    })
-    .then(data => {
-      const version = applyVersionInfo(data?.version || {});
-      if (showStatus) {
-        setStatus(`Versiegegevens bijgewerkt (v${version})`, 'ok');
-      }
-      log(`Versiegegevens geladen: v${version}`);
-      return version;
-    })
-    .catch(err => {
-      console.warn('Kon versiegegevens niet laden', err);
-      if (showStatus) {
-        setStatus('Kon versiegegevens niet laden', 'error');
-      }
-      return APP_VERSION;
-    });
+  const version = applyVersionInfo(state.version || {});
+  if (showStatus) {
+    setStatus(`Versiegegevens bijgewerkt (v${version})`, 'ok');
+  }
+  log(`Versiegegevens geladen: v${version}`);
+  return Promise.resolve(version);
 }
 
 export function log(...args) {

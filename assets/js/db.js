@@ -1,31 +1,58 @@
 /* =======================================================
    Vis Lokaties — db.js
-   Clienthelpers voor PHP API (SQLite)
+   Lokale opslaghelpers (localStorage) voor spots, vangsten en bathy-imports
    ======================================================= */
 
-const API_BASE = "api";
+const DB_KEY = "vislok_local_db_v1";
 
-function callApi(endpoint, options = {}) {
-  return fetch(`${API_BASE}/${endpoint}`, {
-    headers: { "Content-Type": "application/json" },
-    ...options
-  })
-    .then(async response => {
-      const bodyText = await response.text();
-      const bodyJson = bodyText ? safeJson(bodyText) : null;
+function loadDb() {
+  const empty = { spots: [], catches: [], imports: [], importPoints: [] };
+  try {
+    const raw = localStorage.getItem(DB_KEY);
+    if (!raw) return { ...empty };
+    const parsed = JSON.parse(raw);
+    return {
+      ...empty,
+      ...parsed,
+      spots: Array.isArray(parsed?.spots) ? parsed.spots : [],
+      catches: Array.isArray(parsed?.catches) ? parsed.catches : [],
+      imports: Array.isArray(parsed?.imports) ? parsed.imports : [],
+      importPoints: Array.isArray(parsed?.importPoints) ? parsed.importPoints : []
+    };
+  } catch (err) {
+    console.warn("Kon lokale database niet laden, resetten", err);
+    return { ...empty };
+  }
+}
 
-      if (!response.ok) {
-        const apiMessage = bodyJson?.error || bodyJson?.message;
-        const statusText = `HTTP ${response.status}`;
-        throw new Error(apiMessage ? `${statusText}: ${apiMessage}` : statusText);
-      }
+function saveDb(db) {
+  const normalized = {
+    spots: Array.isArray(db?.spots) ? db.spots : [],
+    catches: Array.isArray(db?.catches) ? db.catches : [],
+    imports: Array.isArray(db?.imports) ? db.imports : [],
+    importPoints: Array.isArray(db?.importPoints) ? db.importPoints : []
+  };
+  localStorage.setItem(DB_KEY, JSON.stringify(normalized));
+  return normalized;
+}
 
-      return bodyJson;
-    })
-    .catch(err => {
-      console.warn(`API ${endpoint} faalde`, err);
-      throw err;
-    });
+function nextId(prefix) {
+  const rand = Math.random().toString(36).slice(2, 8);
+  return `${prefix}_${Date.now()}_${rand}`;
+}
+
+function normalizeSpot(spot) {
+  if (!spot) return null;
+  const base = { ...spot };
+  base.id = base.id || nextId(spot.type || "spot");
+  base.type = base.type || "water";
+  base.lat = Number(base.lat) || 0;
+  base.lng = Number(base.lng) || 0;
+  if (base.water_id !== undefined && base.waterId === undefined) base.waterId = base.water_id;
+  if (base.stek_id !== undefined && base.stekId === undefined) base.stekId = base.stek_id;
+  delete base.water_id;
+  delete base.stek_id;
+  return base;
 }
 
 function safeJson(text) {
@@ -37,85 +64,109 @@ function safeJson(text) {
 }
 
 export function fetchSpots() {
-  return callApi("list_spots.php").then(result => result?.data || []);
+  const db = loadDb();
+  return Promise.resolve(db.spots.map(normalizeSpot).filter(Boolean));
 }
 
 export function saveSpot(spot) {
-  const payload = { ...spot };
-  if (payload.waterId !== undefined) {
-    payload.water_id = payload.waterId || null;
-    delete payload.waterId;
+  const db = loadDb();
+  const record = normalizeSpot(spot);
+  const list = db.spots || [];
+  const idx = list.findIndex(item => item.id === record.id);
+  if (idx >= 0) {
+    list[idx] = { ...list[idx], ...record };
+  } else {
+    list.push(record);
   }
-  if (payload.stekId !== undefined) {
-    payload.stek_id = payload.stekId || null;
-    delete payload.stekId;
-  }
-  return callApi("save_spot.php", {
-    method: "POST",
-    body: JSON.stringify(payload)
-  }).then(result => result?.spot || null);
+  db.spots = list;
+  saveDb(db);
+  return Promise.resolve(record);
 }
 
 export function deleteSpot(id) {
-  return callApi("delete_spot.php", {
-    method: "POST",
-    body: JSON.stringify({ id })
-  });
+  const db = loadDb();
+  db.spots = (db.spots || []).filter(item => item.id !== id);
+  saveDb(db);
+  return Promise.resolve();
 }
 
 export function resetServer() {
-  return callApi("reset_spots.php", { method: "POST" });
+  saveDb({ spots: [], catches: [], imports: [], importPoints: [] });
+  return Promise.resolve();
 }
 
 export function saveBathyBatch(payload) {
-  return callApi("save_import.php", {
-    method: "POST",
-    body: JSON.stringify(payload)
-  });
+  const db = loadDb();
+  const id = payload?.batchId || nextId("import");
+  const points = Array.isArray(payload?.points)
+    ? payload.points.map(p => ({ lat: Number(p.lat) || 0, lng: Number(p.lng) || 0, val: p.val ?? null }))
+    : [];
+  const entry = {
+    id,
+    source: payload?.source || "csv",
+    file: payload?.file || null,
+    created: new Date().toISOString(),
+    count: points.length
+  };
+  db.imports = [...(db.imports || []).filter(item => item.id !== id), entry];
+  db.importPoints = [...(db.importPoints || []), ...points];
+  saveDb(db);
+  return Promise.resolve({ stored: points.length, entry });
 }
 
 export function fetchBathyImports() {
-  return callApi("list_imports.php").then(result => ({
-    list: result?.data || [],
-    summary: result?.summary || { batches: 0, points: 0 }
-  }));
+  const db = loadDb();
+  const list = db.imports || [];
+  const summary = {
+    batches: list.length,
+    points: (db.importPoints || []).length
+  };
+  return Promise.resolve({ list, summary });
 }
 
 export function clearBathyImports() {
-  return callApi("clear_imports.php", { method: "POST" });
+  const db = loadDb();
+  db.imports = [];
+  db.importPoints = [];
+  saveDb(db);
+  return Promise.resolve();
 }
 
 export function fetchBathyPoints(bounds) {
-  const payload = {
-    south: bounds?.south,
-    west: bounds?.west,
-    north: bounds?.north,
-    east: bounds?.east
-  };
-  return callApi("get_import_points.php", {
-    method: "POST",
-    body: JSON.stringify(payload)
-  }).then(result => result || { points: [] });
+  const db = loadDb();
+  let points = db.importPoints || [];
+  if (bounds && Object.values(bounds).every(v => typeof v === "number")) {
+    points = points.filter(p =>
+      p.lat >= bounds.south &&
+      p.lat <= bounds.north &&
+      p.lng >= bounds.west &&
+      p.lng <= bounds.east
+    );
+  }
+  return Promise.resolve({ points });
 }
 
 export function fetchCatches(spotId) {
-  const payload = spotId ? { spot_id: spotId } : {};
-  return callApi("list_catches.php", {
-    method: "POST",
-    body: JSON.stringify(payload)
-  }).then(result => result?.data || []);
+  const db = loadDb();
+  const list = db.catches || [];
+  const filtered = spotId ? list.filter(item => item.spot_id === spotId || item.spotId === spotId) : list;
+  return Promise.resolve(filtered.map(item => ({ ...item, spotId: item.spotId ?? item.spot_id }))); 
 }
 
 export function saveCatch(entry) {
-  return callApi("save_catch.php", {
-    method: "POST",
-    body: JSON.stringify(entry)
-  }).then(result => result?.catch || null);
+  const db = loadDb();
+  const record = { ...entry };
+  record.id = record.id || nextId("catch");
+  if (record.spot_id !== undefined && record.spotId === undefined) record.spotId = record.spot_id;
+  delete record.spot_id;
+  db.catches = [...(db.catches || []).filter(c => c.id !== record.id), record];
+  saveDb(db);
+  return Promise.resolve(record);
 }
 
 export function deleteCatch(id) {
-  return callApi("delete_catch.php", {
-    method: "POST",
-    body: JSON.stringify({ id })
-  });
+  const db = loadDb();
+  db.catches = (db.catches || []).filter(item => item.id !== id);
+  saveDb(db);
+  return Promise.resolve();
 }

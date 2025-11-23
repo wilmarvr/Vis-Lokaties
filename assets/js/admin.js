@@ -180,23 +180,8 @@ function initAdmin() {
 
   function loadConfig() {
     if (!form) return;
-    fetch("api/get_config.php")
-      .then(response => {
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        return response.json();
-      })
-      .then(data => {
-        if (data?.config) {
-          applyConfig(data.config);
-          setPanelMessage("admin_status_loaded", "Configuratie geladen", "ok");
-        } else {
-          throw new Error("config ontbreekt");
-        }
-      })
-      .catch(err => {
-        console.error("Admin config laden mislukt", err);
-        setPanelMessage("admin_status_error", "Configuratie kon niet worden geladen", "error");
-      });
+    applyConfig({ options: state.settings || FEATURE_DEFAULTS });
+    setPanelMessage("admin_status_loaded", "Configuratie geladen", "ok");
   }
 
   if (form) {
@@ -220,54 +205,15 @@ function initAdmin() {
     form.addEventListener("submit", e => {
       e.preventDefault();
       const payload = readFormConfig();
-      setPanelMessage("admin_status_saving", "Configuratie opslaan...", "info");
-      fetch("api/save_config.php", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      })
-        .then(response => {
-          if (!response.ok) return response.json().then(err => Promise.reject(err));
-          return response.json();
-        })
-        .then(result => {
-          if (result?.config) {
-            applyConfig(result.config);
-            setPanelMessage("admin_status_saved", "Configuratie opgeslagen", "ok");
-            if (autoSync?.checked) {
-              triggerSync().catch(err => console.warn("Auto-sync na opslaan mislukt", err));
-            }
-          } else {
-            throw new Error("config ontbreekt");
-          }
-        })
-        .catch(err => {
-          console.error("Configuratie opslaan mislukt", err);
-          const msg = err?.error || err?.message || "Onbekende fout";
-          setPanelMessage("admin_status_save_error", msg, "error");
-        });
+      applyConfig(payload);
+      setPanelMessage("admin_status_saved", "Configuratie opgeslagen", "ok");
+      if (autoSync?.checked) {
+        triggerSync().catch(err => console.warn("Auto-sync na opslaan mislukt", err));
+      }
     });
 
     btnTest?.addEventListener("click", () => {
-      const payload = readFormConfig();
-      setPanelMessage("admin_status_testing", "Verbinding testen...", "info");
-      fetch("api/test_connection.php", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      })
-        .then(response => {
-          if (!response.ok) return response.json().then(err => Promise.reject(err));
-          return response.json();
-        })
-        .then(() => {
-          setPanelMessage("admin_status_test_ok", "Verbinding geslaagd", "ok");
-        })
-        .catch(err => {
-          console.error("Verbindingstest mislukt", err);
-          const msg = err?.error || err?.message || "Onbekende fout";
-          setPanelMessage("admin_status_test_error", msg, "error");
-        });
+      setPanelMessage("admin_status_test_ok", "Lokale opslag actief", "ok");
     });
 
     if (autoSync) {
@@ -322,25 +268,11 @@ function initAdmin() {
       e.preventDefault();
       const { payload } = buildVersionPayload();
       setVersionMessage("admin_version_saving", "Versie opslaan...", "info");
-      fetch("api/save_version.php", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      })
-        .then(response => {
-          if (!response.ok) return response.json().then(err => Promise.reject(err));
-          return response.json();
-        })
-        .then(() => loadVersionInfo(true))
-        .then(() => {
-          refreshVersionForm();
-          setVersionMessage("admin_version_saved", "Versiedetails opgeslagen", "ok");
-        })
-        .catch(err => {
-          console.error("Versiegegevens opslaan mislukt", err);
-          const msg = err?.error || err?.message || "Onbekende fout";
-          setVersionMessage("admin_version_error", msg, "error");
-        });
+      state.version = payload;
+      saveState();
+      applyVersionInfo(state.version);
+      refreshVersionForm();
+      setVersionMessage("admin_version_saved", "Versiedetails opgeslagen", "ok");
     });
   }
 
