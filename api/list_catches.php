@@ -1,7 +1,7 @@
 <?php
 require_once __DIR__ . '/db.php';
 
-try {
+vislok_api(static function () {
     $payload = vislok_read_json();
     $spotId = $payload['spot_id'] ?? ($_GET['spot_id'] ?? null);
 
@@ -14,7 +14,5 @@ try {
     }
 
     $rows = $stmt->fetchAll();
-    vislok_json_response(['data' => $rows]);
-} catch (Throwable $e) {
-    vislok_json_response(['error' => $e->getMessage()], 500);
-}
+    return ['data' => $rows];
+});

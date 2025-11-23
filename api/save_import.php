@@ -36,7 +36,7 @@ try {
 
     $meta = $pdo->prepare('INSERT INTO bathy_imports (id, source, file_name, total_points)
         VALUES (:id, :source, :file, :total)
-        ON DUPLICATE KEY UPDATE source = VALUES(source), file_name = VALUES(file_name), total_points = VALUES(total_points)');
+        ON CONFLICT(id) DO UPDATE SET source=excluded.source, file_name=excluded.file_name, total_points=excluded.total_points');
     $meta->execute([
         ':id' => $batchId,
         ':source' => $source,

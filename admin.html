@@ -26,21 +26,6 @@
     <section class="admin-card admin-config">
       <h2 data-i18n="admin_db_title">Database instellingen</h2>
       <form id="adminConfigForm" class="form-grid admin-form">
-        <label data-i18n="admin_db_host">Host
-          <input type="text" id="adminDbHost" required />
-        </label>
-        <label data-i18n="admin_db_port">Poort
-          <input type="number" id="adminDbPort" min="1" max="65535" required />
-        </label>
-        <label data-i18n="admin_db_name">Database
-          <input type="text" id="adminDbName" required />
-        </label>
-        <label data-i18n="admin_db_user">Gebruiker
-          <input type="text" id="adminDbUser" required />
-        </label>
-        <label data-i18n="admin_db_pass">Wachtwoord
-          <input type="password" id="adminDbPass" autocomplete="current-password" />
-        </label>
         <div class="admin-actions">
           <button type="submit" id="btnAdminSave" data-i18n="admin_save">Opslaan</button>
           <button type="button" id="btnAdminTest" data-i18n="admin_test">Test verbinding</button>
@@ -94,7 +79,7 @@
       <h2 data-i18n="admin_help_title">Hulp &amp; uitleg</h2>
       <p data-i18n="admin_help_intro">Volg onderstaande stappen om de backend snel te configureren.</p>
       <ul class="admin-help-list">
-        <li data-i18n="admin_help_db">Vul je XAMPP MySQL host, poort, database, gebruiker en wachtwoord in (standaard: localhost en poort 3306).</li>
+        <li data-i18n="admin_help_db">De applicatie gebruikt automatisch <code>data/vislok.sqlite</code>; geen pad nodig.</li>
         <li data-i18n="admin_help_sync">Schakel “Sync lokale data” in om waters, stekken, rigs en bathy-data automatisch met de database te synchroniseren.</li>
         <li data-i18n="admin_help_version">Gebruik het versieformulier om release-informatie op te slaan en de zichtbare app-versie bij te werken.</li>
         <li data-i18n="admin_help_actions">Gebruik de knoppen Opslaan en Test verbinding na wijzigingen om te controleren of de configuratie werkt.</li>

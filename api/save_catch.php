@@ -56,40 +56,30 @@ function vislok_store_photo(?string $dataUrl, ?string $existingPath = null): ?st
     return 'uploads/catches/' . $fileName;
 }
 
-try {
+vislok_api(static function () {
     $payload = vislok_read_json();
-    $spotId = $payload['spot_id'] ?? '';
-    if (!$spotId) {
+    $stekId = $payload['spot_id'] ?? '';
+    if (!$stekId) {
         vislok_json_response(['error' => 'spot_id vereist'], 400);
     }
 
     $pdo = vislok_get_connection();
-    $stmt = $pdo->prepare('SELECT id, type FROM spots WHERE id = :id LIMIT 1');
-    $stmt->execute([':id' => $spotId]);
-    $spot = $stmt->fetch();
-    if (!$spot) {
+    $stek = vislok_fetch_stek($pdo, $stekId);
+    if (!$stek) {
         vislok_json_response(['error' => 'Stek niet gevonden'], 404);
-    }
-    if ($spot['type'] !== 'stek') {
-        vislok_json_response(['error' => 'Vangsten kunnen alleen aan stekken gekoppeld worden'], 400);
     }
 
     $rigId = $payload['rig_id'] ?? null;
     $rigIdValue = null;
     if ($rigId) {
-        $rigStmt = $pdo->prepare('SELECT id, type, stek_id FROM spots WHERE id = :id LIMIT 1');
-        $rigStmt->execute([':id' => $rigId]);
-        $rig = $rigStmt->fetch();
+        $rig = vislok_fetch_rig($pdo, $rigId);
         if (!$rig) {
             vislok_json_response(['error' => 'Rig niet gevonden'], 404);
         }
-        if ($rig['type'] !== 'rig') {
-            vislok_json_response(['error' => 'Ongeldig rig-type voor vangst'], 400);
-        }
         $rigIdValue = $rig['id'];
-        if (($rig['stek_id'] ?? null) !== $spotId) {
-            $assignStmt = $pdo->prepare('UPDATE spots SET stek_id = :stek WHERE id = :id');
-            $assignStmt->execute([':stek' => $spotId, ':id' => $rigIdValue]);
+        if (($rig['stek_id'] ?? null) !== $stekId) {
+            $assignStmt = $pdo->prepare('UPDATE rigs SET stek_id = :stek WHERE id = :id');
+            $assignStmt->execute([':stek' => $stekId, ':id' => $rigIdValue]);
         }
     }
 
@@ -116,7 +106,7 @@ try {
         VALUES (:id, :spot_id, :rig_id, :title, :species, :weight, :length, :notes, :photo, :caught_at)');
     $stmt->execute([
         ':id' => $id,
-        ':spot_id' => $spotId,
+        ':spot_id' => $stekId,
         ':rig_id' => $rigIdValue,
         ':title' => $title ?: null,
         ':species' => $species ?: null,
@@ -127,11 +117,11 @@ try {
         ':caught_at' => $caughtAt ?: null,
     ]);
 
-    vislok_json_response([
+    return [
         'status' => 'ok',
         'catch' => [
             'id' => $id,
-            'spot_id' => $spotId,
+            'spot_id' => $stekId,
             'rig_id' => $rigIdValue,
             'title' => $title,
             'species' => $species,
@@ -141,7 +131,5 @@ try {
             'photo_path' => $photoPath,
             'caught_at' => $caughtAt,
         ],
-    ]);
-} catch (Throwable $e) {
-    vislok_json_response(['error' => $e->getMessage()], 500);
-}
+    ];
+});

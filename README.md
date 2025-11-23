@@ -1,6 +1,6 @@
 # Vis Lokaties (v0.0.0)
 
-Vis Lokaties is een moderne herbouw van het oorspronkelijke bestand **“Vis lokaties 1.1.4-d.html”** met dezelfde kaartenworkflow, uitgebreidere bathymetrie-imports en MySQL-synchronisatie. De toepassing is volledig meertalig (Nederlands/Engels), werkt zonder bundler en kan rechtstreeks op XAMPP worden geplaatst.
+Vis Lokaties is een moderne herbouw van het oorspronkelijke bestand **“Vis lokaties 1.1.4-d.html”** met dezelfde kaartenworkflow, uitgebreide bathymetrie-imports en persistente opslag in de browser (localStorage). De toepassing is volledig meertalig (Nederlands/Engels), werkt zonder bundler en kan als statische site of op XAMPP worden geplaatst.
 
 ## Belangrijkste mogelijkheden
 
@@ -12,7 +12,7 @@ Vis Lokaties is een moderne herbouw van het oorspronkelijke bestand **“Vis lok
 
 ### Data-import & bathymetrie
 - CSV-, ZIP-, map- en GeoJSON-import met wachtrij, voortgangsbalk, deduplicatie en automatische heatmaprendering.【F:index.html†L189-L274】【F:assets/js/data.js†L90-L370】【F:assets/js/data.js†L690-L986】
-- Bathymetrieopsplitsing in batches (`bathy_imports` + `bathy_points`), quota-bewaking en optionele opslag in de database.【F:api/db.php†L44-L86】【F:assets/js/data.js†L1022-L1380】
+  - Bathymetrieopsplitsing in batches, quota-bewaking en optionele opslag in de lokale browserdatabase.【F:assets/js/data.js†L1022-L1380】
 - Heatmapinstellingen (radius, blur, min/max, invert, clip) en contourlaag gebaseerd op Turf.js.【F:index.html†L214-L252】【F:assets/js/map.js†L1183-L1364】
 
 ### Detectie & waterbeheer
@@ -21,11 +21,11 @@ Vis Lokaties is een moderne herbouw van het oorspronkelijke bestand **“Vis lok
 
 ### Beheer, koppelingen & vangsten
 - Overzichtstabellen voor waters/stekken/rigs met hernoemen, verwijderen en dropdowns om koppelingen aan te passen; toolbar-summary toont hiërarchische relaties.【F:index.html†L331-L433】【F:assets/js/ui.js†L56-L208】【F:assets/js/ui.js†L320-L468】
-- Vangstenpaneel met foto-upload en opslag in de tabel `catches`, inclusief sync naar MySQL.【F:assets/js/data.js†L1382-L1706】【F:api/save_catch.php†L1-L126】
+  - Vangstenpaneel met foto-upload; de gegevens blijven in de browseropslag en foto’s worden lokaal opgeslagen in de `uploads/`-map wanneer je die exporteert of back-upt.【F:assets/js/data.js†L1382-L1706】
 
 ### Weer, admin & versiebeheer
 - Weerpaneel met datum/uur-keuze, dichtheid, overlay-toggle en pijllagen.【F:index.html†L435-L520】【F:assets/js/weather.js†L38-L210】
-- Adminpagina voor databaseconfiguratie, autosync, bathy-voorkeuren en releasebeheer (`version.json`).【F:admin.html†L15-L115】【F:assets/js/admin.js†L32-L220】【F:data/version.json†L1-L10】
+  - Adminpagina voor autosync, bathy-voorkeuren en releasebeheer (`version.json`) zonder databaseconfiguratie; alles wordt in je browserprofiel opgeslagen.【F:admin.html†L15-L110】【F:assets/js/admin.js†L32-L220】【F:data/version.json†L1-L10】
 - Versie blijft op **v0.0.0** totdat klaar voor release; beheer gebeurt via admin of direct in `data/version.json`.【F:admin.html†L17-L77】【F:data/version.json†L1-L10】
 
 ## Directory-overzicht
@@ -37,67 +37,32 @@ Vis Lokaties is een moderne herbouw van het oorspronkelijke bestand **“Vis lok
 | `assets/css/` | Thema’s voor licht/donker + admin-styling.【F:assets/css/style-dark.css†L1-L620】【F:assets/css/style-light.css†L1-L620】 |
 | `assets/js/` | Modules (`core`, `map`, `data`, `ui`, `weather`, `admin`, `db`, `i18n`, `helpers`).【F:assets/js/core.js†L1-L350】 |
 | `assets/vendor/osmtogeojson.js` | Gebundelde Overpass-converter (fallback op eigen parsing).【F:assets/vendor/osmtogeojson.js†L1-L2】 |
-| `api/` | PHP-endpoints voor spots, bathymetrie, vangsten, config en versiebeheer.【F:api/save_spot.php†L1-L48】【F:api/save_import.php†L1-L69】【F:api/save_catch.php†L1-L126】 |
+| `api/` | Legacy PHP-endpoints (niet vereist voor lokale opslag); bewaarbaar voor eigen hostinguitbreidingen. |
 | `data/` | Persistente JSON-state + versie-informatie.【F:data/state.json†L1-L9】【F:data/version.json†L1-L10】 |
 | `lang/` | Nederlands/Engels vertalingen voor het volledige UI.【F:lang/nl.json†L1-L401】【F:lang/en.json†L1-L401】 |
 | `docs/` | Projectinventaris, herstelpunten en GitHub-sync-handleiding.【F:docs/project_inventory.md†L1-L106】【F:docs/restore_points.md†L1-L39】【F:docs/sync_github.md†L1-L98】 |
 | `scripts/` | Sync-helpers en herstelpunt-script (`create_restore_point.sh`).【F:scripts/sync_github.sh†L1-L40】【F:scripts/sync_github_full.sh†L1-L35】【F:scripts/create_restore_point.sh†L1-L45】 |
 | `uploads/` | Uploadmap voor vangstfoto’s (webserver schrijfrechten vereist). |
 
-## Installatie & gebruik
+## Installatie & gebruik (statische hosting of XAMPP)
 
 1. **Benodigdheden**
-   - XAMPP of andere PHP 8 + MySQL-stack.
+   - Een eenvoudige webserver om ES-modules te serveren (bijv. `npx serve`, XAMPP/Apache, nginx). File:// opent vaak niet door modulebeperkingen.
    - Browser met ES modules ondersteuning (Chrome, Firefox, Edge).
 
 2. **Plaatsing**
-   - Kopieer de repo naar je webroot, bv. `C:\xampp\htdocs\Vis-Lokaties`.
-   - Zorg dat `/api/` bereikbaar is via `http://localhost/Vis-Lokaties/api/...`.
+   - Kopieer de repo naar je webroot, bijv. `C:\xampp\htdocs\vislokaties` of `/var/www/vislokaties`, of start een statische server vanuit de projectmap.
+   - `uploads/` blijft beschikbaar voor handmatige foto-export of back-ups; applicatiedata (waters/stekken/rigs/imports/vangsten) staat in de browseropslag.
 
-3. **Databaseconfiguratie**
-   - Open `http://localhost/Vis-Lokaties/admin.html`.
-   - Vul host/poort/database/gebruiker/wachtwoord in en klik **Opslaan**.
-   - Gebruik **Test verbinding** om de credentials te verifiëren; configuratie wordt opgeslagen in `api/config.local.json`.【F:admin.html†L27-L70】【F:assets/js/admin.js†L132-L210】
-   - De eerste succesvolle API-call maakt de database en tabellen automatisch aan.【F:api/db.php†L1-L86】
-
-4. **Werking**
+3. **Werking**
    - Start de hoofdapp via `index.html`.
-   - Gebruik het **Data / Analyse**-paneel voor imports; vink “Opslaan in database” aan om bathy naar MySQL te schrijven.【F:index.html†L189-L247】
+   - Gebruik het **Data / Analyse**-paneel voor imports; punten worden lokaal bewaard en in de heatmap getoond.【F:index.html†L189-L247】【F:assets/js/data.js†L1022-L1380】
    - Nieuwe stekken/rigs koppelen automatisch aan dichtbijzijnde water/stek en kunnen in het beheerpaneel worden aangepast.【F:assets/js/data.js†L422-L646】【F:assets/js/ui.js†L56-L208】
-   - Vangsten toevoegen via het **Vangsten**-paneel; foto’s worden opgeslagen onder `uploads/`.【F:assets/js/data.js†L1382-L1706】
+   - Vangsten toevoegen via het **Vangsten**-paneel; gegevens blijven lokaal, foto’s kun je handmatig in `uploads/` bewaren of exporteren.【F:assets/js/data.js†L1382-L1706】
 
-5. **Admin & versiebeheer**
-   - Beheer autosync, bathy-voorkeuren en releases op de adminpagina.
+4. **Admin & versiebeheer**
+   - Beheer bathy-voorkeuren, autosync en releases op de adminpagina; alles wordt direct in de lokale opslag geplaatst.【F:admin.html†L15-L110】【F:assets/js/admin.js†L32-L220】
    - Het project blijft op versie **0.0.0** totdat een nieuwe release wordt opgeslagen.【F:data/version.json†L1-L10】
-
-## Database-overzicht
-
-| Tabel | Doel | Belangrijke kolommen |
-| --- | --- | --- |
-| `spots` | Bevat waters, stekken en rigs met optionele polygonen en relaties. | `type`, `name`, `lat`, `lng`, `polygon`, `water_id`, `stek_id`【F:api/db.php†L23-L45】 |
-| `bathy_imports` | Metadata voor elke bathymetrie-import. | `source`, `file_name`, `total_points`【F:api/db.php†L47-L56】 |
-| `bathy_points` | Alle dieptepunten gekoppeld aan een import. | `import_id`, `lat`, `lng`, `depth`【F:api/db.php†L58-L67】 |
-| `catches` | Vangsten per stek/rig (optionele foto). | `spot_id`, `title`, `species`, `weight_kg`, `photo_path`【F:api/db.php†L69-L80】 |
-
-Alle tabellen worden gecreëerd indien ze ontbreken. Verwijderen van een spot cascadeert naar gekoppelde vangsten en bathy-punten dankzij foreign keys.【F:api/db.php†L55-L67】【F:api/db.php†L69-L80】
-
-## API-endpoints
-
-| Endpoint | Methode | Beschrijving |
-| --- | --- | --- |
-| `api/list_spots.php` | GET | Haalt alle waters/stekken/rigs + relaties op.【F:api/list_spots.php†L1-L17】 |
-| `api/save_spot.php` | POST | Maakt of wijzigt een spot en koppelingen.【F:api/save_spot.php†L1-L48】 |
-| `api/delete_spot.php` | POST | Verwijdert een spot (cascade op rigs/vangsten).【F:api/delete_spot.php†L1-L15】 |
-| `api/reset_spots.php` | POST | Leegt de spotstabel en bathy-data.【F:api/reset_spots.php†L1-L10】 |
-| `api/list_imports.php` | GET | Lijst bathy-imports met puntentellingen.【F:api/list_imports.php†L1-L21】 |
-| `api/save_import.php` | POST | Slaat een batch bathy-punten op (cleart oude records).【F:api/save_import.php†L1-L69】 |
-| `api/clear_imports.php` | POST | Verwijdert alle bathy-imports.【F:api/clear_imports.php†L1-L11】 |
-| `api/list_catches.php` | GET | Retourneert vangsten inclusief spotkoppeling.【F:api/list_catches.php†L1-L20】 |
-| `api/save_catch.php` | POST | Bewaart of wijzigt een vangst en uploadt foto’s.【F:api/save_catch.php†L1-L126】 |
-| `api/delete_catch.php` | POST | Verwijdert een vangst + foto (indien aanwezig).【F:api/delete_catch.php†L1-L31】 |
-| `api/get_config.php` / `save_config.php` | GET/POST | Leest/schrijft databaseconfiguratie.【F:api/get_config.php†L1-L11】【F:api/save_config.php†L1-L30】 |
-| `api/test_connection.php` | POST | Valideert credentials zonder ze op te slaan.【F:api/test_connection.php†L1-L23】 |
-| `api/get_version.php` / `save_version.php` | GET/POST | Leest en schrijft releasegegevens via `version_store`.【F:api/get_version.php†L1-L10】【F:api/save_version.php†L1-L15】【F:api/version_store.php†L1-L131】 |
 
 ## Data-import workflow
 
