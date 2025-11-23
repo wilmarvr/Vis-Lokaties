@@ -587,6 +587,8 @@ function bindEvents() {
     selectionLabel: document.getElementById("catchSelectionLabel"),
     list: document.getElementById("catchList")
   };
+
+  ensureCatchFormVisible();
   bindCatchForm();
 
   document.addEventListener("vislok:focus-catch-form", e => focusCatchForm(e.detail));
@@ -607,6 +609,23 @@ function bindEvents() {
   document.addEventListener("vislok:storage-truncated", handleStorageTruncated);
   document.addEventListener("vislok:storage-error", handleStorageError);
   document.addEventListener("vislok:map-bounds", e => scheduleBathyViewportFetch(e?.detail || e));
+}
+
+function ensureCatchFormVisible() {
+  const panel = document.querySelector('details[data-panel="catches"]');
+  if (panel) {
+    panel.setAttribute("open", "open");
+    panel.classList.remove("is-hidden");
+  }
+
+  if (catchFormEls.form) {
+    catchFormEls.form.hidden = false;
+    catchFormEls.form.style.display = "grid";
+    catchFormEls.form.classList.remove("is-hidden");
+  }
+
+  if (catchFormEls.selectionLabel) catchFormEls.selectionLabel.hidden = false;
+  if (catchFormEls.list) catchFormEls.list.hidden = false;
 }
 
 /* ---------- MAP EVENT HANDLERS ---------- */

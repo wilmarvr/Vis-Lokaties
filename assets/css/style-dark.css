@@ -592,8 +592,9 @@ details .group h3 {
   padding: 4px 8px 10px;
 }
 
+#catchForm,
 .catch-form {
-  display: grid;
+  display: grid !important;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   gap: 6px 8px;
 }
