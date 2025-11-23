@@ -14,6 +14,7 @@
   --ok: #1b8a55;
   --shadow: rgba(0,0,0,0.15);
   --sidebar-width: 340px;
+  --header-height: 60px;
 }
 
 /* ---------- ALGEMEEN ---------- */
@@ -43,6 +44,8 @@ header {
   border-bottom: 1px solid var(--border);
   box-shadow: 0 2px 6px var(--shadow);
   padding: 6px 10px;
+  min-height: var(--header-height);
+  box-sizing: border-box;
 }
 header h1 {
   font-size: 1.1em;
@@ -239,27 +242,16 @@ header small {
 /* ---------- LAYOUT ---------- */
 main {
   display: flex;
-  flex: 1;
+  flex: 1 1 auto;
   min-height: 0;
+  height: calc(100vh - var(--header-height));
 }
 #mapContainer {
   flex: 1;
   background: #e9ecf0;
   min-width: 0;
+  height: 100%;
   min-height: 100%;
-}
-#toolbarResizeHandle {
-  width: 10px;
-  cursor: ew-resize;
-  background: linear-gradient(90deg, transparent 0%, rgba(0,0,0,0.05) 40%, rgba(0,0,0,0.05) 60%, transparent 100%);
-  flex: 0 0 10px;
-  border-left: 1px solid var(--border);
-  border-right: 1px solid var(--border);
-  box-shadow: inset -1px 0 2px rgba(0, 0, 0, 0.05);
-}
-#toolbarResizeHandle.is-dragging {
-  background: linear-gradient(90deg, rgba(25,118,210,0.25) 0%, rgba(25,118,210,0.35) 50%, rgba(25,118,210,0.25) 100%);
-  border-color: var(--accent);
 }
 #toolbarResizeHandle {
   width: 10px;

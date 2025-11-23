@@ -82,6 +82,13 @@ export function initMap() {
     zoomControl: true
   });
 
+  const container = document.getElementById("mapContainer");
+  if (container) {
+    const refreshSize = () => map.invalidateSize();
+    requestAnimationFrame(refreshSize);
+    setTimeout(refreshSize, 120);
+  }
+
   createBaseLayers();
   switchBaseLayer(state.baseLayer || "osm");
 
