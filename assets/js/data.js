@@ -1857,7 +1857,8 @@ function mergeImportPoints(points, options = {}) {
     setImportMeta({ stored: state.imports.length, total: state.imports.length, truncated: false, dropped: false });
   }
 
-  if (options.save !== false) {
+  const shouldSaveState = options.save === true;
+  if (shouldSaveState) {
     saveState();
   }
 
