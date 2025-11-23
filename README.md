@@ -1,6 +1,6 @@
 # Vis Lokaties (v0.0.0)
 
-Vis Lokaties is een moderne herbouw van het oorspronkelijke bestand **“Vis lokaties 1.1.4-d.html”** met dezelfde kaartenworkflow, uitgebreide bathymetrie-imports en persistente opslag in de browser (localStorage). De toepassing is volledig meertalig (Nederlands/Engels), werkt zonder bundler en kan als statische site worden geplaatst. Er is geen database, server-API of uploads-map meer nodig.
+Vis Lokaties is een moderne herbouw van het oorspronkelijke bestand **“Vis lokaties 1.1.4-d.html”** met dezelfde kaartenworkflow, uitgebreide bathymetrie-imports en persistente opslag in MySQL. De toepassing is volledig meertalig (Nederlands/Engels), werkt zonder bundler en draait op een eenvoudige PHP + MySQL-stack. Bij het opstarten maakt de app met een admin-account automatisch de database, tabellen en een eigen applicatiegebruiker aan, waarna alle data vanuit de UI rechtstreeks in MySQL wordt opgeslagen.
 
 ## Belangrijkste mogelijkheden
 
@@ -12,7 +12,7 @@ Vis Lokaties is een moderne herbouw van het oorspronkelijke bestand **“Vis lok
 
 ### Data-import & bathymetrie
 - CSV-, ZIP-, map- en GeoJSON-import met wachtrij, voortgangsbalk, deduplicatie en automatische heatmaprendering.【F:index.html†L189-L274】【F:assets/js/data.js†L90-L370】【F:assets/js/data.js†L690-L986】
-  - Bathymetrieopsplitsing in batches, quota-bewaking en optionele opslag in de lokale browserdatabase.【F:assets/js/data.js†L1022-L1380】
+  - Bathymetrieopsplitsing in batches en opslag in MySQL via de API, inclusief puntfiltering per kaartvenster.【F:assets/js/data.js†L1022-L1380】【F:api/save_import.php†L1-L43】【F:api/get_import_points.php†L1-L34】
 - Heatmapinstellingen (radius, blur, min/max, invert, clip) en contourlaag gebaseerd op Turf.js.【F:index.html†L214-L252】【F:assets/js/map.js†L1183-L1364】
 
 ### Detectie & waterbeheer
@@ -21,7 +21,7 @@ Vis Lokaties is een moderne herbouw van het oorspronkelijke bestand **“Vis lok
 
 ### Beheer, koppelingen & vangsten
 - Overzichtstabellen voor waters/stekken/rigs met hernoemen, verwijderen en dropdowns om koppelingen aan te passen; toolbar-summary toont hiërarchische relaties.【F:index.html†L331-L433】【F:assets/js/ui.js†L56-L208】【F:assets/js/ui.js†L320-L468】
-- Vangstenpaneel met foto-upload; de gegevens blijven in de browseropslag en foto’s blijven in localStorage (geen servermap nodig).【F:assets/js/data.js†L1382-L1706】
+- Vangstenpaneel met foto-upload; foto’s worden op de server bewaard en metadata in MySQL opgeslagen.【F:assets/js/data.js†L1382-L1706】【F:api/save_catch.php†L1-L43】
 
 ### Weer, admin & versiebeheer
 - Weerpaneel met datum/uur-keuze, dichtheid, overlay-toggle en pijllagen.【F:index.html†L435-L520】【F:assets/js/weather.js†L38-L210】
@@ -42,24 +42,30 @@ Vis Lokaties is een moderne herbouw van het oorspronkelijke bestand **“Vis lok
 | `scripts/` | Optionele sync-helpers en herstelpunt-script (`create_restore_point.sh`).【F:scripts/sync_github.sh†L1-L40】【F:scripts/sync_github_full.sh†L1-L35】【F:scripts/create_restore_point.sh†L1-L45】 |
 | *(geen serverbestanden nodig)* | Alle data blijft in localStorage; er zijn geen PHP-API’s of uploadmappen meer. |
 
-## Installatie & gebruik (statische hosting)
+## Installatie & gebruik (PHP + MySQL)
 
 1. **Benodigdheden**
-   - Een eenvoudige webserver om ES-modules te serveren (bijv. `npx serve`, nginx). File:// opent vaak niet door modulebeperkingen.
-   - Browser met ES modules ondersteuning (Chrome, Firefox, Edge).
+   - PHP 8.1+ met `pdo_mysql` en `json` extensies.
+   - MySQL/MariaDB server.
+   - Webserver die PHP afhandelt (Apache/XAMPP of nginx + php-fpm).
 
-2. **Plaatsing**
-   - Kopieer de repo naar je webroot (bv. `/var/www/vislokaties`) of start een statische server vanuit de projectmap.
-   - Alle applicatiedata (waters/stekken/rigs/imports/vangsten) staat in de browseropslag; er is geen uploadmap of serverproces vereist.
+2. **Database**
+   - Standaard wordt de database `vislok` gebruikt met app-gebruiker `vislok_app` / `vislok_app`.
+   - Stel optioneel omgevingsvariabelen in om host/poort/DB/app/admin-gegevens te overschrijven: `VISLOK_DB_HOST`, `VISLOK_DB_PORT`, `VISLOK_DB_NAME`, `VISLOK_DB_USER`, `VISLOK_DB_PASS`, `VISLOK_DB_ADMIN_USER`, `VISLOK_DB_ADMIN_PASS`.
+   - Bij de eerste API-aanroep maakt de admin-gebruiker de database, tabellen en de app-gebruiker aan; alle tabellen worden door de app-gebruiker gevuld.
 
-3. **Werking**
-   - Start de hoofdapp via `index.html`.
-   - Gebruik het **Data / Analyse**-paneel voor imports; punten worden lokaal bewaard en in de heatmap getoond.【F:index.html†L189-L247】【F:assets/js/data.js†L1022-L1380】
+3. **Plaatsing**
+   - Kopieer de repo naar je webroot (bv. `C:/xampp/htdocs/vislokaties` of `/var/www/vislokaties`).
+   - Zorg dat de map `uploads/catches` schrijfbaar is voor fotouploads.
+   - Open `index.html` in de browser via je webserver (niet via `file://`).
+
+4. **Werking**
+   - Gebruik het **Data / Analyse**-paneel voor imports; punten worden in MySQL opgeslagen en via de heatmap getoond.【F:index.html†L189-L247】【F:assets/js/data.js†L1022-L1380】
    - Nieuwe stekken/rigs koppelen automatisch aan dichtbijzijnde water/stek en kunnen in het beheerpaneel worden aangepast.【F:assets/js/data.js†L422-L646】【F:assets/js/ui.js†L56-L208】
-   - Vangsten toevoegen via het **Vangsten**-paneel; gegevens blijven lokaal en foto’s kun je via de browser downloaden of exporteren.【F:assets/js/data.js†L1382-L1706】
+   - Vangsten toevoegen via het **Vangsten**-paneel; metadata komt in MySQL en foto’s worden op de server geplaatst.【F:assets/js/data.js†L1382-L1706】【F:api/save_catch.php†L1-L43】
 
-4. **Admin & versiebeheer**
-   - Beheer bathy-voorkeuren, autosync en releases op de adminpagina; alles wordt direct in de lokale opslag geplaatst.【F:admin.html†L15-L110】【F:assets/js/admin.js†L32-L220】
+5. **Admin & versiebeheer**
+   - Interface- en map/detectievoorkeuren staan op de adminpagina en slaan rechtstreeks in de appconfig (lokaal) op; databaseconfiguratie verloopt via `api/config.php` of omgevingsvariabelen.【F:admin.html†L15-L110】【F:assets/js/admin.js†L32-L220】【F:api/config.php†L1-L11】
    - Het project blijft op versie **0.0.0** totdat een nieuwe release wordt opgeslagen.【F:data/version.json†L1-L10】
 
 ## Data-import workflow

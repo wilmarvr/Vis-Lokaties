@@ -78,7 +78,7 @@
           <button type="submit" id="btnAdminSave" data-i18n="admin_save">Opslaan</button>
         </div>
       </form>
-      <div id="adminStatus" class="admin-status panel-note" data-i18n="admin_hint">Instellingen worden lokaal opgeslagen; er is geen server nodig.</div>
+      <div id="adminStatus" class="admin-status panel-note" data-i18n="admin_hint">Interfacevoorkeuren worden lokaal opgeslagen; wateren, stekken, rigs en vangsten staan in MySQL.</div>
     </section>
 
     <section class="admin-card admin-version">
@@ -105,12 +105,12 @@
 
       <section class="admin-card admin-help">
         <h2 data-i18n="admin_help_title">Hulp &amp; uitleg</h2>
-        <p data-i18n="admin_help_intro">Alles draait lokaal; gebruik deze tips om je voorkeuren vast te leggen.</p>
+        <p data-i18n="admin_help_intro">De kaart slaat data in MySQL op; gebruik deze tips om je voorkeuren vast te leggen.</p>
         <ul class="admin-help-list">
-          <li data-i18n="admin_help_db">Alle data wordt in de browser bewaard; back-up door de pagina te exporteren of lokale opslag te wissen.</li>
+          <li data-i18n="admin_help_db">Data (waters/stekken/rigs/imports/vangsten) staat in MySQL; interfacevoorkeuren blijven lokaal bewaard.</li>
           <li data-i18n="admin_help_sync">Schakel panelen in/uit om de interface naar wens te maken; de keuzes blijven lokaal bewaard.</li>
           <li data-i18n="admin_help_version">Gebruik het versieformulier om release-informatie op te slaan en de zichtbare app-versie bij te werken.</li>
-          <li data-i18n="admin_help_actions">Opslaan is voldoende; er is geen server- of databaseverbinding nodig.</li>
+          <li data-i18n="admin_help_actions">Opslaan is voldoende; de backend beheert database en gebruikers automatisch.</li>
         </ul>
       </section>
   </main>
