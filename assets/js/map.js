@@ -51,6 +51,7 @@ let pointerDownPoint = null;
 let suppressPlacementClick = false;
 let suppressTimer = null;
 let dragDistanceTooltip = null;
+let dragDistanceLine = null;
 let dragDistanceContext = null;
 let spotPopup = null;
 let spotPopupData = null;
@@ -605,32 +606,50 @@ function resolveMarkerReference(item, type) {
   return null;
 }
 
-  function startMarkerDistancePreview(marker, item, type, initialLatLng = null) {
-    if (!map) return;
-    const reference = resolveMarkerReference(item, type);
-    dragDistanceContext = reference ? { marker, reference, type } : null;
+function startMarkerDistancePreview(marker, item, type, initialLatLng = null) {
+  if (!map) return;
+  const reference = resolveMarkerReference(item, type);
+  dragDistanceContext = reference ? { marker, reference, type } : null;
     if (!dragDistanceContext) {
       stopMarkerDistancePreview();
       return;
     }
     const startPoint = initialLatLng || (marker?.getLatLng ? marker.getLatLng() : null);
-    if (!startPoint || !Number.isFinite(startPoint.lat) || !Number.isFinite(startPoint.lng)) {
-      stopMarkerDistancePreview();
-      return;
-    }
-    if (!dragDistanceTooltip) {
-      dragDistanceTooltip = L.tooltip({
-        permanent: false,
-        direction: "top",
-        className: "placement-tip",
-        opacity: 0.9
-      });
-    }
-    dragDistanceTooltip.setLatLng([startPoint.lat, startPoint.lng]);
-    if (!map.hasLayer(dragDistanceTooltip)) {
-      dragDistanceTooltip.addTo(map);
-    }
-    updateMarkerDistancePreview(startPoint);
+  if (!startPoint || !Number.isFinite(startPoint.lat) || !Number.isFinite(startPoint.lng)) {
+    stopMarkerDistancePreview();
+    return;
+  }
+  const color = type === "rig" ? "#ab47bc" : "#1e88e5";
+  if (!dragDistanceTooltip) {
+    dragDistanceTooltip = L.tooltip({
+      permanent: false,
+      direction: "top",
+      className: "placement-tip",
+      opacity: 0.9
+    });
+  }
+  if (!dragDistanceLine) {
+    dragDistanceLine = L.polyline([], {
+      color,
+      weight: 2,
+      opacity: 0.8,
+      pane: map.getPane("overlayPane"),
+      className: "drag-distance-line"
+    });
+    dragDistanceLine.addTo(map);
+  } else {
+    dragDistanceLine.setStyle({ color });
+    if (!map.hasLayer(dragDistanceLine)) dragDistanceLine.addTo(map);
+  }
+  dragDistanceLine.setLatLngs([
+    [reference.lat, reference.lng],
+    [startPoint.lat, startPoint.lng]
+  ]);
+  dragDistanceTooltip.setLatLng([startPoint.lat, startPoint.lng]);
+  if (!map.hasLayer(dragDistanceTooltip)) {
+    dragDistanceTooltip.addTo(map);
+  }
+  updateMarkerDistancePreview(startPoint);
   }
 
 function updateMarkerDistancePreview(latlng) {
@@ -646,12 +665,22 @@ function updateMarkerDistancePreview(latlng) {
   const text = t(labelKey, fallback).replace("{distance}", String(rounded));
   const nameLine = escapeHtml(reference.name || reference.id || "");
   const label = nameLine ? `${text}<br><small>${nameLine}</small>` : text;
+  if (dragDistanceLine) {
+    dragDistanceLine.setLatLngs([
+      [reference.lat, reference.lng],
+      [latlng.lat, latlng.lng]
+    ]);
+  }
   dragDistanceTooltip.setLatLng([latlng.lat, latlng.lng]);
   dragDistanceTooltip.setContent(label);
 }
 
 function stopMarkerDistancePreview() {
   dragDistanceContext = null;
+  if (dragDistanceLine) {
+    map.removeLayer(dragDistanceLine);
+    dragDistanceLine = null;
+  }
   if (dragDistanceTooltip) {
     map.removeLayer(dragDistanceTooltip);
     dragDistanceTooltip = null;
