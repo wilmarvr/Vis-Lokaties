@@ -1,6 +1,6 @@
 # Vis Lokaties (v0.0.0)
 
-Vis Lokaties is een moderne herbouw van het oorspronkelijke bestand **“Vis lokaties 1.1.4-d.html”** met dezelfde kaartenworkflow, uitgebreidere bathymetrie-imports en MySQL-synchronisatie. De toepassing is volledig meertalig (Nederlands/Engels), werkt zonder bundler en kan rechtstreeks op XAMPP worden geplaatst.
+Vis Lokaties is een moderne herbouw van het oorspronkelijke bestand **“Vis lokaties 1.1.4-d.html”** met dezelfde kaartenworkflow, uitgebreidere bathymetrie-imports en persistente opslag via SQLite. De toepassing is volledig meertalig (Nederlands/Engels), werkt zonder bundler en kan rechtstreeks op XAMPP worden geplaatst.
 
 ## Belangrijkste mogelijkheden
 
@@ -21,11 +21,11 @@ Vis Lokaties is een moderne herbouw van het oorspronkelijke bestand **“Vis lok
 
 ### Beheer, koppelingen & vangsten
 - Overzichtstabellen voor waters/stekken/rigs met hernoemen, verwijderen en dropdowns om koppelingen aan te passen; toolbar-summary toont hiërarchische relaties.【F:index.html†L331-L433】【F:assets/js/ui.js†L56-L208】【F:assets/js/ui.js†L320-L468】
-- Vangstenpaneel met foto-upload en opslag in de tabel `catches`, inclusief sync naar MySQL.【F:assets/js/data.js†L1382-L1706】【F:api/save_catch.php†L1-L126】
+- Vangstenpaneel met foto-upload en opslag in de tabel `catches`, inclusief lokale opslag in SQLite.【F:assets/js/data.js†L1382-L1706】【F:api/save_catch.php†L1-L126】
 
 ### Weer, admin & versiebeheer
 - Weerpaneel met datum/uur-keuze, dichtheid, overlay-toggle en pijllagen.【F:index.html†L435-L520】【F:assets/js/weather.js†L38-L210】
-- Adminpagina voor databaseconfiguratie, autosync, bathy-voorkeuren en releasebeheer (`version.json`).【F:admin.html†L15-L115】【F:assets/js/admin.js†L32-L220】【F:data/version.json†L1-L10】
+- Adminpagina voor autosync, bathy-voorkeuren en releasebeheer (`version.json`). De database draait standaard op `data/vislok.sqlite` en vergt geen configuratie.【F:admin.html†L15-L110】【F:assets/js/admin.js†L32-L220】【F:data/version.json†L1-L10】
 - Versie blijft op **v0.0.0** totdat klaar voor release; beheer gebeurt via admin of direct in `data/version.json`.【F:admin.html†L17-L77】【F:data/version.json†L1-L10】
 
 ## Directory-overzicht
@@ -44,42 +44,44 @@ Vis Lokaties is een moderne herbouw van het oorspronkelijke bestand **“Vis lok
 | `scripts/` | Sync-helpers en herstelpunt-script (`create_restore_point.sh`).【F:scripts/sync_github.sh†L1-L40】【F:scripts/sync_github_full.sh†L1-L35】【F:scripts/create_restore_point.sh†L1-L45】 |
 | `uploads/` | Uploadmap voor vangstfoto’s (webserver schrijfrechten vereist). |
 
-## Installatie & gebruik
+## Installatie & gebruik (XAMPP/hosting)
 
 1. **Benodigdheden**
-   - XAMPP of andere PHP 8 + MySQL-stack.
+   - PHP 8.0+ met de extensies `pdo_sqlite`, `sqlite3`, `json` en `fileinfo` (standaard aanwezig in XAMPP; anders aanvinken in `php.ini`).
+   - Webserver met schrijfrechten op `data/` en `uploads/` (bij voorkeur 0775).
    - Browser met ES modules ondersteuning (Chrome, Firefox, Edge).
 
 2. **Plaatsing**
-   - Kopieer de repo naar je webroot, bv. `C:\xampp\htdocs\Vis-Lokaties`.
-   - Zorg dat `/api/` bereikbaar is via `http://localhost/Vis-Lokaties/api/...`.
+   - Kopieer de repo naar je webroot, bijv. `C:\xampp\htdocs\vislokaties` of `/var/www/vislokaties`.
+   - Controleer dat `uploads/` en `data/` bestaan; de applicatie maakt `data/vislok.sqlite` automatisch aan als hij ontbreekt.【F:api/db.php†L33-L106】
 
-3. **Databaseconfiguratie**
-   - Open `http://localhost/Vis-Lokaties/admin.html`.
-   - Vul host/poort/database/gebruiker/wachtwoord in en klik **Opslaan**.
-   - Gebruik **Test verbinding** om de credentials te verifiëren; configuratie wordt opgeslagen in `api/config.local.json`.【F:admin.html†L27-L70】【F:assets/js/admin.js†L132-L210】
-   - De eerste succesvolle API-call maakt de database en tabellen automatisch aan.【F:api/db.php†L1-L86】
+3. **Database (geen MySQL nodig)**
+   - De app gebruikt altijd `data/vislok.sqlite`; extra configuratie is niet nodig.
+   - Open `http://localhost/vislokaties/admin.html` om sync- en interface-opties te beheren of de verbinding te testen.
+   - De backend zorgt bij de eerste request dat de map bestaat, de SQLite-file wordt aangemaakt en alle tabellen worden opgebouwd.【F:api/db.php†L33-L169】
 
 4. **Werking**
    - Start de hoofdapp via `index.html`.
-   - Gebruik het **Data / Analyse**-paneel voor imports; vink “Opslaan in database” aan om bathy naar MySQL te schrijven.【F:index.html†L189-L247】
+   - Gebruik het **Data / Analyse**-paneel voor imports; bathy wordt lokaal in SQLite bewaard zodra je “Opslaan in database” activeert.【F:index.html†L189-L247】【F:assets/js/data.js†L1022-L1380】
    - Nieuwe stekken/rigs koppelen automatisch aan dichtbijzijnde water/stek en kunnen in het beheerpaneel worden aangepast.【F:assets/js/data.js†L422-L646】【F:assets/js/ui.js†L56-L208】
-   - Vangsten toevoegen via het **Vangsten**-paneel; foto’s worden opgeslagen onder `uploads/`.【F:assets/js/data.js†L1382-L1706】
+   - Vangsten toevoegen via het **Vangsten**-paneel; foto’s worden opgeslagen onder `uploads/` en het pad komt in de `catches`-tabel.【F:assets/js/data.js†L1382-L1706】【F:api/save_catch.php†L1-L126】
 
 5. **Admin & versiebeheer**
-   - Beheer autosync, bathy-voorkeuren en releases op de adminpagina.
+    - Beheer bathy-voorkeuren en releases op de adminpagina.
    - Het project blijft op versie **0.0.0** totdat een nieuwe release wordt opgeslagen.【F:data/version.json†L1-L10】
 
-## Database-overzicht
+## Database-overzicht (SQLite)
 
 | Tabel | Doel | Belangrijke kolommen |
 | --- | --- | --- |
-| `spots` | Bevat waters, stekken en rigs met optionele polygonen en relaties. | `type`, `name`, `lat`, `lng`, `polygon`, `water_id`, `stek_id`【F:api/db.php†L23-L45】 |
-| `bathy_imports` | Metadata voor elke bathymetrie-import. | `source`, `file_name`, `total_points`【F:api/db.php†L47-L56】 |
-| `bathy_points` | Alle dieptepunten gekoppeld aan een import. | `import_id`, `lat`, `lng`, `depth`【F:api/db.php†L58-L67】 |
-| `catches` | Vangsten per stek/rig (optionele foto). | `spot_id`, `title`, `species`, `weight_kg`, `photo_path`【F:api/db.php†L69-L80】 |
+| `waters` | Waterlichamen met polygon/centroid. | `name`, `lat`, `lng`, `polygon`, `val`, `note`【F:api/db.php†L72-L87】 |
+| `stekken` | Stekken die optioneel aan een water hangen. | `water_id`, `name`, `lat`, `lng`, `polygon`【F:api/db.php†L89-L107】 |
+| `rigs` | Rig-posities die aan een stek/water kunnen hangen. | `stek_id`, `water_id`, `name`, `lat`, `lng`, `polygon`【F:api/db.php†L109-L128】 |
+| `bathy_imports` | Metadata voor elke bathymetrie-import. | `source`, `file_name`, `total_points`【F:api/db.php†L130-L139】 |
+| `bathy_points` | Alle dieptepunten gekoppeld aan een import. | `import_id`, `lat`, `lng`, `depth`【F:api/db.php†L141-L153】 |
+| `catches` | Vangsten per stek/rig (optionele foto). | `spot_id`, `rig_id`, `title`, `species`, `photo_path`, weer/maatkolommen【F:api/db.php†L155-L205】 |
 
-Alle tabellen worden gecreëerd indien ze ontbreken. Verwijderen van een spot cascadeert naar gekoppelde vangsten en bathy-punten dankzij foreign keys.【F:api/db.php†L55-L67】【F:api/db.php†L69-L80】
+Alle tabellen worden automatisch gecreëerd als ze ontbreken. Verwijderen van een stek cascadeert naar gekoppelde rigs en vangsten; bathy-punten hangen aan imports met cascade-delete.【F:api/db.php†L155-L205】
 
 ## API-endpoints
 

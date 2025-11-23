@@ -1,18 +1,13 @@
 <?php
 // =======================================================
 // Vis Lokaties — config.php
-// Dynamische databaseconfiguratie voor XAMPP (MySQL/MariaDB)
-// Deze configuratie laadt standaardwaarden en optionele overrides
-// uit config.local.json zodat de waarden via de admin-interface
-// aangepast kunnen worden.
+// Eenvoudige configuratie voor SQLite.
+// De database draait altijd op het ingebouwde pad; alleen UI-opties zijn instelbaar.
 // =======================================================
 
+const VISLOK_DEFAULT_PATH = __DIR__ . '/../data/vislok.sqlite';
+
 const VISLOK_CONFIG_DEFAULT = [
-    'host' => '127.0.0.1',
-    'port' => '3306',
-    'name' => 'vis_lokaties',
-    'user' => 'root',
-    'pass' => '',
     'options' => []
 ];
 
@@ -46,31 +41,27 @@ function vislok_config_path(): string
     return __DIR__ . '/config.local.json';
 }
 
+function vislok_normalise_path(string $path): string
+{
+    $path = trim($path);
+    if ($path === '') {
+        return VISLOK_DEFAULT_PATH;
+    }
+
+    // Relative pad -> baseer op project root
+    if (!preg_match('~^(/|[A-Za-z]:[\\/])~', $path)) {
+        $base = realpath(__DIR__ . '/..') ?: dirname(__DIR__);
+        $path = rtrim($base, '/\\') . '/' . ltrim($path, '/\\');
+    }
+
+    return $path;
+}
+
 function vislok_sanitise_config(array $config): array
 {
-    $clean = [
-        'host' => trim((string)($config['host'] ?? VISLOK_CONFIG_DEFAULT['host'])),
-        'port' => (string)($config['port'] ?? VISLOK_CONFIG_DEFAULT['port']),
-        'name' => trim((string)($config['name'] ?? VISLOK_CONFIG_DEFAULT['name'])),
-        'user' => trim((string)($config['user'] ?? VISLOK_CONFIG_DEFAULT['user'])),
-        'pass' => (string)($config['pass'] ?? VISLOK_CONFIG_DEFAULT['pass']),
+    return [
         'options' => vislok_sanitise_options($config['options'] ?? [])
     ];
-
-    if ($clean['host'] === '') {
-        $clean['host'] = VISLOK_CONFIG_DEFAULT['host'];
-    }
-    if (!preg_match('/^[0-9]+$/', $clean['port'])) {
-        $clean['port'] = VISLOK_CONFIG_DEFAULT['port'];
-    }
-    if ($clean['name'] === '') {
-        $clean['name'] = VISLOK_CONFIG_DEFAULT['name'];
-    }
-    if ($clean['user'] === '') {
-        $clean['user'] = VISLOK_CONFIG_DEFAULT['user'];
-    }
-
-    return $clean;
 }
 
 function vislok_load_config(bool $refresh = false): array
@@ -81,6 +72,7 @@ function vislok_load_config(bool $refresh = false): array
     }
 
     $config = VISLOK_CONFIG_DEFAULT;
+
     $path = vislok_config_path();
     if (is_readable($path)) {
         $json = file_get_contents($path);
@@ -115,8 +107,4 @@ function vislok_current_config(): array
 }
 
 $config = vislok_current_config();
-define('DB_HOST', $config['host']);
-define('DB_PORT', $config['port']);
-define('DB_NAME', $config['name']);
-define('DB_USER', $config['user']);
-define('DB_PASS', $config['pass']);
+define('DB_PATH', VISLOK_DEFAULT_PATH);
