@@ -2429,8 +2429,8 @@ function persistSpot(spot, showStatus = true) {
 
 /* ---------- SERVER SYNC ---------- */
 function syncWithServer(pushLocal) {
-  return Promise.all([fetchSpots(), fetchCatches()])
-    .then(([spots, catches]) => {
+  return fetchSpots()
+    .then(spots => {
       if (Array.isArray(spots)) {
         mergeServerData(spots);
         setStatus(`${t("status_sync_done", "Lokale opslag geladen")} (${spots.length})`, "ok");
