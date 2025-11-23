@@ -1,20 +1,15 @@
 <?php
-require_once __DIR__ . '/db.php';
+require __DIR__ . '/db.php';
 
 try {
-    $payload = vislok_read_json();
-    $spotId = $payload['spot_id'] ?? ($_GET['spot_id'] ?? null);
-
-    $pdo = vislok_get_connection();
-    if ($spotId) {
-        $stmt = $pdo->prepare('SELECT * FROM catches WHERE spot_id = :spot ORDER BY caught_at DESC, created_at DESC');
-        $stmt->execute([':spot' => $spotId]);
-    } else {
-        $stmt = $pdo->query('SELECT * FROM catches ORDER BY caught_at DESC, created_at DESC');
-    }
-
-    $rows = $stmt->fetchAll();
-    vislok_json_response(['data' => $rows]);
+    $pdo = vislok_bootstrap();
+    $sql = 'SELECT c.*, s.name AS stek_name, r.name AS rig_name
+            FROM catches c
+            LEFT JOIN stekken s ON c.stek_id = s.id
+            LEFT JOIN rigs r ON c.rig_id = r.id
+            ORDER BY c.caught_at DESC, c.created_at DESC';
+    $rows = $pdo->query($sql)->fetchAll();
+    vislok_json_response(['catches' => $rows]);
 } catch (Throwable $e) {
-    vislok_json_response(['error' => $e->getMessage()], 500);
+    vislok_error('Catch list failed', 500, ['detail' => $e->getMessage()]);
 }
