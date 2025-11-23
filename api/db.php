@@ -39,8 +39,17 @@ function vislok_get_connection(): PDO {
 
     $path = vislok_sqlite_path(DB_PATH);
     $dir = dirname($path);
+
+    // Probeer het gewenste pad aan te maken; val bij een mislukt custom pad
+    // terug op de standaard data-map zodat de app altijd kan opstarten.
     if (!is_dir($dir) && !mkdir($dir, 0775, true) && !is_dir($dir)) {
-        throw new RuntimeException('Kan databasepad niet aanmaken: ' . $dir);
+        $fallback = vislok_sqlite_path(__DIR__ . '/../data/vislok.sqlite');
+        $fallbackDir = dirname($fallback);
+        if ($path !== $fallback && (!is_dir($fallbackDir) && !mkdir($fallbackDir, 0775, true) && !is_dir($fallbackDir))) {
+            throw new RuntimeException('Kan databasepad niet aanmaken: ' . $dir . ' en fallback: ' . $fallbackDir);
+        }
+        $path = $fallback;
+        $dir = $fallbackDir;
     }
 
     $options = [
