@@ -10,8 +10,8 @@ import {
   state,
   saveState,
   loadState
-} from "./core.js?v=20250611";
-import { updateOverview, applyFeatureVisibility } from "./ui.js?v=20250611";
+} from "./core.js?v=20250715";
+import { updateOverview, applyFeatureVisibility } from "./ui.js?v=20250715";
 import {
   refreshDataLayers,
   refreshImportLayer,
@@ -24,7 +24,7 @@ import {
   startWaterDrawing,
   finishWaterDrawing,
   cancelWaterDrawing
-} from "./map.js?v=20250611";
+} from "./map.js?v=20250715";
 import {
   saveSpot,
   fetchSpots,
@@ -37,9 +37,9 @@ import {
   saveCatch,
   deleteCatch,
   fetchBathyPoints
-} from "./db.js?v=20250611";
-import { uid, distanceM, escapeHtml } from "./helpers.js?v=20250611";
-import { t } from "./i18n.js?v=20250611";
+} from "./db.js?v=20250715";
+import { uid, distanceM, escapeHtml } from "./helpers.js?v=20250715";
+import { t } from "./i18n.js?v=20250715";
 
 let rawImports = [];
 let rawImportKeys = new Set();
@@ -57,6 +57,10 @@ let currentImportName = null;
 let catchPhotoData = null;
 let catchStekSelectEl = null;
 let catchRigSelectEl = null;
+let catchWeightKgInput = null;
+let catchWeightLbsInput = null;
+let weightSyncing = false;
+let catchSelectionLabel = null;
 let waterDrawActive = false;
 let btnDrawWater = null;
 let btnFinishWater = null;
@@ -79,6 +83,8 @@ const FEATURE_KEYS = [
   "autoLink",
   "toolbarDrag"
 ];
+const KG_TO_LBS = 2.20462;
+const LBS_TO_KG = 1 / KG_TO_LBS;
 
 function ensureFeatureDefaults() {
   if (!state.settings) state.settings = {};
@@ -89,6 +95,9 @@ function ensureFeatureDefaults() {
   });
   if (!Array.isArray(state.settings.panelOrder)) {
     state.settings.panelOrder = [];
+  }
+  if (!state.settings.panelOpen || typeof state.settings.panelOpen !== "object") {
+    state.settings.panelOpen = {};
   }
 }
 
@@ -128,22 +137,8 @@ function applyFeatureSettings(options = {}) {
 }
 
 function loadRemoteConfigOptions() {
-  return fetch("api/get_config.php")
-    .then(response => {
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      return response.json();
-    })
-    .then(data => {
-      if (data?.config?.options) {
-        applyFeatureSettings(data.config.options);
-      } else {
-        applyFeatureVisibility();
-      }
-    })
-    .catch(err => {
-      console.warn("Kon configuratie-opties niet laden", err);
-      applyFeatureVisibility();
-    });
+  applyFeatureSettings(state.settings || {});
+  return Promise.resolve();
 }
 
 function setImportMeta({ stored, total, truncated = false, dropped = false } = {}) {
@@ -459,6 +454,9 @@ function bindEvents() {
   const btnGeo = document.getElementById("btnImportGeoJSON");
   const btnSaveHtml = document.getElementById("btnSaveHtml");
   const btnSaveHtmlData = document.getElementById("btnSaveHtmlData");
+  const btnLocalSave = document.getElementById("btnLocalSave");
+  const btnLocalLoad = document.getElementById("btnLocalLoad");
+  const btnLocalReset = document.getElementById("btnLocalReset");
   const btnExportJSON = document.getElementById("btnExportGeoJSON");
   const btnExportZIP = document.getElementById("btnExportZIP");
   const btnFilterDepth = document.getElementById("btnFilterDepth");
@@ -501,6 +499,9 @@ function bindEvents() {
   btnGeo?.addEventListener("click", openGeoJSONDialog);
   btnSaveHtml?.addEventListener("click", exportHTML);
   btnSaveHtmlData?.addEventListener("click", exportHTMLWithData);
+  btnLocalSave?.addEventListener("click", localSave);
+  btnLocalLoad?.addEventListener("click", localLoad);
+  btnLocalReset?.addEventListener("click", localReset);
   btnExportJSON?.addEventListener("click", exportGeoJSON);
   btnExportZIP?.addEventListener("click", exportZIP);
   btnFilterDepth?.addEventListener("click", applyDepthFilter);
@@ -578,14 +579,20 @@ function bindEvents() {
 
   catchStekSelectEl = document.getElementById("catchStekSelect");
   catchRigSelectEl = document.getElementById("catchRigSelect");
+  catchWeightKgInput = document.getElementById("catchWeight");
+  catchWeightLbsInput = document.getElementById("catchWeightLbs");
   const catchStekSelect = catchStekSelectEl;
   const catchRigSelect = catchRigSelectEl;
+
+  catchWeightKgInput?.addEventListener("input", () => syncCatchWeights("kg"));
+  catchWeightLbsInput?.addEventListener("input", () => syncCatchWeights("lbs"));
 
   catchPhotoInput?.addEventListener("change", handleCatchPhotoSelect);
 
   catchStekSelect?.addEventListener("change", () => {
     const current = catchStekSelect.value || "";
     catchStekSelect.dataset.selectedStek = current;
+    updateCatchSelectionLabel(current, catchRigSelect?.value || "");
     updateCatchRigOptions(current);
     if (current) {
       const stek = (state.stekken || []).find(item => item.id === current);
@@ -606,14 +613,39 @@ function bindEvents() {
   catchRigSelect?.addEventListener("change", () => {
     const current = catchRigSelect.value || "";
     catchRigSelect.dataset.selectedRig = current;
-    if (!current) return;
-    const rig = (state.rigs || []).find(item => item.id === current);
-    if (rig) {
-      const message = t("catch_hint_selected_rig", "Rig {name} geselecteerd. Vul de velden in.")
-        .replace("{name}", rig.name || rig.id);
-      setCatchStatus("catch_hint_selected_rig", message, "info");
+    if (current) {
+      const parentStek = resolveStekForRig(current);
+      if (parentStek && catchStekSelect) {
+        catchStekSelect.dataset.selectedStek = parentStek;
+        catchStekSelect.value = parentStek;
+        updateCatchStekOptions(parentStek, current);
+        updateCatchSelectionLabel(parentStek, current);
+        return;
+      }
+      const rig = (state.rigs || []).find(item => item.id === current);
+      if (rig) {
+        const message = t("catch_hint_selected_rig", "Rig {name} geselecteerd. Vul de velden in.")
+          .replace("{name}", rig.name || rig.id);
+        setCatchStatus("catch_hint_selected_rig", message, "info");
+        updateCatchSelectionLabel(resolveStekForRig(current) || "", current);
+      }
+    } else if (catchStekSelect?.value) {
+      const stek = (state.stekken || []).find(item => item.id === catchStekSelect.value);
+      const message = t("catch_hint_selected", "Stek {name} geselecteerd. Vul de velden in.")
+        .replace("{name}", stek?.name || stek?.id || "stek");
+      setCatchStatus("catch_hint_selected", message, "info");
+      updateCatchSelectionLabel(catchStekSelect.value, "");
+    } else {
+      setCatchStatus(
+        "catch_hint_ready",
+        t("catch_hint_ready", "Selecteer een stek (en eventueel een rig) en vul de velden in."),
+        "info"
+      );
+      updateCatchSelectionLabel();
     }
   });
+
+  updateCatchSelectionLabel(catchStekSelect?.value || "", catchRigSelect?.value || "");
 
   catchTable?.addEventListener("click", e => {
     const target = e.target.closest("button[data-catch-action]");
@@ -1415,14 +1447,14 @@ function formatDate(value) {
           scheduleBathyViewportFetch(lastViewportDetail);
         }
         if (showStatus) {
-          setStatus(t("status_imports_synced", "Serverimporten bijgewerkt"), "ok");
+          setStatus(t("status_imports_synced", "Lokale imports bijgewerkt"), "ok");
         }
       })
       .catch(err => {
-        console.warn("Kon serverimporten niet laden", err);
+        console.warn("Kon lokale imports niet laden", err);
         bathyServerAvailable = false;
         if (showStatus) {
-          setStatus(t("status_imports_sync_error", "Serverimporten konden niet geladen worden"), "error");
+          setStatus(t("status_imports_sync_error", "Imports konden niet geladen worden"), "error");
         }
       });
   }
@@ -2464,6 +2496,7 @@ function clearCatchForm(preserveStek = true) {
   const title = document.getElementById("catchTitle");
   const species = document.getElementById("catchSpecies");
   const weight = document.getElementById("catchWeight");
+  const weightLbs = document.getElementById("catchWeightLbs");
   const length = document.getElementById("catchLength");
   const date = document.getElementById("catchDate");
   const notes = document.getElementById("catchNotes");
@@ -2471,12 +2504,14 @@ function clearCatchForm(preserveStek = true) {
   if (title) title.value = "";
   if (species) species.value = "";
   if (weight) weight.value = "";
+  if (weightLbs) weightLbs.value = "";
   if (length) length.value = "";
   if (date) date.value = "";
   if (notes) notes.value = "";
   if (photo) photo.value = "";
   catchPhotoData = null;
   updateCatchRigOptions(stekSelect?.value || "");
+  updateCatchSelectionLabel(stekSelect?.value || "", rigSelect?.value || "");
 }
 
 function handleCatchPhotoSelect(e) {
@@ -2502,9 +2537,42 @@ function handleCatchPhotoSelect(e) {
   reader.readAsDataURL(file);
 }
 
+function syncCatchWeights(source = "kg") {
+  if (weightSyncing) return;
+  weightSyncing = true;
+  const kgInput = catchWeightKgInput || document.getElementById("catchWeight");
+  const lbsInput = catchWeightLbsInput || document.getElementById("catchWeightLbs");
+
+  if (source === "kg" && kgInput && lbsInput) {
+    const kg = parseFloat(kgInput.value);
+    if (Number.isFinite(kg)) {
+      lbsInput.value = (kg * KG_TO_LBS).toFixed(2);
+    } else {
+      lbsInput.value = "";
+    }
+  } else if (source === "lbs" && kgInput && lbsInput) {
+    const lbs = parseFloat(lbsInput.value);
+    if (Number.isFinite(lbs)) {
+      kgInput.value = (lbs * LBS_TO_KG).toFixed(2);
+    } else {
+      kgInput.value = "";
+    }
+  }
+
+  weightSyncing = false;
+}
+
 function addCatchFromForm() {
   const stekSelect = document.getElementById("catchStekSelect");
   const rigSelect = document.getElementById("catchRigSelect");
+  if (!stekSelect?.value && rigSelect?.value) {
+    const parent = resolveStekForRig(rigSelect.value);
+    if (parent) {
+      stekSelect.value = parent;
+      stekSelect.dataset.selectedStek = parent;
+      updateCatchRigOptions(parent, rigSelect.value);
+    }
+  }
   if (!stekSelect || !stekSelect.value) {
     setCatchStatus("catch_error_stek", "Kies eerst een stek", "error");
     return;
@@ -2518,6 +2586,7 @@ function addCatchFromForm() {
     title: document.getElementById("catchTitle")?.value?.trim() || "",
     species: document.getElementById("catchSpecies")?.value?.trim() || "",
     weight_kg: parseFloat(document.getElementById("catchWeight")?.value),
+    weight_lbs: parseFloat(document.getElementById("catchWeightLbs")?.value),
     length_cm: parseFloat(document.getElementById("catchLength")?.value),
     caught_at: document.getElementById("catchDate")?.value || null,
     notes: document.getElementById("catchNotes")?.value?.trim() || ""
@@ -2526,6 +2595,13 @@ function addCatchFromForm() {
     payload.rig_id = rigValue;
   }
   if (!Number.isFinite(payload.weight_kg)) payload.weight_kg = null;
+  if (!Number.isFinite(payload.weight_lbs)) payload.weight_lbs = null;
+  if (payload.weight_kg === null && payload.weight_lbs !== null) {
+    payload.weight_kg = +(payload.weight_lbs * LBS_TO_KG).toFixed(2);
+  }
+  if (payload.weight_lbs === null && payload.weight_kg !== null) {
+    payload.weight_lbs = +(payload.weight_kg * KG_TO_LBS).toFixed(2);
+  }
   if (!Number.isFinite(payload.length_cm)) payload.length_cm = null;
   if (!payload.notes) payload.notes = null;
   if (catchPhotoData) payload.photo = catchPhotoData;
@@ -2581,8 +2657,37 @@ function setCatchStatus(key, fallback, type = "info") {
   }
 }
 
+function updateCatchSelectionLabel(stekId = "", rigId = "") {
+  if (!catchSelectionLabel) {
+    catchSelectionLabel = document.getElementById("catchSelectionLabel");
+  }
+  if (!catchSelectionLabel) return;
+
+  const stek = (state.stekken || []).find(item => item.id === stekId);
+  const rig = (state.rigs || []).find(item => item.id === rigId);
+  if (rig && stek) {
+    catchSelectionLabel.textContent = t("catch_selected_rig", "Rig {rig} @ {stek}")
+      .replace("{rig}", rig.name || rig.id)
+      .replace("{stek}", stek.name || stek.id);
+  } else if (stek) {
+    catchSelectionLabel.textContent = t("catch_selected_stek", "Stek {stek} geselecteerd")
+      .replace("{stek}", stek.name || stek.id);
+  } else {
+    catchSelectionLabel.textContent = t("catch_selected_none", "Geen stek of rig geselecteerd");
+  }
+}
+
+function resolveStekForRig(rigId) {
+  if (!rigId) return "";
+  const rig = (state.rigs || []).find(item => item.id === rigId);
+  return rig?.stekId || rig?.stek_id || "";
+}
+
 function focusCatchForm(options = {}) {
-  const { stekId = "", rigId = "", scroll = false } = options || {};
+  let { stekId = "", rigId = "", scroll = false, highlight = false } = options || {};
+  if (!stekId && rigId) {
+    stekId = resolveStekForRig(rigId) || stekId;
+  }
   const panel = document.querySelector('details[data-panel="catches"]');
   if (panel) {
     panel.open = true;
@@ -2599,6 +2704,7 @@ function focusCatchForm(options = {}) {
   }
 
   updateCatchStekOptions(stekId, rigId);
+  updateCatchSelectionLabel(stekId, rigId);
 
   const select = catchStekSelectEl || document.getElementById("catchStekSelect");
   if (select && typeof select.focus === "function") {
@@ -2616,11 +2722,23 @@ function focusCatchForm(options = {}) {
     title.focus();
   }
 
-  setCatchStatus(
-    "catch_hint_ready",
-    t("catch_hint_ready", "Selecteer een stek (en eventueel een rig) en vul de velden in."),
-    "info"
-  );
+  if (highlight && stekId) {
+    const stek = (state.stekken || []).find(item => item.id === stekId);
+    const rig = rigId ? (state.rigs || []).find(item => item.id === rigId) : null;
+    const name = stek?.name || stekId;
+    const rigName = rig?.name || rigId || "";
+    const message = rigName
+      ? t("catch_hint_selected_rig", "Rig {name} geselecteerd. Vul de velden in.").replace("{name}", rigName)
+      : t("catch_hint_selected", "Stek {name} geselecteerd. Vul de velden in.").replace("{name}", name);
+    setCatchStatus(rigName ? "catch_hint_selected_rig" : "catch_hint_selected", message, "info");
+  } else {
+    setCatchStatus(
+      "catch_hint_ready",
+      t("catch_hint_ready", "Selecteer een stek (en eventueel een rig) en vul de velden in."),
+      "info"
+    );
+    updateCatchSelectionLabel();
+  }
 }
 
 function upsertCatch(entry) {
@@ -2650,6 +2768,9 @@ function updateCatchStekOptions(preferredStek, preferredRig) {
   let desired = select.dataset.selectedStek || select.value || "";
   if (preferredStek !== undefined) {
     desired = preferredStek || "";
+  }
+  if (!desired && preferredRig) {
+    desired = resolveStekForRig(preferredRig) || "";
   }
 
   select.innerHTML = "";
@@ -2691,6 +2812,7 @@ function updateCatchStekOptions(preferredStek, preferredRig) {
 
   select.disabled = items.length === 0;
   select.dataset.selectedStek = select.value || "";
+  updateCatchSelectionLabel(select.value || "", preferredRig || "");
 
   const addBtn = document.getElementById("btnAddCatch");
   if (addBtn) {
@@ -2768,6 +2890,7 @@ function updateCatchRigOptions(stekId = "", preferredRig) {
 
   select.disabled = !stekId;
   select.dataset.selectedRig = select.value || "";
+  updateCatchSelectionLabel(stekId || "", select.value || "");
 }
 
 function updateCatchTable() {
@@ -2809,6 +2932,7 @@ function updateCatchTable() {
       <td>${escapeHtml(item.species || "-")}</td>
       <td>${rigName}</td>
       <td>${Number.isFinite(item.weight_kg) ? item.weight_kg.toFixed(2) : "-"}</td>
+      <td>${Number.isFinite(item.weight_lbs) ? item.weight_lbs.toFixed(2) : "-"}</td>
       <td>${Number.isFinite(item.length_cm) ? item.length_cm.toFixed(1) : "-"}</td>
       <td>${photoCell}</td>
       <td class="table-actions">
@@ -2846,6 +2970,10 @@ function normalizeCatchEntry(entry) {
   if (normalized.weight_kg !== undefined) {
     const weight = Number(normalized.weight_kg);
     normalized.weight_kg = Number.isFinite(weight) ? weight : null;
+  }
+  if (normalized.weight_lbs !== undefined) {
+    const weight = Number(normalized.weight_lbs);
+    normalized.weight_lbs = Number.isFinite(weight) ? weight : null;
   }
   if (normalized.length_cm !== undefined) {
     const length = Number(normalized.length_cm);
@@ -2913,7 +3041,7 @@ function syncWithServer(pushLocal) {
     .then(([spots, catches]) => {
       if (Array.isArray(spots)) {
         mergeServerData(spots);
-        setStatus(`${t("status_sync_done", "Server synchronisatie voltooid")} (${spots.length})`, "ok");
+        setStatus(`${t("status_sync_done", "Lokale opslag geladen")} (${spots.length})`, "ok");
       }
       if (Array.isArray(catches)) {
         mergeServerCatches(catches);
@@ -2923,19 +3051,15 @@ function syncWithServer(pushLocal) {
 
       if (!pushLocal) return;
       const all = [...state.waters, ...state.stekken, ...state.rigs];
-      return all
-        .reduce(
-          (chain, spot) =>
-            chain.then(() =>
-              saveSpot(spot).catch(err => {
-                console.warn("Spot upload faalde", err);
-              })
-            ),
-          Promise.resolve()
-        )
-        .then(() => {
-          setStatus(t("status_sync_push", "Lokale data naar server geschreven"), "ok");
-        });
+      return all.reduce(
+        (chain, spot) =>
+          chain.then(() =>
+            saveSpot(spot).catch(err => {
+              console.warn("Lokale opslag bijwerken faalde", err);
+            })
+          ),
+        Promise.resolve()
+      );
     })
     .then(() => {
       whenMapReady(() => refreshDataLayers());
@@ -2945,8 +3069,8 @@ function syncWithServer(pushLocal) {
       return loadServerImportSummary();
     })
     .catch(err => {
-      console.warn("Server sync faalde", err);
-      setStatus(t("status_sync_error", "Server niet bereikbaar"), "error");
+      console.warn("Lokale sync faalde", err);
+      setStatus(t("status_sync_error", "Lokale opslag niet beschikbaar"), "error");
     });
 }
 
@@ -2982,12 +3106,19 @@ function resetServerData() {
   if (!confirm(t("confirm_reset_server", "Weet je zeker dat je de serverdata wilt resetten?"))) return;
   resetServer()
     .then(() => {
-      setStatus(t("status_server_reset", "Serverdata gewist"), "ok");
-      syncWithServer(false);
+      state.waters = [];
+      state.stekken = [];
+      state.rigs = [];
+      state.imports = [];
+      state.importsMeta = { stored: 0, total: 0 };
+      saveState();
+      setStatus(t("status_server_reset", "Lokale opslag gewist"), "ok");
+      whenMapReady(() => refreshDataLayers());
+      populateTables();
     })
     .catch(err => {
       console.error(err);
-      setStatus(t("status_server_reset_error", "Server reset mislukt"), "error");
+      setStatus(t("status_server_reset_error", "Lokale reset mislukt"), "error");
     });
 }
 
@@ -3325,26 +3456,4 @@ window.VisLokData = { forceServerSync };
 /* ---------- EVENTKOPPELINGEN ---------- */
 document.addEventListener("DOMContentLoaded", () => {
   initData();
-
-  const toolbar = document.querySelector(".toolbar-right");
-  if (toolbar && !document.getElementById("btnLocalSave")) {
-    const btnSaveLocal = document.createElement("button");
-    btnSaveLocal.id = "btnLocalSave";
-    btnSaveLocal.textContent = t("btn_local_save", "💾 Opslaan");
-    btnSaveLocal.addEventListener("click", localSave);
-
-    const btnLoadLocal = document.createElement("button");
-    btnLoadLocal.id = "btnLocalLoad";
-    btnLoadLocal.textContent = t("btn_local_load", "📂 Laden");
-    btnLoadLocal.addEventListener("click", localLoad);
-
-    const btnResetLocal = document.createElement("button");
-    btnResetLocal.id = "btnLocalReset";
-    btnResetLocal.textContent = t("btn_local_reset", "🗑️ Reset");
-    btnResetLocal.addEventListener("click", localReset);
-
-    toolbar.appendChild(btnSaveLocal);
-    toolbar.appendChild(btnLoadLocal);
-    toolbar.appendChild(btnResetLocal);
-  }
 });
