@@ -38,19 +38,7 @@ function vislok_get_connection(): PDO {
     }
 
     $path = vislok_sqlite_path(DB_PATH);
-    $dir = dirname($path);
-
-    // Probeer het gewenste pad aan te maken; val bij een mislukt custom pad
-    // terug op de standaard data-map zodat de app altijd kan opstarten.
-    if (!is_dir($dir) && !mkdir($dir, 0775, true) && !is_dir($dir)) {
-        $fallback = vislok_sqlite_path(__DIR__ . '/../data/vislok.sqlite');
-        $fallbackDir = dirname($fallback);
-        if ($path !== $fallback && (!is_dir($fallbackDir) && !mkdir($fallbackDir, 0775, true) && !is_dir($fallbackDir))) {
-            throw new RuntimeException('Kan databasepad niet aanmaken: ' . $dir . ' en fallback: ' . $fallbackDir);
-        }
-        $path = $fallback;
-        $dir = $fallbackDir;
-    }
+    [$path, $dir] = vislok_prepare_sqlite_path($path);
 
     $options = [
         PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
@@ -76,6 +64,44 @@ function vislok_sqlite_path(string $path): string {
         $path = rtrim($base, '/\\') . '/' . ltrim($path, '/\\');
     }
     return $path;
+}
+
+/**
+ * Ensure the target SQLite directory exists and the file is present.
+ * Falls back to the default data path if the custom path cannot be created.
+ */
+function vislok_prepare_sqlite_path(string $path): array {
+    $path = vislok_sqlite_path($path);
+    $dir = dirname($path);
+
+    $ensureDir = static function (string $candidate): void {
+        if (is_dir($candidate)) {
+            return;
+        }
+        if (!@mkdir($candidate, 0775, true) && !is_dir($candidate)) {
+            throw new RuntimeException('Kan databasepad niet aanmaken: ' . $candidate);
+        }
+    };
+
+    try {
+        $ensureDir($dir);
+    } catch (Throwable $e) {
+        $fallback = vislok_sqlite_path(__DIR__ . '/../data/vislok.sqlite');
+        $fallbackDir = dirname($fallback);
+        $ensureDir($fallbackDir);
+        $path = $fallback;
+        $dir = $fallbackDir;
+    }
+
+    if (!file_exists($path)) {
+        $handle = @fopen($path, 'c');
+        if ($handle === false) {
+            throw new RuntimeException('Kon SQLite-bestand niet aanmaken: ' . $path);
+        }
+        fclose($handle);
+    }
+
+    return [$path, $dir];
 }
 
 function vislok_ensure_schema(PDO $pdo): void {
