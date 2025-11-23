@@ -134,29 +134,6 @@ function vislok_ensure_schema(PDO $pdo): void
         CONSTRAINT fk_rig_stek FOREIGN KEY (stek_id) REFERENCES stekken(id) ON DELETE SET NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci');
 
-    $pdo->exec('CREATE TABLE IF NOT EXISTS catches (
-        id VARCHAR(64) PRIMARY KEY,
-        spot_id VARCHAR(64) NULL,
-        rig_id VARCHAR(64) NULL,
-        title VARCHAR(255) NULL,
-        species VARCHAR(255) NULL,
-        weight_kg DOUBLE NULL,
-        weight_lbs DOUBLE NULL,
-        length_cm DOUBLE NULL,
-        caught_at DATETIME NULL,
-        notes TEXT NULL,
-        photo_path VARCHAR(255) NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        CONSTRAINT fk_catch_stek FOREIGN KEY (spot_id) REFERENCES stekken(id) ON DELETE SET NULL,
-        CONSTRAINT fk_catch_rig FOREIGN KEY (rig_id) REFERENCES rigs(id) ON DELETE SET NULL
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci');
-
-    try {
-        $pdo->exec('ALTER TABLE catches ADD COLUMN weight_lbs DOUBLE NULL AFTER weight_kg');
-    } catch (PDOException $e) {
-        // Column already exists or cannot be altered; ignore silently
-    }
-
     $pdo->exec('CREATE TABLE IF NOT EXISTS bathy_imports (
         id VARCHAR(64) PRIMARY KEY,
         source VARCHAR(50) NULL,
@@ -190,24 +167,4 @@ function vislok_sanitize_id(?string $id, string $prefix): string
 {
     if ($id && strlen($id) <= 64) return $id;
     return sprintf('%s_%s', $prefix, bin2hex(random_bytes(6)));
-}
-
-function vislok_store_photo(?string $dataUri, string $id): ?string
-{
-    if (!$dataUri || strpos($dataUri, 'data:') !== 0) return null;
-    if (!preg_match('#^data:(image/[^;]+);base64,(.+)$#', $dataUri, $m)) return null;
-    $mime = $m[1];
-    $blob = base64_decode($m[2], true);
-    if ($blob === false) return null;
-    $ext = 'jpg';
-    if (strpos($mime, 'png') !== false) $ext = 'png';
-    elseif (strpos($mime, 'gif') !== false) $ext = 'gif';
-    $dir = __DIR__ . '/../uploads/catches';
-    if (!is_dir($dir)) {
-        mkdir($dir, 0777, true);
-    }
-    $filename = sprintf('catch_%s.%s', $id, $ext);
-    $path = $dir . '/' . $filename;
-    file_put_contents($path, $blob);
-    return 'uploads/catches/' . $filename;
 }

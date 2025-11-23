@@ -19,10 +19,6 @@ Vis Lokaties is een moderne herbouw van het oorspronkelijke bestand **“Vis lok
 - Detectie van viewport, selectiecirkel en OSM-water (met Overpass fallback), inclusief naam-prompts en automatische opslag als waterobject.【F:index.html†L239-L270】【F:assets/js/map.js†L333-L435】【F:assets/js/data.js†L470-L646】
 - Handmatig water tekenen via kaartprikken, dubbelklik-afronding en beheer vanuit de tabs.【F:assets/js/map.js†L808-L990】【F:assets/js/ui.js†L210-L318】
 
-### Beheer, koppelingen & vangsten
-- Overzichtstabellen voor waters/stekken/rigs met hernoemen, verwijderen en dropdowns om koppelingen aan te passen; toolbar-summary toont hiërarchische relaties.【F:index.html†L331-L433】【F:assets/js/ui.js†L56-L208】【F:assets/js/ui.js†L320-L468】
-- Vangstenpaneel met foto-upload; foto’s worden op de server bewaard en metadata in MySQL opgeslagen.【F:assets/js/data.js†L1382-L1706】【F:api/save_catch.php†L1-L43】
-
 ### Weer, admin & versiebeheer
 - Weerpaneel met datum/uur-keuze, dichtheid, overlay-toggle en pijllagen.【F:index.html†L435-L520】【F:assets/js/weather.js†L38-L210】
   - Adminpagina voor autosync, bathy-voorkeuren en releasebeheer (`version.json`) zonder databaseconfiguratie; alles wordt in je browserprofiel opgeslagen.【F:admin.html†L15-L110】【F:assets/js/admin.js†L32-L220】【F:data/version.json†L1-L10】
@@ -40,7 +36,7 @@ Vis Lokaties is een moderne herbouw van het oorspronkelijke bestand **“Vis lok
 | `data/` | Persistente JSON-state + versie-informatie.【F:data/state.json†L1-L9】【F:data/version.json†L1-L10】 |
 | `lang/` | Nederlands/Engels vertalingen voor het volledige UI.【F:lang/nl.json†L1-L401】【F:lang/en.json†L1-L401】 |
 | `scripts/` | Optionele sync-helpers en herstelpunt-script (`create_restore_point.sh`).【F:scripts/sync_github.sh†L1-L40】【F:scripts/sync_github_full.sh†L1-L35】【F:scripts/create_restore_point.sh†L1-L45】 |
-| `api/` | PHP-API voor MySQL-opslag (waters/stekken/rigs/vangsten/imports) plus config/test endpoints. |
+| `api/` | PHP-API voor MySQL-opslag (waters/stekken/rigs/imports) plus config/test endpoints. |
 
 ## Installatie & gebruik (PHP + MySQL)
 
@@ -56,14 +52,11 @@ Vis Lokaties is een moderne herbouw van het oorspronkelijke bestand **“Vis lok
 
 3. **Plaatsing**
    - Kopieer de repo naar je webroot (bv. `C:/xampp/htdocs/vislokaties` of `/var/www/vislokaties`).
-   - Zorg dat de map `uploads/catches` schrijfbaar is voor fotouploads.
    - Open `index.html` in de browser via je webserver (niet via `file://`).
 
 4. **Werking**
    - Gebruik het **Data / Analyse**-paneel voor imports; punten worden in MySQL opgeslagen en via de heatmap getoond.【F:index.html†L189-L247】【F:assets/js/data.js†L1022-L1380】
    - Nieuwe stekken/rigs koppelen automatisch aan dichtbijzijnde water/stek en kunnen in het beheerpaneel worden aangepast.【F:assets/js/data.js†L422-L646】【F:assets/js/ui.js†L56-L208】
-   - Vangsten toevoegen via het **Vangsten**-paneel; metadata komt in MySQL en foto’s worden op de server geplaatst.【F:assets/js/data.js†L1382-L1706】【F:api/save_catch.php†L1-L43】
-
 5. **Admin & versiebeheer**
    - De adminpagina toont MySQL-host/poort/database plus app- en admin-credentials; na opslaan worden database en tabellen aangemaakt en getest via de backend.【F:admin.html†L25-L83】【F:assets/js/admin.js†L18-L131】【F:api/save_config.php†L1-L34】【F:api/test_connection.php†L1-L12】
    - Interface- en detectievoorkeuren blijven lokaal; databasegegevens worden server-side in `data/config.local.json` bewaard (uitgezonderd uit Git).【F:.gitignore†L1-L4】【F:api/config.php†L1-L11】【F:api/db.php†L1-L105】

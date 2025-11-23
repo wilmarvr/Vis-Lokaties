@@ -26,7 +26,6 @@ const DEFAULT_SETTINGS = {
   showData: true,
   showWeather: true,
   showContours: true,
-  showCatches: true,
   showManage: true,
   showOverview: true,
   showChangelog: true,
@@ -50,7 +49,6 @@ export let state = {
   waters: [],
   stekken: [],
   rigs: [],
-  catches: [],
   lastDetection: null,
   settings: { ...DEFAULT_SETTINGS },
   filters: {
@@ -107,7 +105,6 @@ function sanitizeSettings(raw = {}) {
   merged.showData = !!merged.showData;
   merged.showWeather = !!merged.showWeather;
   merged.showContours = !!merged.showContours;
-  merged.showCatches = !!merged.showCatches;
   merged.showManage = !!merged.showManage;
   merged.showOverview = !!merged.showOverview;
   merged.showChangelog = !!merged.showChangelog;

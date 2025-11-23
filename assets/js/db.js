@@ -66,16 +66,3 @@ export async function fetchBathyPoints(bounds) {
   return { points: data.points || [] };
 }
 
-export async function fetchCatches(spotId) {
-  const data = await callApi("list_catches.php", { method: "POST", body: spotId ? { spotId } : {} });
-  return Array.isArray(data.catches) ? data.catches : [];
-}
-
-export async function saveCatch(entry) {
-  const data = await callApi("save_catch.php", { method: "POST", body: entry });
-  return data || entry;
-}
-
-export async function deleteCatch(id) {
-  await callApi("delete_catch.php", { method: "POST", body: { id } });
-}

@@ -2136,11 +2136,9 @@ function buildSpotPopupContent(item, type) {
   const coords = Number.isFinite(item.lat) && Number.isFinite(item.lng)
     ? formatLatLng(item.lat, item.lng)
     : "";
-  const labelCatch = t("spot_popup_catch", "Registreer vangst");
   const labelRename = t("spot_popup_rename", "Hernoem");
   const labelDelete = t("spot_popup_delete", "Verwijderen");
   const actionButtons = [
-    { action: "catch", label: labelCatch },
     { action: "rename", label: labelRename },
     { action: "delete", label: labelDelete }
   ];
@@ -2375,19 +2373,6 @@ function attachMarkerHandlers(marker, item, type) {
   marker.on("click", e => {
     swallowLeafletEvent(e);
     stopMarkerDistancePreview();
-    if (type === "stek" || type === "rig") {
-      const stekId = type === "stek"
-        ? item.id
-        : item.stekId || item.stek_id || findNearestStek(item.lat, item.lng) || "";
-      const rigId = type === "rig" ? item.id : "";
-      if (stekId) {
-        document.dispatchEvent(
-          new CustomEvent("vislok:focus-catch-form", {
-            detail: { stekId, rigId, scroll: true, highlight: true }
-          })
-        );
-      }
-    }
     showSpotPopup(marker, item, type);
   });
 }

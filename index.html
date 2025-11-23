@@ -265,64 +265,6 @@
         <div id="weatherLegend" class="panel-note weather-legend"></div>
       </details>
 
-      <details data-panel="catches" class="ui-panel" open>
-        <summary data-i18n="tab_catches">🐟 Vangsten · <span id="catchSelectionLabel" data-i18n="catch_selected_none">Geen stek of rig geselecteerd</span></summary>
-        <div class="group form-grid catch-form">
-          <label data-i18n="catch_label_stek">Stek
-            <select id="catchStekSelect"></select>
-          </label>
-          <label data-i18n="catch_label_rig">Rig (optioneel)
-            <select id="catchRigSelect" disabled></select>
-          </label>
-          <label data-i18n="catch_label_title">Titel
-            <input type="text" id="catchTitle" />
-          </label>
-          <label data-i18n="catch_label_species">Soort
-            <input type="text" id="catchSpecies" />
-          </label>
-          <label data-i18n="catch_label_weight">Gewicht (kg)
-            <input type="number" id="catchWeight" step="0.01" min="0" />
-          </label>
-          <label data-i18n="catch_label_weight_lbs">Gewicht (lbs)
-            <input type="number" id="catchWeightLbs" step="0.01" min="0" />
-          </label>
-          <label data-i18n="catch_label_length">Lengte (cm)
-            <input type="number" id="catchLength" step="0.1" min="0" />
-          </label>
-          <label data-i18n="catch_label_date">Datum
-            <input type="date" id="catchDate" />
-          </label>
-          <label data-i18n="catch_label_photo">Foto
-            <input type="file" id="catchPhoto" accept="image/*" />
-          </label>
-          <label data-i18n="catch_label_notes">Notities
-            <textarea id="catchNotes"></textarea>
-          </label>
-          <button id="btnAddCatch" data-i18n="btn_add_catch">➕ Opslaan</button>
-        </div>
-        <div id="catchStatus" class="panel-note" data-i18n="catch_hint">Selecteer een stek om vangsten toe te voegen.</div>
-        <div class="catch-table-wrapper">
-          <table id="catchTable">
-            <thead>
-              <tr>
-                <th data-i18n="catch_col_stek">Stek</th>
-                <th data-i18n="catch_col_title">Titel</th>
-                <th data-i18n="catch_col_date">Datum</th>
-                <th data-i18n="catch_col_species">Soort</th>
-                <th data-i18n="catch_col_rig">Rig</th>
-                <th data-i18n="catch_col_weight">Gewicht (kg)</th>
-                <th data-i18n="catch_col_weight_lbs">Gewicht (lbs)</th>
-                <th data-i18n="catch_col_length">Lengte (cm)</th>
-                <th data-i18n="catch_col_photo">Foto</th>
-                <th data-i18n="catch_col_actions">Acties</th>
-              </tr>
-            </thead>
-            <tbody></tbody>
-          </table>
-          <p id="catchTableEmpty" class="panel-note" data-i18n="catch_table_empty">Nog geen vangsten geregistreerd.</p>
-        </div>
-      </details>
-
       <details data-panel="manage" class="ui-panel" open>
         <summary data-i18n="tab_manage">🛠️ Beheer</summary>
         <div id="manageTabs"></div>

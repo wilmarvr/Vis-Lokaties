@@ -12,7 +12,6 @@ const FEATURE_DEFAULTS = {
   showData: true,
   showWeather: true,
   showContours: true,
-  showCatches: true,
   showManage: true,
   showOverview: true,
   showChangelog: true,
