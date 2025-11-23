@@ -21,10 +21,17 @@ html, body {
   margin: 0;
   padding: 0;
   height: 100%;
+  min-height: 100vh;
   background: var(--bg);
   color: var(--fg);
   font-family: "Segoe UI", Roboto, sans-serif;
   overflow: hidden;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
 }
 
 /* ---------- HEADER ---------- */
@@ -232,12 +239,27 @@ header small {
 /* ---------- LAYOUT ---------- */
 main {
   display: flex;
-  height: calc(100% - 60px);
+  flex: 1;
+  min-height: 0;
 }
 #mapContainer {
   flex: 1;
   background: #06090e;
   min-width: 0;
+  min-height: 100%;
+}
+#toolbarResizeHandle {
+  width: 10px;
+  cursor: ew-resize;
+  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.06) 40%, rgba(255,255,255,0.06) 60%, transparent 100%);
+  flex: 0 0 10px;
+  border-left: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  box-shadow: inset -1px 0 2px rgba(0, 0, 0, 0.3);
+}
+#toolbarResizeHandle.is-dragging {
+  background: linear-gradient(90deg, rgba(33,150,243,0.25) 0%, rgba(33,150,243,0.4) 50%, rgba(33,150,243,0.25) 100%);
+  border-color: var(--accent);
 }
 #toolbarResizeHandle {
   width: 10px;

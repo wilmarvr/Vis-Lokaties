@@ -1636,19 +1636,25 @@ function updateHeatOptions() {
 }
 
 export function showHeatmap(setStatusMessage = true) {
-  const points = (state.imports || []).map(p => {
-    const raw = p.val ?? p.depth ?? 0;
-    let value = raw;
-    if (state.settings.heatmapClamp) {
-      value = Math.min(state.settings.heatmapMax, Math.max(state.settings.heatmapMin, value));
-    }
-    const range = Math.max(0.001, state.settings.heatmapMax - state.settings.heatmapMin);
-    let weight = (value - state.settings.heatmapMin) / range;
-    weight = Math.min(1, Math.max(0, weight));
-    if (state.settings.heatmapInvert) weight = 1 - weight;
-    weight = Math.max(0.05, weight);
-    return [p.lat, p.lng, weight];
-  });
+  const points = (state.imports || [])
+    .map(p => {
+      const lat = Number(p.lat);
+      const lng = Number(p.lng);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+
+      const raw = p.val ?? p.depth ?? 0;
+      let value = raw;
+      if (state.settings.heatmapClamp) {
+        value = Math.min(state.settings.heatmapMax, Math.max(state.settings.heatmapMin, value));
+      }
+      const range = Math.max(0.001, state.settings.heatmapMax - state.settings.heatmapMin);
+      let weight = (value - state.settings.heatmapMin) / range;
+      weight = Math.min(1, Math.max(0, weight));
+      if (state.settings.heatmapInvert) weight = 1 - weight;
+      weight = Math.max(0.05, weight);
+      return [lat, lng, weight];
+    })
+    .filter(Boolean);
 
   if (!points.length) {
     if (setStatusMessage) setStatus(t("status_heat_empty", "Geen data voor heatmap"), "error");
