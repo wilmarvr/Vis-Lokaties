@@ -633,7 +633,7 @@ function startMarkerDistancePreview(marker, item, type, initialLatLng = null) {
       color,
       weight: 2,
       opacity: 0.8,
-      pane: map.getPane("overlayPane"),
+      pane: "overlayPane",
       className: "drag-distance-line"
     });
     dragDistanceLine.addTo(map);
@@ -2297,6 +2297,7 @@ function attachMarkerHandlers(marker, item, type) {
     marker.on(evt, ev => {
       removeFromClusterForDrag();
       ensureDraggingEnabled();
+      startMarkerDistancePreview(marker, item, type, marker.getLatLng());
       const original = ev?.originalEvent || ev;
       if (original?.stopPropagation) original.stopPropagation();
       if (marker.dragging?._draggable?.["_onDown"]) {
@@ -2320,7 +2321,7 @@ function attachMarkerHandlers(marker, item, type) {
     markerMoved = false;
     try { map.dragging.disable(); } catch (_) {}
     removeFromClusterForDrag();
-    startMarkerDistancePreview(marker, item, type);
+    startMarkerDistancePreview(marker, item, type, marker.getLatLng());
   });
 
   marker.on("drag", e => {

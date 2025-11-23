@@ -1,6 +1,6 @@
 # Vis Lokaties (v0.0.0)
 
-Vis Lokaties is een moderne herbouw van het oorspronkelijke bestand **“Vis lokaties 1.1.4-d.html”** met dezelfde kaartenworkflow, uitgebreide bathymetrie-imports en persistente opslag in de browser (localStorage). De toepassing is volledig meertalig (Nederlands/Engels), werkt zonder bundler en kan als statische site worden geplaatst. Er is geen database of server-API meer nodig.
+Vis Lokaties is een moderne herbouw van het oorspronkelijke bestand **“Vis lokaties 1.1.4-d.html”** met dezelfde kaartenworkflow, uitgebreide bathymetrie-imports en persistente opslag in de browser (localStorage). De toepassing is volledig meertalig (Nederlands/Engels), werkt zonder bundler en kan als statische site worden geplaatst. Er is geen database, server-API of uploads-map meer nodig.
 
 ## Belangrijkste mogelijkheden
 
@@ -21,7 +21,7 @@ Vis Lokaties is een moderne herbouw van het oorspronkelijke bestand **“Vis lok
 
 ### Beheer, koppelingen & vangsten
 - Overzichtstabellen voor waters/stekken/rigs met hernoemen, verwijderen en dropdowns om koppelingen aan te passen; toolbar-summary toont hiërarchische relaties.【F:index.html†L331-L433】【F:assets/js/ui.js†L56-L208】【F:assets/js/ui.js†L320-L468】
-  - Vangstenpaneel met foto-upload; de gegevens blijven in de browseropslag en foto’s worden lokaal opgeslagen in de `uploads/`-map wanneer je die exporteert of back-upt.【F:assets/js/data.js†L1382-L1706】
+- Vangstenpaneel met foto-upload; de gegevens blijven in de browseropslag en foto’s blijven in localStorage (geen servermap nodig).【F:assets/js/data.js†L1382-L1706】
 
 ### Weer, admin & versiebeheer
 - Weerpaneel met datum/uur-keuze, dichtheid, overlay-toggle en pijllagen.【F:index.html†L435-L520】【F:assets/js/weather.js†L38-L210】
@@ -39,9 +39,8 @@ Vis Lokaties is een moderne herbouw van het oorspronkelijke bestand **“Vis lok
 | `assets/vendor/osmtogeojson.js` | Gebundelde Overpass-converter (fallback op eigen parsing).【F:assets/vendor/osmtogeojson.js†L1-L2】 |
 | `data/` | Persistente JSON-state + versie-informatie.【F:data/state.json†L1-L9】【F:data/version.json†L1-L10】 |
 | `lang/` | Nederlands/Engels vertalingen voor het volledige UI.【F:lang/nl.json†L1-L401】【F:lang/en.json†L1-L401】 |
-| `docs/` | Projectinventaris, herstelpunten en GitHub-sync-handleiding.【F:docs/project_inventory.md†L1-L106】【F:docs/restore_points.md†L1-L39】【F:docs/sync_github.md†L1-L98】 |
-| `scripts/` | Sync-helpers en herstelpunt-script (`create_restore_point.sh`).【F:scripts/sync_github.sh†L1-L40】【F:scripts/sync_github_full.sh†L1-L35】【F:scripts/create_restore_point.sh†L1-L45】 |
-| `uploads/` | Uploadmap voor vangstfoto’s (webserver schrijfrechten vereist). |
+| `scripts/` | Optionele sync-helpers en herstelpunt-script (`create_restore_point.sh`).【F:scripts/sync_github.sh†L1-L40】【F:scripts/sync_github_full.sh†L1-L35】【F:scripts/create_restore_point.sh†L1-L45】 |
+| *(geen serverbestanden nodig)* | Alle data blijft in localStorage; er zijn geen PHP-API’s of uploadmappen meer. |
 
 ## Installatie & gebruik (statische hosting)
 
@@ -51,13 +50,13 @@ Vis Lokaties is een moderne herbouw van het oorspronkelijke bestand **“Vis lok
 
 2. **Plaatsing**
    - Kopieer de repo naar je webroot (bv. `/var/www/vislokaties`) of start een statische server vanuit de projectmap.
-   - `uploads/` blijft beschikbaar voor handmatige foto-export of back-ups; alle applicatiedata (waters/stekken/rigs/imports/vangsten) staat in de browseropslag.
+   - Alle applicatiedata (waters/stekken/rigs/imports/vangsten) staat in de browseropslag; er is geen uploadmap of serverproces vereist.
 
 3. **Werking**
    - Start de hoofdapp via `index.html`.
    - Gebruik het **Data / Analyse**-paneel voor imports; punten worden lokaal bewaard en in de heatmap getoond.【F:index.html†L189-L247】【F:assets/js/data.js†L1022-L1380】
    - Nieuwe stekken/rigs koppelen automatisch aan dichtbijzijnde water/stek en kunnen in het beheerpaneel worden aangepast.【F:assets/js/data.js†L422-L646】【F:assets/js/ui.js†L56-L208】
-   - Vangsten toevoegen via het **Vangsten**-paneel; gegevens blijven lokaal, foto’s kun je handmatig in `uploads/` bewaren of exporteren.【F:assets/js/data.js†L1382-L1706】
+   - Vangsten toevoegen via het **Vangsten**-paneel; gegevens blijven lokaal en foto’s kun je via de browser downloaden of exporteren.【F:assets/js/data.js†L1382-L1706】
 
 4. **Admin & versiebeheer**
    - Beheer bathy-voorkeuren, autosync en releases op de adminpagina; alles wordt direct in de lokale opslag geplaatst.【F:admin.html†L15-L110】【F:assets/js/admin.js†L32-L220】
@@ -81,18 +80,6 @@ Vis Lokaties is een moderne herbouw van het oorspronkelijke bestand **“Vis lok
 - Versie-informatie staat in `data/version.json` en wordt bij het starten geladen voor weergave in header en adminpagina.【F:assets/js/core.js†L28-L120】【F:data/version.json†L1-L10】
 - Het project blijft bewust op **v0.0.0**; gebruik het adminpaneel om release-notities voor toekomstige versies voor te bereiden.【F:admin.html†L17-L115】
 
-## Herstelpunten
-
-- Maak een lokaal herstelpunt met `./scripts/create_restore_point.sh`; het script legt een `restore-YYYYMMDD-HHMMSS`-branch vast en schrijft een archief onder `backups/` voor snelle terugrol.【F:scripts/create_restore_point.sh†L1-L45】
-- Raadpleeg `docs/restore_points.md` voor terugzet- en opschoontips rond deze snapshots.【F:docs/restore_points.md†L1-L39】
-
-## Synchronisatie naar GitHub
-
-- **Hoofdbron**: deze map is leidend; GitHub-repo’s fungeren als mirror.
-- **Scripts**: gebruik `scripts/sync_github.sh <remote> <branch>` voor één branch of `scripts/sync_github_full.sh <remote>` voor volledige mirrors.【F:scripts/sync_github.sh†L1-L40】【F:scripts/sync_github_full.sh†L1-L35】
-- **Workflow**: via `.github/workflows/mirror-to-branch.yml` kan je ook vanuit de GitHub UI synchroniseren zonder lokale terminal.【F:.github/workflows/mirror-to-branch.yml†L1-L43】
-- Volg de handleiding in `docs/sync_github.md` voor details en checklist.【F:docs/sync_github.md†L1-L98】
-
 ## Testen & linten
 
 - Frontend modules: `node --check assets/js/*.js`
@@ -107,4 +94,4 @@ Vis Lokaties is een moderne herbouw van het oorspronkelijke bestand **“Vis lok
 - Dit project is een herbouw van het originele “Vis lokaties 1.1.4-d.html” en bevat aangepaste iconen en UI.
 - Externe bibliotheken: Leaflet, Leaflet.markercluster, Leaflet.heat, JSZip en Turf.js worden via CDN geladen.【F:index.html†L17-L39】
 
-Voor aanvullende details over individuele bestanden of synchronisatie, raadpleeg `docs/project_inventory.md` en `docs/sync_github.md`.
+Voor aanvullende details kun je de bronbestanden in `assets/js/` en `scripts/` bekijken; er zijn geen serverhandleidingen meer nodig.
