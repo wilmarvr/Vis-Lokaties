@@ -11,6 +11,12 @@ const VISLOK_CONFIG_DEFAULT = [
     'options' => []
 ];
 
+// Sta overrides via omgeving variabelen toe zodat hosting-configuraties
+// zonder schrijfrechten op bestanden toch de database kunnen instellen.
+const VISLOK_ENV_KEYS = [
+    'path'   => 'VISLOK_DB_PATH',
+];
+
 const VISLOK_OPTION_DEFAULTS = [
     'showData' => true,
     'showWeather' => true,
