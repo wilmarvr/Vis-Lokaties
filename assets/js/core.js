@@ -8,6 +8,7 @@ export const APP_VERSION = "0.0.0";
 export const TOOLBAR_MIN_WIDTH = 280;
 export const TOOLBAR_MAX_WIDTH = 520;
 export const TOOLBAR_DEFAULT_WIDTH = 340;
+const STORAGE_BUDGET_BYTES = 4 * 1024 * 1024; // ~4MB veilig voor localStorage
 const DEFAULT_SETTINGS = {
   heatmapRadius: 25,
   heatmapBlur: 15,
@@ -421,33 +422,63 @@ export function initCore() {
   setStatus("Gereed");
 }
 
-function buildPersistableState() {
-  const base = { ...state, imports: [], importsMeta: state.importsMeta };
-  const persist = safeClone(base);
-  const imports = Array.isArray(state.imports) ? state.imports : [];
-  const sanitized = imports
-    .map(point => {
-      const lat = Number(point?.lat);
-      const lng = Number(point?.lng);
-      const depth = Number(point?.val ?? point?.depth);
-      const entry = {};
+  function buildPersistableState() {
+    const base = { ...state, imports: [], importsMeta: state.importsMeta };
+    const persist = safeClone(base);
+    const imports = Array.isArray(state.imports) ? state.imports : [];
+    const sanitized = imports
+      .map(point => {
+        const lat = Number(point?.lat);
+        const lng = Number(point?.lng);
+        const depth = Number(point?.val ?? point?.depth);
+        const entry = {};
       if (Number.isFinite(lat)) entry.lat = lat;
       if (Number.isFinite(lng)) entry.lng = lng;
       if (Number.isFinite(depth)) entry.val = depth;
       if (Object.keys(entry).length === 0) return null;
       return entry;
-    })
-    .filter(Boolean);
+      })
+      .filter(Boolean);
 
-  persist.imports = sanitized;
-  persist.importsMeta = {
-    stored: sanitized.length,
-    total: imports.length,
-    truncated: false,
-    dropped: false
-  };
-  return persist;
-}
+    const meta = {
+      stored: sanitized.length,
+      total: imports.length,
+      truncated: false,
+      dropped: false
+    };
+
+    const encoder = typeof TextEncoder !== "undefined" ? new TextEncoder() : null;
+    const measureBytes = obj => {
+      try {
+        const json = JSON.stringify(obj);
+        return encoder ? encoder.encode(json).length : json.length;
+      } catch (err) {
+        console.warn("Kon opslaggrootte niet meten", err);
+        return Number.MAX_SAFE_INTEGER;
+      }
+    };
+
+    let trimmed = sanitized;
+    let candidate = { ...persist, imports: trimmed, importsMeta: { ...meta } };
+    let size = measureBytes(candidate);
+    while (size > STORAGE_BUDGET_BYTES && trimmed.length > 0) {
+      const nextLength = Math.max(0, Math.floor(trimmed.length * 0.7));
+      trimmed = trimmed.slice(0, nextLength);
+      meta.truncated = true;
+      meta.stored = trimmed.length;
+      candidate = { ...persist, imports: trimmed, importsMeta: { ...meta, total: imports.length } };
+      size = measureBytes(candidate);
+    }
+
+    if (size > STORAGE_BUDGET_BYTES) {
+      meta.truncated = true;
+      meta.dropped = true;
+      meta.stored = 0;
+      candidate = { ...persist, imports: [], importsMeta: { ...meta, total: imports.length } };
+    }
+
+    return candidate;
+  }
 
 function safeClone(value) {
   if (value === null || value === undefined) return value;

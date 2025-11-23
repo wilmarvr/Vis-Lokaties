@@ -512,22 +512,24 @@ function updatePlacementPreview(latlng) {
     return;
   }
 
-  let reference = null;
-  if (clickMode === "stek") {
-    reference = findNearestWater(lat, lng);
-  } else if (clickMode === "rig") {
-    reference = findNearestStek(lat, lng);
-  } else {
-    clearPlacementPreview();
-    return;
-  }
+    let reference = null;
+    if (clickMode === "stek") {
+      reference = findNearestWater(lat, lng);
+    } else if (clickMode === "rig") {
+      reference = findNearestStek(lat, lng);
+    } else {
+      clearPlacementPreview();
+      return;
+    }
 
-  if (!reference || !Number.isFinite(reference.lat) || !Number.isFinite(reference.lng)) {
-    clearPlacementPreview();
-    return;
-  }
+    const refLat = reference?.lat;
+    const refLng = reference?.lng;
+    if (!Number.isFinite(refLat) || !Number.isFinite(refLng)) {
+      clearPlacementPreview();
+      return;
+    }
 
-  const distance = map.distance([reference.lat, reference.lng], [lat, lng]);
+    const distance = map.distance([refLat, refLng], [lat, lng]);
   if (!Number.isFinite(distance)) {
     clearPlacementPreview();
     return;
