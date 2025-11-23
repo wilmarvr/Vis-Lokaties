@@ -91,6 +91,16 @@ function vislok_prepare_sqlite_path(string $path): array {
         } catch (Throwable $e) {
             $errors[] = $candidate . ': ' . $e->getMessage();
         }
+    };
+
+    try {
+        $ensureDir($dir);
+    } catch (Throwable $e) {
+        $fallback = vislok_sqlite_path(__DIR__ . '/../data/vislok.sqlite');
+        $fallbackDir = dirname($fallback);
+        $ensureDir($fallbackDir);
+        $path = $fallback;
+        $dir = $fallbackDir;
     }
 
     throw new RuntimeException('Kon SQLite-pad niet voorbereiden (' . implode(' | ', $errors) . ')');
