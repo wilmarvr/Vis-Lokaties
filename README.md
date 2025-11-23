@@ -40,7 +40,7 @@ Vis Lokaties is een moderne herbouw van het oorspronkelijke bestand **“Vis lok
 | `data/` | Persistente JSON-state + versie-informatie.【F:data/state.json†L1-L9】【F:data/version.json†L1-L10】 |
 | `lang/` | Nederlands/Engels vertalingen voor het volledige UI.【F:lang/nl.json†L1-L401】【F:lang/en.json†L1-L401】 |
 | `scripts/` | Optionele sync-helpers en herstelpunt-script (`create_restore_point.sh`).【F:scripts/sync_github.sh†L1-L40】【F:scripts/sync_github_full.sh†L1-L35】【F:scripts/create_restore_point.sh†L1-L45】 |
-| *(geen serverbestanden nodig)* | Alle data blijft in localStorage; er zijn geen PHP-API’s of uploadmappen meer. |
+| `api/` | PHP-API voor MySQL-opslag (waters/stekken/rigs/vangsten/imports) plus config/test endpoints. |
 
 ## Installatie & gebruik (PHP + MySQL)
 
@@ -51,7 +51,7 @@ Vis Lokaties is een moderne herbouw van het oorspronkelijke bestand **“Vis lok
 
 2. **Database**
    - Standaard wordt de database `vislok` gebruikt met app-gebruiker `vislok_app` / `vislok_app`.
-   - Stel optioneel omgevingsvariabelen in om host/poort/DB/app/admin-gegevens te overschrijven: `VISLOK_DB_HOST`, `VISLOK_DB_PORT`, `VISLOK_DB_NAME`, `VISLOK_DB_USER`, `VISLOK_DB_PASS`, `VISLOK_DB_ADMIN_USER`, `VISLOK_DB_ADMIN_PASS`.
+   - Stel optioneel omgevingsvariabelen in of gebruik de **adminpagina** om host/poort/DB/app/admin-gegevens te overschrijven: `VISLOK_DB_HOST`, `VISLOK_DB_PORT`, `VISLOK_DB_NAME`, `VISLOK_DB_USER`, `VISLOK_DB_PASS`, `VISLOK_DB_ADMIN_USER`, `VISLOK_DB_ADMIN_PASS`.
    - Bij de eerste API-aanroep maakt de admin-gebruiker de database, tabellen en de app-gebruiker aan; alle tabellen worden door de app-gebruiker gevuld.
 
 3. **Plaatsing**
@@ -65,7 +65,8 @@ Vis Lokaties is een moderne herbouw van het oorspronkelijke bestand **“Vis lok
    - Vangsten toevoegen via het **Vangsten**-paneel; metadata komt in MySQL en foto’s worden op de server geplaatst.【F:assets/js/data.js†L1382-L1706】【F:api/save_catch.php†L1-L43】
 
 5. **Admin & versiebeheer**
-   - Interface- en map/detectievoorkeuren staan op de adminpagina en slaan rechtstreeks in de appconfig (lokaal) op; databaseconfiguratie verloopt via `api/config.php` of omgevingsvariabelen.【F:admin.html†L15-L110】【F:assets/js/admin.js†L32-L220】【F:api/config.php†L1-L11】
+   - De adminpagina toont MySQL-host/poort/database plus app- en admin-credentials; na opslaan worden database en tabellen aangemaakt en getest via de backend.【F:admin.html†L25-L83】【F:assets/js/admin.js†L18-L131】【F:api/save_config.php†L1-L34】【F:api/test_connection.php†L1-L12】
+   - Interface- en detectievoorkeuren blijven lokaal; databasegegevens worden server-side in `data/config.local.json` bewaard (uitgezonderd uit Git).【F:.gitignore†L1-L4】【F:api/config.php†L1-L11】【F:api/db.php†L1-L105】
    - Het project blijft op versie **0.0.0** totdat een nieuwe release wordt opgeslagen.【F:data/version.json†L1-L10】
 
 ## Data-import workflow
@@ -73,7 +74,7 @@ Vis Lokaties is een moderne herbouw van het oorspronkelijke bestand **“Vis lok
 1. Kies **Import CSV/ZIP** of **Import map**; beide sturen bestanden naar de wachtrij en tonen live-progress in `importQueue` en de legacy teller (`impCount`, `impPctAll`).【F:index.html†L189-L238】【F:assets/js/data.js†L189-L370】
 2. CSV-parser detecteert scheidingstekens, herkent kolomnamen (zoals “GPS (Lat)”) en haalt alleen lat/lon/diepte op.【F:assets/js/data.js†L736-L986】
 3. ZIP-imports worden uitgepakt met JSZip; elke CSV wordt als aparte taak verwerkt.【F:assets/js/data.js†L986-L1120】
-4. Na verwerking worden heatmap en importoverlay bijgewerkt; alle importpunten blijven in de lokale browseropslag.【F:assets/js/data.js†L1122-L1380】
+4. Na verwerking worden heatmap en importoverlay bijgewerkt; importpunten worden in MySQL opgeslagen en gefilterd per kaartvenster.【F:assets/js/data.js†L1122-L1380】【F:api/save_import.php†L1-L43】【F:api/get_import_points.php†L1-L34】
 5. De importgeschiedenis verdwijnt zodra de wachtrij leeg is, maar de statusnotitie blijft beschikbaar voor feedback.【F:assets/js/data.js†L360-L420】
 
 ## Lokalisatie & thema’s

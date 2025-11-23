@@ -23,8 +23,40 @@
   </header>
 
   <main class="admin-main">
+    <section class="admin-card admin-db">
+      <h2 data-i18n="admin_db_title">Database</h2>
+      <form id="adminDbForm" class="form-grid admin-form admin-db-form">
+        <label data-i18n="admin_db_host">Host
+          <input type="text" id="adminDbHost" autocomplete="off" required />
+        </label>
+        <label data-i18n="admin_db_port">Poort
+          <input type="number" id="adminDbPort" min="1" max="65535" required />
+        </label>
+        <label data-i18n="admin_db_name">Database
+          <input type="text" id="adminDbName" autocomplete="off" required />
+        </label>
+        <label data-i18n="admin_db_user">App-gebruiker
+          <input type="text" id="adminDbUser" autocomplete="off" required />
+        </label>
+        <label data-i18n="admin_db_pass">App-wachtwoord
+          <input type="password" id="adminDbPass" autocomplete="new-password" />
+        </label>
+        <label data-i18n="admin_db_admin_user">Admin-gebruiker
+          <input type="text" id="adminDbAdminUser" autocomplete="off" required />
+        </label>
+        <label data-i18n="admin_db_admin_pass">Admin-wachtwoord
+          <input type="password" id="adminDbAdminPass" autocomplete="new-password" />
+        </label>
+        <div class="admin-actions admin-actions--inline">
+          <button type="submit" id="btnDbSave" data-i18n="admin_db_save">Opslaan &amp; toepassen</button>
+          <button type="button" id="btnDbTest" data-i18n="admin_db_test">Verbinding testen</button>
+        </div>
+      </form>
+      <div id="adminDbStatus" class="admin-status panel-note" data-i18n="admin_db_hint">Database en gebruiker worden via de admin-gegevens aangemaakt.</div>
+    </section>
+
     <section class="admin-card admin-config">
-      <h2 data-i18n="admin_db_title">Opslag &amp; instellingen</h2>
+      <h2 data-i18n="admin_ui_title">Opslag &amp; instellingen</h2>
       <form id="adminConfigForm" class="form-grid admin-form">
         <fieldset class="admin-fieldset">
           <legend data-i18n="admin_field_interface">Interface</legend>

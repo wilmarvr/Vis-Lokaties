@@ -1,13 +1,36 @@
 <?php
 // Shared MySQL helpers
 
-function vislok_load_config(): array
+function vislok_load_config(?array $overrides = null): array
 {
     static $config = null;
     if ($config === null) {
-        $config = require __DIR__ . '/config.php';
+        $base = require __DIR__ . '/config.php';
+        $config = $base['db'];
+
+        $localPath = __DIR__ . '/../data/config.local.json';
+        if (is_file($localPath)) {
+            $json = file_get_contents($localPath);
+            $data = json_decode($json, true);
+            if (is_array($data)) {
+                $config = array_merge($config, array_intersect_key($data, $config));
+            }
+        }
     }
-    return $config['db'];
+
+    if ($overrides && is_array($overrides)) {
+        $config = array_merge($config, array_intersect_key($overrides, $config));
+    }
+
+    $config['host'] = $config['host'] ?: '127.0.0.1';
+    $config['port'] = (int)($config['port'] ?: 3306);
+    $config['database'] = $config['database'] ?: 'vislok';
+    $config['user'] = $config['user'] ?: 'vislok_app';
+    $config['pass'] = $config['pass'] ?? '';
+    $config['admin_user'] = $config['admin_user'] ?: 'root';
+    $config['admin_pass'] = $config['admin_pass'] ?? '';
+
+    return $config;
 }
 
 function vislok_json_response($payload, int $status = 200): void
@@ -49,9 +72,9 @@ function vislok_connect_admin(?array $cfg = null): PDO
     ]);
 }
 
-function vislok_bootstrap(): PDO
+function vislok_bootstrap(?array $overrides = null): PDO
 {
-    $cfg = vislok_load_config();
+    $cfg = vislok_load_config($overrides);
     try {
         $pdo = vislok_connect_app($cfg);
         vislok_ensure_schema($pdo);
@@ -63,7 +86,6 @@ function vislok_bootstrap(): PDO
         }
     }
 
-    // Create database and app user with admin credentials
     $admin = vislok_connect_admin($cfg);
     $dbName = $cfg['database'];
     $appUser = $cfg['user'];

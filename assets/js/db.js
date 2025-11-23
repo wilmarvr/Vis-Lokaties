@@ -3,7 +3,7 @@
    MySQL-backed opslag via PHP API
    ======================================================= */
 
-const DB_KEY = "vislok_local_db_v1";
+const API_BASE = (typeof window !== "undefined" && window.VISLOK_API_BASE) ? window.VISLOK_API_BASE : "api";
 
 async function callApi(path, options = {}) {
   const url = `${API_BASE}/${path}`;

@@ -36,14 +36,35 @@ const SETTING_DEFAULTS = {
   heatmapMax: 10
 };
 
+const DB_DEFAULTS = {
+  host: "127.0.0.1",
+  port: 3306,
+  database: "vislok",
+  user: "vislok_app",
+  pass: "vislok_app",
+  admin_user: "root",
+  admin_pass: ""
+};
+
 function initAdmin() {
   const form = document.getElementById("adminConfigForm");
+  const dbForm = document.getElementById("adminDbForm");
   const versionForm = document.getElementById("adminVersionForm");
-  if (!form && !versionForm) return;
+  if (!form && !dbForm && !versionForm) return;
 
   const statusEl = document.getElementById("adminStatus");
+  const dbStatusEl = document.getElementById("adminDbStatus");
   const optionInputs = Array.from(document.querySelectorAll("[data-option]"));
   const settingInputs = Array.from(document.querySelectorAll("[data-setting]"));
+
+  const dbHost = document.getElementById("adminDbHost");
+  const dbPort = document.getElementById("adminDbPort");
+  const dbName = document.getElementById("adminDbName");
+  const dbUser = document.getElementById("adminDbUser");
+  const dbPass = document.getElementById("adminDbPass");
+  const dbAdminUser = document.getElementById("adminDbAdminUser");
+  const dbAdminPass = document.getElementById("adminDbAdminPass");
+  const btnDbTest = document.getElementById("btnDbTest");
 
   const versionCurrent = document.getElementById("adminVersionCurrent");
   const versionDate = document.getElementById("adminVersionDate");
@@ -62,6 +83,16 @@ function initAdmin() {
       if (type === "ok" || type === "success") statusEl.classList.add("success");
     }
     setStatus(message, type === "error" ? "error" : type === "success" || type === "ok" ? "ok" : "info");
+  }
+
+  function setDbMessage(key, fallback, type = "info") {
+    if (!dbStatusEl) return;
+    const message = t(key, fallback);
+    dbStatusEl.textContent = message;
+    dbStatusEl.classList.remove("error", "success");
+    if (type === "error") dbStatusEl.classList.add("error");
+    if (type === "ok" || type === "success") dbStatusEl.classList.add("success");
+    if (type === "error") setStatus(message, "error");
   }
 
   function setVersionMessage(key, fallback, type = "info") {
@@ -206,6 +237,43 @@ function initAdmin() {
     saveState();
   }
 
+  function applyDbConfig(cfg = {}) {
+    const normalized = { ...DB_DEFAULTS, ...(cfg || {}) };
+    if (dbHost) dbHost.value = normalized.host || "";
+    if (dbPort) dbPort.value = normalized.port || 3306;
+    if (dbName) dbName.value = normalized.database || "vislok";
+    if (dbUser) dbUser.value = normalized.user || "";
+    if (dbPass) dbPass.value = normalized.pass || "";
+    if (dbAdminUser) dbAdminUser.value = normalized.admin_user || "";
+    if (dbAdminPass) dbAdminPass.value = normalized.admin_pass || "";
+  }
+
+  function readDbConfig() {
+    return {
+      host: dbHost?.value?.trim() || DB_DEFAULTS.host,
+      port: Number.parseInt(dbPort?.value, 10) || DB_DEFAULTS.port,
+      database: dbName?.value?.trim() || DB_DEFAULTS.database,
+      user: dbUser?.value?.trim() || DB_DEFAULTS.user,
+      pass: dbPass?.value || DB_DEFAULTS.pass,
+      admin_user: dbAdminUser?.value?.trim() || DB_DEFAULTS.admin_user,
+      admin_pass: dbAdminPass?.value || DB_DEFAULTS.admin_pass,
+    };
+  }
+
+  async function loadDbConfig() {
+    if (!dbForm) return;
+    try {
+      const res = await fetch("api/get_config.php");
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || res.statusText);
+      applyDbConfig(data.config || {});
+      setDbMessage("admin_db_loaded", "Databaseconfiguratie geladen", "ok");
+    } catch (err) {
+      setDbMessage("admin_db_load_fail", `Config laden mislukt: ${err.message}`, "error");
+      applyDbConfig();
+    }
+  }
+
   function readFormConfig() {
     return {
       options: readOptions(),
@@ -231,6 +299,49 @@ function initAdmin() {
     applyConfig({ options: state.settings || FEATURE_DEFAULTS, settings: state.settings || SETTING_DEFAULTS });
     setPanelMessage("admin_status_loaded", "Configuratie geladen", "ok");
   }
+
+  async function saveDbConfig(event) {
+    if (event) event.preventDefault();
+    if (!dbForm) return;
+    const cfg = readDbConfig();
+    try {
+      const res = await fetch("api/save_config.php", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(cfg)
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.detail || data?.error || res.statusText);
+      applyDbConfig(data.config || cfg);
+      setDbMessage("admin_db_saved", "Databaseconfiguratie opgeslagen en toegepast", "success");
+    } catch (err) {
+      setDbMessage("admin_db_save_fail", `Opslaan mislukt: ${err.message}`, "error");
+    }
+  }
+
+  async function testDbConfig(event) {
+    if (event) event.preventDefault();
+    if (!dbForm) return;
+    const cfg = readDbConfig();
+    try {
+      const res = await fetch("api/test_connection.php", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ config: cfg })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.detail || data?.error || res.statusText);
+      setDbMessage("admin_db_test_ok", "Verbinding en schema in orde", "success");
+    } catch (err) {
+      setDbMessage("admin_db_test_fail", `Verbinding faalde: ${err.message}`, "error");
+    }
+  }
+
+    if (dbForm) {
+      loadDbConfig();
+      dbForm.addEventListener("submit", saveDbConfig);
+      if (btnDbTest) btnDbTest.addEventListener("click", testDbConfig);
+    }
 
     if (form) {
       optionInputs.forEach(input => {
