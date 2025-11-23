@@ -26,11 +26,7 @@ function initAdmin() {
   const versionForm = document.getElementById("adminVersionForm");
   if (!form && !versionForm) return;
 
-  const host = document.getElementById("adminDbHost");
-  const port = document.getElementById("adminDbPort");
-  const name = document.getElementById("adminDbName");
-  const user = document.getElementById("adminDbUser");
-  const pass = document.getElementById("adminDbPass");
+  const pathInput = document.getElementById("adminDbPath");
   const statusEl = document.getElementById("adminStatus");
   const btnTest = document.getElementById("btnAdminTest");
   const autoSync = document.getElementById("adminAutoSync");
@@ -171,21 +167,13 @@ function initAdmin() {
 
   function readFormConfig() {
     return {
-      host: host?.value?.trim() || "",
-      port: port?.value?.trim() || "",
-      name: name?.value?.trim() || "",
-      user: user?.value?.trim() || "",
-      pass: pass?.value || "",
+      path: pathInput?.value?.trim() || "",
       options: readOptions()
     };
   }
 
   function applyConfig(config = {}) {
-    if (host) host.value = config.host || "";
-    if (port) port.value = config.port || "";
-    if (name) name.value = config.name || "";
-    if (user) user.value = config.user || "";
-    if (pass) pass.value = "";
+    if (pathInput) pathInput.value = config.path || "";
     if (config.options) {
       applyOptions(config.options);
     } else {
