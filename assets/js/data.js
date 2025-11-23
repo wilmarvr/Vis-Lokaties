@@ -445,6 +445,9 @@ function bindEvents() {
   const btnGeo = document.getElementById("btnImportGeoJSON");
   const btnSaveHtml = document.getElementById("btnSaveHtml");
   const btnSaveHtmlData = document.getElementById("btnSaveHtmlData");
+  const btnLocalSave = document.getElementById("btnLocalSave");
+  const btnLocalLoad = document.getElementById("btnLocalLoad");
+  const btnLocalReset = document.getElementById("btnLocalReset");
   const btnExportJSON = document.getElementById("btnExportGeoJSON");
   const btnExportZIP = document.getElementById("btnExportZIP");
   const btnFilterDepth = document.getElementById("btnFilterDepth");
@@ -487,6 +490,9 @@ function bindEvents() {
   btnGeo?.addEventListener("click", openGeoJSONDialog);
   btnSaveHtml?.addEventListener("click", exportHTML);
   btnSaveHtmlData?.addEventListener("click", exportHTMLWithData);
+  btnLocalSave?.addEventListener("click", localSave);
+  btnLocalLoad?.addEventListener("click", localLoad);
+  btnLocalReset?.addEventListener("click", localReset);
   btnExportJSON?.addEventListener("click", exportGeoJSON);
   btnExportZIP?.addEventListener("click", exportZIP);
   btnFilterDepth?.addEventListener("click", applyDepthFilter);
@@ -3314,26 +3320,4 @@ window.VisLokData = { forceServerSync };
 /* ---------- EVENTKOPPELINGEN ---------- */
 document.addEventListener("DOMContentLoaded", () => {
   initData();
-
-  const toolbar = document.querySelector(".toolbar-right");
-  if (toolbar && !document.getElementById("btnLocalSave")) {
-    const btnSaveLocal = document.createElement("button");
-    btnSaveLocal.id = "btnLocalSave";
-    btnSaveLocal.textContent = t("btn_local_save", "💾 Opslaan");
-    btnSaveLocal.addEventListener("click", localSave);
-
-    const btnLoadLocal = document.createElement("button");
-    btnLoadLocal.id = "btnLocalLoad";
-    btnLoadLocal.textContent = t("btn_local_load", "📂 Laden");
-    btnLoadLocal.addEventListener("click", localLoad);
-
-    const btnResetLocal = document.createElement("button");
-    btnResetLocal.id = "btnLocalReset";
-    btnResetLocal.textContent = t("btn_local_reset", "🗑️ Reset");
-    btnResetLocal.addEventListener("click", localReset);
-
-    toolbar.appendChild(btnSaveLocal);
-    toolbar.appendChild(btnLoadLocal);
-    toolbar.appendChild(btnResetLocal);
-  }
 });

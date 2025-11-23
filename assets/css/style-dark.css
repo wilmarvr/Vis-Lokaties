@@ -49,6 +49,9 @@ header small {
 }
 
 /* ---------- TOOLBAR ---------- */
+.toolbar-panel button,
+.toolbar-panel select,
+.toolbar-panel .toolbar-link,
 .toolbar-right button,
 .toolbar-right select,
 .toolbar-right .toolbar-link {
@@ -62,16 +65,19 @@ header small {
   text-decoration: none;
   display: inline-flex;
   align-items: center;
-}
+.toolbar-panel select,
 .toolbar-right select {
   min-width: 90px;
 }
+.toolbar-panel button:hover,
+.toolbar-panel .toolbar-link:hover,
 .toolbar-right button:hover,
 .toolbar-right .toolbar-link:hover {
   background: var(--accent);
   color: #fff;
   border-color: var(--accent-light);
 }
+.toolbar-panel,
 .toolbar-right {
   display: flex;
   flex-wrap: wrap;
@@ -106,6 +112,7 @@ header small {
   margin: 0;
 }
 @media (max-width: 960px) {
+  .toolbar-panel,
   .toolbar-right {
     justify-content: flex-start;
     gap: 8px;
@@ -232,6 +239,19 @@ main {
   background: #06090e;
   min-width: 0;
 }
+#toolbarResizeHandle {
+  width: 10px;
+  cursor: ew-resize;
+  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.06) 40%, rgba(255,255,255,0.06) 60%, transparent 100%);
+  flex: 0 0 10px;
+  border-left: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  box-shadow: inset -1px 0 2px rgba(0, 0, 0, 0.3);
+}
+#toolbarResizeHandle.is-dragging {
+  background: linear-gradient(90deg, rgba(33,150,243,0.25) 0%, rgba(33,150,243,0.4) 50%, rgba(33,150,243,0.25) 100%);
+  border-color: var(--accent);
+}
 aside#uiControls {
   width: var(--sidebar-width);
   min-width: 260px;
@@ -254,30 +274,14 @@ details {
   margin-bottom: 6px;
 }
 
-.toolbar-resize {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: rgba(12, 16, 22, 0.9);
+.toolbar-panel {
   border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 6px 8px;
-  font-size: 0.85em;
-}
-.toolbar-resize label {
-  flex: 0 0 auto;
-  font-weight: 600;
-  color: var(--accent-light);
-}
-.toolbar-resize input[type="range"] {
-  flex: 1 1 auto;
-  accent-color: var(--accent);
-}
-.toolbar-resize output {
-  flex: 0 0 auto;
-  min-width: 52px;
-  text-align: right;
-  font-family: "JetBrains Mono", monospace;
+  border-radius: 6px;
+  padding: 8px;
+  background: #121721;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 details summary {
   cursor: pointer;
