@@ -90,6 +90,9 @@ function ensureFeatureDefaults() {
   if (!Array.isArray(state.settings.panelOrder)) {
     state.settings.panelOrder = [];
   }
+  if (!state.settings.panelOpen || typeof state.settings.panelOpen !== "object") {
+    state.settings.panelOpen = {};
+  }
 }
 
 function applyFeatureSettings(options = {}) {

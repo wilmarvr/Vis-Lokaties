@@ -33,6 +33,7 @@ const DEFAULT_SETTINGS = {
   autoLink: true,
   toolbarDrag: true,
   panelOrder: [],
+  panelOpen: {},
   toolbarWidth: TOOLBAR_DEFAULT_WIDTH
 };
 
@@ -113,6 +114,13 @@ function sanitizeSettings(raw = {}) {
   merged.autoLink = !!merged.autoLink;
   merged.toolbarDrag = !!merged.toolbarDrag;
   merged.panelOrder = Array.isArray(merged.panelOrder) ? merged.panelOrder : [];
+  merged.panelOpen =
+    merged.panelOpen && typeof merged.panelOpen === "object" && !Array.isArray(merged.panelOpen)
+      ? Object.keys(merged.panelOpen).reduce((acc, key) => {
+          acc[key] = merged.panelOpen[key] !== false;
+          return acc;
+        }, {})
+      : {};
 
   return merged;
 }

@@ -110,6 +110,7 @@ function ensurePanelDragSetup() {
 
   if (!panelOrderApplied) {
     applySavedPanelOrder();
+    applySavedPanelOpenStates();
     panelOrderApplied = true;
   }
 
@@ -146,8 +147,24 @@ function attachPanelDragHandlers() {
   panels.forEach(panel => {
     panel.removeEventListener("dragstart", handlePanelDragStart);
     panel.removeEventListener("dragend", handlePanelDragEnd);
+    panel.removeEventListener("toggle", handlePanelToggle);
     panel.addEventListener("dragstart", handlePanelDragStart);
     panel.addEventListener("dragend", handlePanelDragEnd);
+    panel.addEventListener("toggle", handlePanelToggle);
+  });
+}
+
+function applySavedPanelOpenStates() {
+  if (!dragContainer) return;
+  const saved = state.settings?.panelOpen || {};
+  dragContainer.querySelectorAll("details[data-panel]").forEach(panel => {
+    const id = panel.dataset.panel;
+    if (!id) return;
+    if (saved[id] === true) {
+      panel.setAttribute("open", "open");
+    } else if (saved[id] === false) {
+      panel.removeAttribute("open");
+    }
   });
 }
 
@@ -201,6 +218,22 @@ function handlePanelDrop(event) {
   if (!draggingPanel || state.settings?.toolbarDrag === false) return;
   event.preventDefault();
   persistPanelOrder();
+}
+
+function handlePanelToggle(event) {
+  const panel = event.currentTarget;
+  const id = panel?.dataset?.panel;
+  if (!id) return;
+  if (!state.settings || typeof state.settings !== "object") {
+    state.settings = {};
+  }
+  if (!state.settings.panelOpen || typeof state.settings.panelOpen !== "object") {
+    state.settings.panelOpen = {};
+  }
+  const isOpen = !!panel.open;
+  if (state.settings.panelOpen[id] === isOpen) return;
+  state.settings.panelOpen[id] = isOpen;
+  saveState();
 }
 
 function getPanelAfterElement(cursorY) {
