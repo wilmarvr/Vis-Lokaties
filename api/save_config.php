@@ -8,19 +8,9 @@ try {
         vislok_json_response(['error' => 'Geen configuratie ontvangen'], 400);
     }
 
-    $required = ['host', 'port', 'name', 'user'];
-    foreach ($required as $field) {
-        if (!isset($data[$field]) || $data[$field] === '') {
-            vislok_json_response(['error' => sprintf('Veld %s ontbreekt', $field)], 422);
-        }
-    }
-
     $config = [
-        'host' => $data['host'],
-        'port' => $data['port'],
-        'name' => $data['name'],
-        'user' => $data['user'],
-        'pass' => $data['pass'] ?? '',
+        // Pad is optioneel: lege waarde betekent standaardpad.
+        'path' => $data['path'] ?? '',
         'options' => $data['options'] ?? []
     ];
 
