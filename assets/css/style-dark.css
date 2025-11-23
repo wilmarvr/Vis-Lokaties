@@ -634,6 +634,84 @@ details .group h3 {
 .catch-form textarea {
   width: 100%;
 }
+.catch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+  margin: 4px 0;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: rgba(14, 18, 26, 0.9);
+}
+.catch-row-meta {
+  font-size: 0.85em;
+  color: #9aa7ba;
+}
+.catch-row-actions button {
+  border: 1px solid var(--border);
+  background: rgba(24, 32, 44, 0.9);
+  color: var(--fg);
+  border-radius: 4px;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.modal {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1200;
+}
+
+.modal.hidden {
+  display: none;
+}
+
+.modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(2px);
+}
+
+.modal-dialog {
+  position: relative;
+  background: #0f131a;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px;
+  width: min(520px, 90vw);
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+  z-index: 1;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 1.1em;
+}
+
+.modal-header button {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--fg);
+  padding: 4px 8px;
+  cursor: pointer;
+}
 .panel-note.success {
   border-color: var(--ok);
   color: var(--ok);

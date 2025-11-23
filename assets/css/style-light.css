@@ -636,6 +636,84 @@ details .group h3 {
 .catch-form textarea {
   width: 100%;
 }
+.catch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+  margin: 4px 0;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.85);
+}
+.catch-row-meta {
+  font-size: 0.85em;
+  color: #2e3642;
+}
+.catch-row-actions button {
+  border: 1px solid var(--border);
+  background: #eef2f6;
+  color: #1a1a1a;
+  border-radius: 4px;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.modal {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1200;
+}
+
+.modal.hidden {
+  display: none;
+}
+
+.modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(2px);
+}
+
+.modal-dialog {
+  position: relative;
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px;
+  width: min(520px, 90vw);
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.2);
+  z-index: 1;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 1.1em;
+}
+
+.modal-header button {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: #1a1a1a;
+  padding: 4px 8px;
+  cursor: pointer;
+}
 .panel-note.success {
   border-color: var(--ok);
   color: var(--ok);

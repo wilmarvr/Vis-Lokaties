@@ -53,6 +53,7 @@ let importHistory = [];
 let serverImports = [];
 let serverImportSummary = { batches: 0, points: 0 };
 let catchFormEls = {};
+let activeCatchId = null;
 const importEntryMap = new WeakMap();
 let currentImportName = null;
 let waterDrawActive = false;
@@ -574,15 +575,23 @@ function bindEvents() {
   });
 
   catchFormEls = {
-    form: document.getElementById("catchForm"),
-    stek: document.getElementById("catchStek"),
-    rig: document.getElementById("catchRig"),
-    weightKg: document.getElementById("catchWeightKg"),
-    weightLbs: document.getElementById("catchWeightLbs"),
-    length: document.getElementById("catchLength"),
-    notes: document.getElementById("catchNotes"),
-    photo: document.getElementById("catchPhoto"),
-    reset: document.getElementById("btnResetCatch"),
+    panel: document.querySelector('details[data-panel="catches"]'),
+    openBtn: document.getElementById("btnOpenCatchModal"),
+    modal: document.getElementById("catchModal"),
+    title: document.getElementById("catchModalTitle"),
+    form: document.getElementById("catchModalForm"),
+    id: document.getElementById("catchModalId"),
+    stek: document.getElementById("catchModalStek"),
+    rig: document.getElementById("catchModalRig"),
+    weightKg: document.getElementById("catchModalWeightKg"),
+    weightLbs: document.getElementById("catchModalWeightLbs"),
+    length: document.getElementById("catchModalLength"),
+    notes: document.getElementById("catchModalNotes"),
+    photo: document.getElementById("catchModalPhoto"),
+    date: document.getElementById("catchModalDate"),
+    deleteBtn: document.getElementById("btnDeleteCatch"),
+    cancelBtn: document.getElementById("btnCancelCatch"),
+    closeBtn: document.getElementById("catchModalClose"),
     summaryLabel: document.getElementById("catchSummarySelection"),
     selectionLabel: document.getElementById("catchSelectionLabel"),
     list: document.getElementById("catchList")
@@ -612,18 +621,10 @@ function bindEvents() {
 }
 
 function ensureCatchFormVisible() {
-  const panel = document.querySelector('details[data-panel="catches"]');
-  if (panel) {
-    panel.setAttribute("open", "open");
-    panel.classList.remove("is-hidden");
+  if (catchFormEls.panel) {
+    catchFormEls.panel.setAttribute("open", "open");
+    catchFormEls.panel.classList.remove("is-hidden");
   }
-
-  if (catchFormEls.form) {
-    catchFormEls.form.hidden = false;
-    catchFormEls.form.style.display = "grid";
-    catchFormEls.form.classList.remove("is-hidden");
-  }
-
   if (catchFormEls.selectionLabel) catchFormEls.selectionLabel.hidden = false;
   if (catchFormEls.list) catchFormEls.list.hidden = false;
 }
@@ -2715,6 +2716,7 @@ async function handleCatchSubmit(e) {
     return;
   }
   const payload = {
+    id: activeCatchId || catchFormEls.id?.value || null,
     stekId: finalStek,
     rigId: rigId || null,
     waterId: findSpot("stek", finalStek)?.waterId || null,
@@ -2722,7 +2724,7 @@ async function handleCatchSubmit(e) {
     weightLbs: parseFloat(catchFormEls.weightLbs?.value || ""),
     lengthCm: parseFloat(catchFormEls.length?.value || ""),
     notes: catchFormEls.notes?.value || "",
-    caughtAt: new Date().toISOString().slice(0, 19).replace('T', ' ')
+    caughtAt: normalizeDateInput(catchFormEls.date?.value)
   };
   if (!Number.isFinite(payload.weightKg)) payload.weightKg = null;
   if (!Number.isFinite(payload.weightLbs)) payload.weightLbs = null;
@@ -2732,14 +2734,29 @@ async function handleCatchSubmit(e) {
   return saveCatch(payload)
     .then(saved => {
       upsertCatch(saved);
-      resetCatchForm();
       updateCatchList();
+      closeCatchModal();
       setStatus(t("status_catch_saved", "Vangst opgeslagen"), "ok");
     })
     .catch(err => {
       console.warn("Catch save failed", err);
       setStatus(t("status_catch_save_error", "Vangst opslaan mislukt"), "error");
     });
+}
+
+function normalizeDateInput(value) {
+  if (!value || typeof value !== "string") return null;
+  const m = value.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?/);
+  if (!m) return null;
+  const [, y, mo, d, h, mi, s] = m;
+  const sec = s || "00";
+  return `${y}-${mo}-${d} ${h}:${mi}:${sec}`;
+}
+
+function toDatetimeLocal(value) {
+  if (!value) return "";
+  const m = value.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2})(?::\d{2})?/);
+  return m ? `${m[1]}T${m[2]}` : "";
 }
 
 function upsertCatch(entry) {
@@ -2894,11 +2911,9 @@ function renderCatchSelects(selectedStek, selectedRig) {
 }
 
 function bindCatchForm() {
-  if (!catchFormEls.form) return;
   renderCatchSelects();
   updateCatchList();
-  catchFormEls.form.addEventListener("submit", handleCatchSubmit);
-  catchFormEls.reset?.addEventListener("click", resetCatchForm);
+  catchFormEls.form?.addEventListener("submit", handleCatchSubmit);
   catchFormEls.stek?.addEventListener("change", updateCatchSelectionLabel);
   catchFormEls.rig?.addEventListener("change", () => {
     const rigId = catchFormEls.rig.value;
@@ -2920,22 +2935,77 @@ function bindCatchForm() {
   };
   syncWeights(catchFormEls.weightKg, catchFormEls.weightLbs, 2.20462);
   syncWeights(catchFormEls.weightLbs, catchFormEls.weightKg, 0.453592);
+
+  catchFormEls.openBtn?.addEventListener("click", () => openCatchModal());
+  catchFormEls.cancelBtn?.addEventListener("click", closeCatchModal);
+  catchFormEls.closeBtn?.addEventListener("click", closeCatchModal);
+  catchFormEls.deleteBtn?.addEventListener("click", handleCatchDelete);
+  catchFormEls.list?.addEventListener("click", handleCatchListClick);
 }
 
 function focusCatchForm(detail = {}) {
-  if (!catchFormEls.form) return;
-  renderCatchSelects(detail.stekId, detail.rigId);
-  if (detail.stekId && catchFormEls.stek) catchFormEls.stek.value = detail.stekId;
-  if (detail.rigId && catchFormEls.rig) catchFormEls.rig.value = detail.rigId;
-  updateCatchSelectionLabel();
-  if (detail.scroll) catchFormEls.form.scrollIntoView({ behavior: "smooth" });
+  openCatchModal({ stekId: detail.stekId, rigId: detail.rigId, scroll: true });
 }
 
-function resetCatchForm() {
-  if (!catchFormEls.form) return;
-  catchFormEls.form.reset();
-  renderCatchSelects();
+function openCatchModal(detail = {}) {
+  if (!catchFormEls.modal || !catchFormEls.form) return;
+  const existing = detail.catchId ? state.catches?.find(c => c.id === detail.catchId) : null;
+  activeCatchId = existing?.id || null;
+  catchFormEls.id.value = existing?.id || "";
+  renderCatchSelects(detail.stekId || existing?.stek_id, detail.rigId || existing?.rig_id);
+  if (catchFormEls.stek) catchFormEls.stek.value = detail.stekId || existing?.stek_id || "";
+  if (catchFormEls.rig) catchFormEls.rig.value = detail.rigId || existing?.rig_id || "";
+  if (catchFormEls.weightKg) catchFormEls.weightKg.value = Number.isFinite(existing?.weight_kg) ? existing.weight_kg : "";
+  if (catchFormEls.weightLbs) catchFormEls.weightLbs.value = Number.isFinite(existing?.weight_lbs) ? existing.weight_lbs : "";
+  if (catchFormEls.length) catchFormEls.length.value = Number.isFinite(existing?.length_cm) ? existing.length_cm : "";
+  if (catchFormEls.notes) catchFormEls.notes.value = existing?.notes || "";
+  if (catchFormEls.date) catchFormEls.date.value = toDatetimeLocal(existing?.caught_at);
+  if (catchFormEls.photo) catchFormEls.photo.value = "";
+  if (catchFormEls.title) {
+    catchFormEls.title.textContent = existing
+      ? t("catch_modal_title_edit", "Vangst bewerken")
+      : t("catch_modal_title_new", "Nieuwe vangst");
+  }
+  if (catchFormEls.deleteBtn) catchFormEls.deleteBtn.hidden = !existing;
   updateCatchSelectionLabel();
+  catchFormEls.modal.classList.remove("hidden");
+  if (detail.scroll) {
+    catchFormEls.modal.scrollIntoView({ behavior: "smooth" });
+  }
+}
+
+function closeCatchModal() {
+  activeCatchId = null;
+  if (catchFormEls.form) catchFormEls.form.reset();
+  if (catchFormEls.modal) catchFormEls.modal.classList.add("hidden");
+  updateCatchSelectionLabel();
+}
+
+function handleCatchListClick(ev) {
+  const btn = ev.target.closest("button[data-catch-id]");
+  if (!btn) return;
+  const id = btn.dataset.catchId;
+  if (!id) return;
+  openCatchModal({ catchId: id, scroll: true });
+}
+
+function handleCatchDelete() {
+  if (!activeCatchId) {
+    closeCatchModal();
+    return;
+  }
+  if (!window.confirm(t("confirm_delete_catch", "Vangst verwijderen?"))) return;
+  deleteCatch(activeCatchId)
+    .then(() => {
+      state.catches = (state.catches || []).filter(c => c.id !== activeCatchId);
+      updateCatchList();
+      setStatus(t("status_catch_deleted", "Vangst verwijderd"), "ok");
+      closeCatchModal();
+    })
+    .catch(err => {
+      console.warn("Catch delete failed", err);
+      setStatus(t("status_catch_delete_error", "Verwijderen mislukt"), "error");
+    });
 }
 
 function updateCatchSelectionLabel() {
@@ -2978,7 +3048,13 @@ function updateCatchList() {
       const weight = Number.isFinite(c.weight_kg)
         ? `${c.weight_kg.toFixed(1)} kg / ${(c.weight_lbs ?? 0).toFixed(1)} lbs`
         : "-";
-      return `<div class="catch-row"><strong>${escapeHtml(name || "-" )}</strong> – ${weight}</div>`;
+      const when = c.caught_at ? c.caught_at.split(" ")[0] : "";
+      return `
+        <div class="catch-row">
+          <div><strong>${escapeHtml(name || "-" )}</strong>${when ? ` · ${escapeHtml(when)}` : ""}</div>
+          <div class="catch-row-meta">${weight}</div>
+          <div class="catch-row-actions"><button data-catch-id="${escapeHtml(c.id)}" data-i18n="btn_edit_catch">✏️ Bewerken</button></div>
+        </div>`;
     });
   listEl.innerHTML = rows.join("");
 }
