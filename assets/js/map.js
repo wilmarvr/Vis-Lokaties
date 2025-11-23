@@ -683,7 +683,12 @@ function updateMarkerDistancePreview(latlng) {
   const rounded = Math.round(distance);
   const text = t(labelKey, fallback).replace("{distance}", String(rounded));
   const nameLine = escapeHtml(reference.name || reference.id || "");
-  const label = nameLine ? `${text}<br><small>${nameLine}</small>` : text;
+  const depthInfo = interpolateDepth(latlng.lat, latlng.lng);
+  const depthLine = depthInfo && Number.isFinite(depthInfo.value)
+    ? `${t("footer_depth", "Diepte")}: ${depthInfo.value.toFixed(1)} m`
+    : "";
+  const metaLine = [nameLine, depthLine].filter(Boolean).join(" • ");
+  const label = metaLine ? `${text}<br><small>${metaLine}</small>` : text;
   if (dragDistanceLine) {
     dragDistanceLine.setLatLngs([
       [reference.lat, reference.lng],
