@@ -9,7 +9,7 @@
   <link rel="apple-touch-icon" sizes="180x180" href="assets/img/icon-180.png" />
   <link rel="icon" sizes="192x192" href="assets/img/icon-192.png" />
   <link rel="icon" sizes="512x512" href="assets/img/icon-512.png" />
-  <script type="module" src="assets/js/i18n.js?v=20250611"></script>
+  <script type="module" src="assets/js/i18n.js?v=20250715"></script>
 </head>
 <body class="admin-page">
   <header class="admin-header">
@@ -24,48 +24,61 @@
 
   <main class="admin-main">
     <section class="admin-card admin-config">
-      <h2 data-i18n="admin_db_title">Database instellingen</h2>
+      <h2 data-i18n="admin_db_title">Opslag &amp; instellingen</h2>
       <form id="adminConfigForm" class="form-grid admin-form">
-        <label data-i18n="admin_db_host">Host
-          <input type="text" id="adminDbHost" required />
-        </label>
-        <label data-i18n="admin_db_port">Poort
-          <input type="number" id="adminDbPort" min="1" max="65535" required />
-        </label>
-        <label data-i18n="admin_db_name">Database
-          <input type="text" id="adminDbName" required />
-        </label>
-        <label data-i18n="admin_db_user">Gebruiker
-          <input type="text" id="adminDbUser" required />
-        </label>
-        <label data-i18n="admin_db_pass">Wachtwoord
-          <input type="password" id="adminDbPass" autocomplete="current-password" />
-        </label>
+        <fieldset class="admin-fieldset">
+          <legend data-i18n="admin_field_interface">Interface</legend>
+          <div class="admin-feature-grid">
+            <label class="checkbox"><input type="checkbox" data-option="showData" /> <span data-i18n="admin_opt_data">Data &amp; Detectie-paneel</span></label>
+            <label class="checkbox"><input type="checkbox" data-option="showWeather" /> <span data-i18n="admin_opt_weather">Weer &amp; wind-paneel</span></label>
+            <label class="checkbox"><input type="checkbox" data-option="showContours" /> <span data-i18n="admin_opt_contours">Contouren &amp; bathy-paneel</span></label>
+            <label class="checkbox"><input type="checkbox" data-option="showCatches" /> <span data-i18n="admin_opt_catches">Vangsten-paneel</span></label>
+            <label class="checkbox"><input type="checkbox" data-option="showManage" /> <span data-i18n="admin_opt_manage">Beheer-paneel</span></label>
+            <label class="checkbox"><input type="checkbox" data-option="showOverview" /> <span data-i18n="admin_opt_overview">Overzicht-paneel</span></label>
+            <label class="checkbox"><input type="checkbox" data-option="showChangelog" /> <span data-i18n="admin_opt_changelog">Over / changelog-paneel</span></label>
+            <label class="checkbox"><input type="checkbox" data-option="allowManualWater" /> <span data-i18n="admin_opt_manual_water">Handmatig water tekenen</span></label>
+            <label class="checkbox"><input type="checkbox" data-option="autoLink" /> <span data-i18n="admin_opt_autolink">Automatisch koppelen stek/rig</span></label>
+            <label class="checkbox"><input type="checkbox" data-option="toolbarDrag" /> <span data-i18n="admin_opt_toolbar_drag">Toolbar-secties verslepen</span></label>
+          </div>
+        </fieldset>
+
+        <fieldset class="admin-fieldset">
+          <legend data-i18n="admin_field_map">Kaart &amp; detectie</legend>
+          <div class="admin-grid">
+            <label data-i18n="admin_label_detection_radius">Detectieradius (m)
+              <input type="number" data-setting="detectionRadius" min="20" max="1000" step="10" />
+            </label>
+            <label data-i18n="admin_label_max_edge">Max. afstand tussen punten (m)
+              <input type="number" data-setting="maxEdge" min="10" max="500" step="5" />
+            </label>
+            <label data-i18n="admin_label_heat_radius">Heatmap-radius
+              <input type="number" data-setting="heatmapRadius" min="5" max="80" step="1" />
+            </label>
+            <label data-i18n="admin_label_heat_blur">Heatmap-blur
+              <input type="number" data-setting="heatmapBlur" min="1" max="60" step="1" />
+            </label>
+            <label data-i18n="admin_label_heat_min">Heatmap minimum
+              <input type="number" data-setting="heatmapMin" min="-50" max="100" step="0.1" />
+            </label>
+            <label data-i18n="admin_label_heat_max">Heatmap maximum
+              <input type="number" data-setting="heatmapMax" min="-50" max="200" step="0.1" />
+            </label>
+          </div>
+          <div class="admin-feature-grid admin-feature-grid--wrap">
+            <label class="checkbox"><input type="checkbox" data-option="heatmapInvert" /> <span data-i18n="admin_opt_heat_invert">Heatmap omkeren</span></label>
+            <label class="checkbox"><input type="checkbox" data-option="heatmapClamp" /> <span data-i18n="admin_opt_heat_clamp">Heatmap clamp</span></label>
+            <label class="checkbox"><input type="checkbox" data-option="cluster" /> <span data-i18n="admin_opt_cluster">Cluster markers standaard</span></label>
+            <label class="checkbox"><input type="checkbox" data-option="showImports" /> <span data-i18n="admin_opt_imports">Toon imports standaard</span></label>
+            <label class="checkbox"><input type="checkbox" data-option="saveBathy" /> <span data-i18n="admin_opt_save_bathy">Bewaar bathy-data lokaal</span></label>
+            <label class="checkbox"><input type="checkbox" data-option="autoSync" /> <span data-i18n="admin_opt_autosync">Auto-sync lokale data</span></label>
+          </div>
+        </fieldset>
+
         <div class="admin-actions">
           <button type="submit" id="btnAdminSave" data-i18n="admin_save">Opslaan</button>
-          <button type="button" id="btnAdminTest" data-i18n="admin_test">Test verbinding</button>
         </div>
       </form>
-      <div class="admin-switches">
-        <label class="checkbox"><input type="checkbox" id="adminAutoSync" /> <span data-i18n="admin_auto_sync">Sync lokale data naar database bij opstart</span></label>
-        <label class="checkbox"><input type="checkbox" id="adminForceBathy" /> <span data-i18n="admin_auto_bathy">Bathymetrie standaard in database opslaan</span></label>
-      </div>
-      <div class="admin-feature-toggles">
-        <h3 data-i18n="admin_feature_title">Interface-opties</h3>
-        <div class="admin-feature-grid">
-          <label class="checkbox"><input type="checkbox" data-option="showData" /> <span data-i18n="admin_opt_data">Data &amp; Detectie-paneel</span></label>
-          <label class="checkbox"><input type="checkbox" data-option="showWeather" /> <span data-i18n="admin_opt_weather">Weer &amp; wind-paneel</span></label>
-          <label class="checkbox"><input type="checkbox" data-option="showContours" /> <span data-i18n="admin_opt_contours">Contouren &amp; bathy-paneel</span></label>
-          <label class="checkbox"><input type="checkbox" data-option="showCatches" /> <span data-i18n="admin_opt_catches">Vangsten-paneel</span></label>
-          <label class="checkbox"><input type="checkbox" data-option="showManage" /> <span data-i18n="admin_opt_manage">Beheer-paneel</span></label>
-          <label class="checkbox"><input type="checkbox" data-option="showOverview" /> <span data-i18n="admin_opt_overview">Overzicht-paneel</span></label>
-          <label class="checkbox"><input type="checkbox" data-option="showChangelog" /> <span data-i18n="admin_opt_changelog">Over / changelog-paneel</span></label>
-          <label class="checkbox"><input type="checkbox" data-option="allowManualWater" /> <span data-i18n="admin_opt_manual_water">Handmatig water tekenen</span></label>
-          <label class="checkbox"><input type="checkbox" data-option="autoLink" /> <span data-i18n="admin_opt_autolink">Automatisch koppelen stek/rig</span></label>
-          <label class="checkbox"><input type="checkbox" data-option="toolbarDrag" /> <span data-i18n="admin_opt_toolbar_drag">Toolbar-secties verslepen</span></label>
-        </div>
-      </div>
-      <div id="adminStatus" class="admin-status panel-note" data-i18n="admin_hint">Gebruik dit paneel om database- en synchronisatie-instellingen te wijzigen.</div>
+      <div id="adminStatus" class="admin-status panel-note" data-i18n="admin_hint">Instellingen worden lokaal opgeslagen; er is geen server nodig.</div>
     </section>
 
     <section class="admin-card admin-version">
@@ -90,16 +103,16 @@
       <ul id="versionHistory" class="version-history"></ul>
     </section>
 
-    <section class="admin-card admin-help">
-      <h2 data-i18n="admin_help_title">Hulp &amp; uitleg</h2>
-      <p data-i18n="admin_help_intro">Volg onderstaande stappen om de backend snel te configureren.</p>
-      <ul class="admin-help-list">
-        <li data-i18n="admin_help_db">Vul je XAMPP MySQL host, poort, database, gebruiker en wachtwoord in (standaard: localhost en poort 3306).</li>
-        <li data-i18n="admin_help_sync">Schakel “Sync lokale data” in om waters, stekken, rigs en bathy-data automatisch met de database te synchroniseren.</li>
-        <li data-i18n="admin_help_version">Gebruik het versieformulier om release-informatie op te slaan en de zichtbare app-versie bij te werken.</li>
-        <li data-i18n="admin_help_actions">Gebruik de knoppen Opslaan en Test verbinding na wijzigingen om te controleren of de configuratie werkt.</li>
-      </ul>
-    </section>
+      <section class="admin-card admin-help">
+        <h2 data-i18n="admin_help_title">Hulp &amp; uitleg</h2>
+        <p data-i18n="admin_help_intro">Alles draait lokaal; gebruik deze tips om je voorkeuren vast te leggen.</p>
+        <ul class="admin-help-list">
+          <li data-i18n="admin_help_db">Alle data wordt in de browser bewaard; back-up door de pagina te exporteren of lokale opslag te wissen.</li>
+          <li data-i18n="admin_help_sync">Schakel panelen in/uit om de interface naar wens te maken; de keuzes blijven lokaal bewaard.</li>
+          <li data-i18n="admin_help_version">Gebruik het versieformulier om release-informatie op te slaan en de zichtbare app-versie bij te werken.</li>
+          <li data-i18n="admin_help_actions">Opslaan is voldoende; er is geen server- of databaseverbinding nodig.</li>
+        </ul>
+      </section>
   </main>
 
   <footer>
@@ -107,7 +120,7 @@
     <span id="footerInfo" data-i18n="footer">© 2025 Vis Lokaties</span>
   </footer>
 
-  <script type="module" src="assets/js/core.js?v=20250611"></script>
-  <script type="module" src="assets/js/admin.js?v=20250611"></script>
+  <script type="module" src="assets/js/core.js?v=20250715"></script>
+  <script type="module" src="assets/js/admin.js?v=20250715"></script>
 </body>
 </html>
