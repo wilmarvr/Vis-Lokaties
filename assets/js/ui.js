@@ -13,10 +13,10 @@ import {
   TOOLBAR_MIN_WIDTH,
   TOOLBAR_MAX_WIDTH,
   TOOLBAR_DEFAULT_WIDTH
-} from "./core.js?v=20250611";
-import { populateTables } from "./data.js?v=20250611";
-import { setDictionary, t, getLanguage } from "./i18n.js?v=20250611";
-import { escapeHtml } from "./helpers.js?v=20250611";
+} from "./core.js?v=20250715";
+import { populateTables } from "./data.js?v=20250715";
+import { setDictionary, t, getLanguage } from "./i18n.js?v=20250715";
+import { escapeHtml } from "./helpers.js?v=20250715";
 
 let dragContainer = null;
 let panelOrderApplied = false;
