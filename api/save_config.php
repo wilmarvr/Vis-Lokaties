@@ -1,31 +1,34 @@
 <?php
-require_once __DIR__ . '/config.php';
-require_once __DIR__ . '/db.php';
+require __DIR__ . '/db.php';
 
 try {
-    $data = vislok_read_json();
-    if (!$data) {
-        vislok_json_response(['error' => 'Geen configuratie ontvangen'], 400);
-    }
-
-    $required = ['host', 'port', 'name', 'user'];
-    foreach ($required as $field) {
-        if (!isset($data[$field]) || $data[$field] === '') {
-            vislok_json_response(['error' => sprintf('Veld %s ontbreekt', $field)], 422);
+    $payload = vislok_json_input();
+    $allowed = ['host', 'port', 'database', 'user', 'pass', 'admin_user', 'admin_pass'];
+    $cfg = [];
+    foreach ($allowed as $key) {
+        if (array_key_exists($key, $payload)) {
+            $cfg[$key] = $payload[$key];
         }
     }
+    $cfg['host'] = isset($cfg['host']) ? trim((string)$cfg['host']) : '127.0.0.1';
+    $cfg['port'] = isset($cfg['port']) ? (int)$cfg['port'] : 3306;
+    $cfg['database'] = isset($cfg['database']) ? trim((string)$cfg['database']) : 'vislok';
+    $cfg['user'] = isset($cfg['user']) ? trim((string)$cfg['user']) : 'vislok_app';
+    $cfg['pass'] = isset($cfg['pass']) ? (string)$cfg['pass'] : '';
+    $cfg['admin_user'] = isset($cfg['admin_user']) ? trim((string)$cfg['admin_user']) : 'root';
+    $cfg['admin_pass'] = isset($cfg['admin_pass']) ? (string)$cfg['admin_pass'] : '';
 
-    $config = [
-        'host' => $data['host'],
-        'port' => $data['port'],
-        'name' => $data['name'],
-        'user' => $data['user'],
-        'pass' => $data['pass'] ?? '',
-        'options' => $data['options'] ?? []
-    ];
+    $dir = __DIR__ . '/../data';
+    if (!is_dir($dir)) {
+        mkdir($dir, 0777, true);
+    }
+    $path = $dir . '/config.local.json';
+    file_put_contents($path, json_encode($cfg, JSON_PRETTY_PRINT));
 
-    $saved = vislok_save_config($config);
-    vislok_json_response(['status' => 'ok', 'config' => $saved]);
+    // Test and create schema with new config
+    vislok_bootstrap($cfg);
+
+    vislok_json_response(['ok' => true, 'config' => $cfg]);
 } catch (Throwable $e) {
-    vislok_json_response(['error' => $e->getMessage()], 500);
+    vislok_error('Config opslaan mislukt', 500, ['detail' => $e->getMessage()]);
 }

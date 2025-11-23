@@ -1,11 +1,11 @@
 <?php
-require_once __DIR__ . '/db.php';
+require __DIR__ . '/db.php';
 
 try {
-    $pdo = vislok_get_connection();
+    $pdo = vislok_bootstrap();
     $pdo->exec('DELETE FROM bathy_points');
     $pdo->exec('DELETE FROM bathy_imports');
-    vislok_json_response(['status' => 'ok']);
+    vislok_json_response(['ok' => true]);
 } catch (Throwable $e) {
-    vislok_json_response(['error' => $e->getMessage()], 500);
+    vislok_error('Imports wissen mislukt', 500, ['detail' => $e->getMessage()]);
 }

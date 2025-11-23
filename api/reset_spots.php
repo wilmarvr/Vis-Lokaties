@@ -1,10 +1,13 @@
 <?php
-require_once __DIR__ . '/db.php';
+require __DIR__ . '/db.php';
 
 try {
-    $pdo = vislok_get_connection();
-    $pdo->exec('TRUNCATE TABLE spots');
-    vislok_json_response(['status' => 'ok']);
+    $pdo = vislok_bootstrap();
+    $pdo->exec('DELETE FROM catches');
+    $pdo->exec('DELETE FROM rigs');
+    $pdo->exec('DELETE FROM stekken');
+    $pdo->exec('DELETE FROM waters');
+    vislok_json_response(['ok' => true]);
 } catch (Throwable $e) {
-    vislok_json_response(['error' => $e->getMessage()], 500);
+    vislok_error('Reset mislukt', 500, ['detail' => $e->getMessage()]);
 }
