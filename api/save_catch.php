@@ -56,7 +56,7 @@ function vislok_store_photo(?string $dataUrl, ?string $existingPath = null): ?st
     return 'uploads/catches/' . $fileName;
 }
 
-try {
+vislok_api(static function () {
     $payload = vislok_read_json();
     $stekId = $payload['spot_id'] ?? '';
     if (!$stekId) {
@@ -117,7 +117,7 @@ try {
         ':caught_at' => $caughtAt ?: null,
     ]);
 
-    vislok_json_response([
+    return [
         'status' => 'ok',
         'catch' => [
             'id' => $id,
@@ -131,7 +131,5 @@ try {
             'photo_path' => $photoPath,
             'caught_at' => $caughtAt,
         ],
-    ]);
-} catch (Throwable $e) {
-    vislok_json_response(['error' => $e->getMessage()], 500);
-}
+    ];
+});

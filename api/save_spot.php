@@ -1,7 +1,7 @@
 <?php
 require_once __DIR__ . '/db.php';
 
-try {
+vislok_api(static function () {
     $data = vislok_read_json();
     if (!isset($data['id'])) {
         $data['id'] = uniqid('spot_', true);
@@ -100,7 +100,5 @@ try {
     }
 
     $saved = vislok_find_spot($pdo, $id);
-    vislok_json_response(['status' => 'ok', 'spot' => $saved ?: null]);
-} catch (Throwable $e) {
-    vislok_json_response(['error' => $e->getMessage()], 500);
-}
+    return ['status' => 'ok', 'spot' => $saved ?: null];
+});

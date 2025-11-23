@@ -1,7 +1,7 @@
 <?php
 require_once __DIR__ . '/db.php';
 
-try {
+vislok_api(static function () {
     $data = vislok_read_json();
     $id = $data['id'] ?? '';
     if (!$id) {
@@ -25,7 +25,5 @@ try {
 
     $stmt = $pdo->prepare(sprintf('DELETE FROM %s WHERE id = :id', $tableMap[$type]));
     $stmt->execute([':id' => $id]);
-    vislok_json_response(['status' => 'ok']);
-} catch (Throwable $e) {
-    vislok_json_response(['error' => $e->getMessage()], 500);
-}
+    return ['status' => 'ok'];
+});

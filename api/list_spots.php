@@ -1,7 +1,7 @@
 <?php
 require_once __DIR__ . '/db.php';
 
-try {
+vislok_api(static function () {
     $pdo = vislok_get_connection();
     $stmt = $pdo->query('
         SELECT id, \'water\' AS type, name, lat, lng, val, note, polygon, NULL AS water_id, NULL AS stek_id, created_at
@@ -21,7 +21,6 @@ try {
             $row['polygon'] = $decoded ?: null;
         }
     }
-    vislok_json_response(['data' => $rows]);
-} catch (Throwable $e) {
-    vislok_json_response(['error' => $e->getMessage()], 500);
-}
+
+    return ['data' => $rows];
+});

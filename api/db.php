@@ -1,6 +1,32 @@
 <?php
 require_once __DIR__ . '/config.php';
 
+/**
+ * Run an API action with consistent JSON error handling.
+ * Any PHP warnings/notices are converted to exceptions so we can surface
+ * the underlying message back to the client instead of a blank 500 page.
+ */
+function vislok_api(callable $handler): void {
+    $prevHandler = set_error_handler(static function ($severity, $message, $file, $line) {
+        throw new ErrorException($message, 0, $severity, $file, $line);
+    });
+
+    try {
+        $result = $handler();
+        if ($result !== null) {
+            vislok_json_response($result);
+        }
+    } catch (Throwable $e) {
+        vislok_json_response(['error' => $e->getMessage()], 500);
+    } finally {
+        if ($prevHandler !== null) {
+            set_error_handler($prevHandler);
+        } else {
+            restore_error_handler();
+        }
+    }
+}
+
 function vislok_get_connection(): PDO {
     static $pdo = null;
     if ($pdo instanceof PDO) {
