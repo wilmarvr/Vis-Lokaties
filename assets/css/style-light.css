@@ -79,6 +79,14 @@ header small {
   justify-content: flex-end;
   gap: 6px;
 }
+.toolbar-heading {
+  font-weight: 700;
+  color: var(--fg-strong);
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+}
 .toolbar-group {
   display: flex;
   align-items: center;
@@ -367,6 +375,23 @@ details .group h3 {
 
 .admin-form {
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+}
+.admin-fieldset {
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 4px 0;
+}
+.admin-fieldset legend {
+  padding: 0 6px;
+  font-weight: 700;
+  color: var(--fg-strong);
+}
+.admin-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 8px 12px;
+  margin-bottom: 6px;
 }
 .admin-form h3 {
   grid-column: 1 / -1;
@@ -971,6 +996,54 @@ footer {
   margin-top: 6px;
   font-size: 0.75em;
   color: #6b7280;
+}
+
+.spot-popup-wrapper .leaflet-popup-content {
+  margin: 0;
+}
+
+.spot-popup {
+  min-width: 200px;
+}
+
+.spot-popup__title {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.spot-popup__meta {
+  font-size: 0.78em;
+  color: #6b7280;
+  margin-bottom: 8px;
+}
+
+.spot-popup__actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.spot-popup__btn {
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--fg);
+  border-radius: 4px;
+  font-size: 0.85em;
+  padding: 6px 8px;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.spot-popup__btn:hover,
+.spot-popup__btn:focus {
+  background: var(--accent-light);
+  border-color: var(--accent);
+  color: var(--fg);
+}
+
+.spot-marker--armed {
+  box-shadow: 0 0 8px rgba(59, 130, 246, 0.65);
+  transform: scale(1.15);
 }
 
 /* ---------- HEATMAP LEGENDA ---------- */

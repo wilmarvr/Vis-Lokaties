@@ -10,8 +10,8 @@ import {
   state,
   saveState,
   loadState
-} from "./core.js?v=20250611";
-import { updateOverview, applyFeatureVisibility } from "./ui.js?v=20250611";
+} from "./core.js?v=20250715";
+import { updateOverview, applyFeatureVisibility } from "./ui.js?v=20250715";
 import {
   refreshDataLayers,
   refreshImportLayer,
@@ -24,7 +24,7 @@ import {
   startWaterDrawing,
   finishWaterDrawing,
   cancelWaterDrawing
-} from "./map.js?v=20250611";
+} from "./map.js?v=20250715";
 import {
   saveSpot,
   fetchSpots,
@@ -37,9 +37,9 @@ import {
   saveCatch,
   deleteCatch,
   fetchBathyPoints
-} from "./db.js?v=20250611";
-import { uid, distanceM, escapeHtml } from "./helpers.js?v=20250611";
-import { t } from "./i18n.js?v=20250611";
+} from "./db.js?v=20250715";
+import { uid, distanceM, escapeHtml } from "./helpers.js?v=20250715";
+import { t } from "./i18n.js?v=20250715";
 
 let rawImports = [];
 let rawImportKeys = new Set();
@@ -128,22 +128,8 @@ function applyFeatureSettings(options = {}) {
 }
 
 function loadRemoteConfigOptions() {
-  return fetch("api/get_config.php")
-    .then(response => {
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      return response.json();
-    })
-    .then(data => {
-      if (data?.config?.options) {
-        applyFeatureSettings(data.config.options);
-      } else {
-        applyFeatureVisibility();
-      }
-    })
-    .catch(err => {
-      console.warn("Kon configuratie-opties niet laden", err);
-      applyFeatureVisibility();
-    });
+  applyFeatureSettings(state.settings || {});
+  return Promise.resolve();
 }
 
 function setImportMeta({ stored, total, truncated = false, dropped = false } = {}) {
@@ -1415,14 +1401,14 @@ function formatDate(value) {
           scheduleBathyViewportFetch(lastViewportDetail);
         }
         if (showStatus) {
-          setStatus(t("status_imports_synced", "Serverimporten bijgewerkt"), "ok");
+          setStatus(t("status_imports_synced", "Lokale imports bijgewerkt"), "ok");
         }
       })
       .catch(err => {
-        console.warn("Kon serverimporten niet laden", err);
+        console.warn("Kon lokale imports niet laden", err);
         bathyServerAvailable = false;
         if (showStatus) {
-          setStatus(t("status_imports_sync_error", "Serverimporten konden niet geladen worden"), "error");
+          setStatus(t("status_imports_sync_error", "Imports konden niet geladen worden"), "error");
         }
       });
   }
@@ -2913,7 +2899,7 @@ function syncWithServer(pushLocal) {
     .then(([spots, catches]) => {
       if (Array.isArray(spots)) {
         mergeServerData(spots);
-        setStatus(`${t("status_sync_done", "Server synchronisatie voltooid")} (${spots.length})`, "ok");
+        setStatus(`${t("status_sync_done", "Lokale opslag geladen")} (${spots.length})`, "ok");
       }
       if (Array.isArray(catches)) {
         mergeServerCatches(catches);
@@ -2923,19 +2909,15 @@ function syncWithServer(pushLocal) {
 
       if (!pushLocal) return;
       const all = [...state.waters, ...state.stekken, ...state.rigs];
-      return all
-        .reduce(
-          (chain, spot) =>
-            chain.then(() =>
-              saveSpot(spot).catch(err => {
-                console.warn("Spot upload faalde", err);
-              })
-            ),
-          Promise.resolve()
-        )
-        .then(() => {
-          setStatus(t("status_sync_push", "Lokale data naar server geschreven"), "ok");
-        });
+      return all.reduce(
+        (chain, spot) =>
+          chain.then(() =>
+            saveSpot(spot).catch(err => {
+              console.warn("Lokale opslag bijwerken faalde", err);
+            })
+          ),
+        Promise.resolve()
+      );
     })
     .then(() => {
       whenMapReady(() => refreshDataLayers());
@@ -2945,8 +2927,8 @@ function syncWithServer(pushLocal) {
       return loadServerImportSummary();
     })
     .catch(err => {
-      console.warn("Server sync faalde", err);
-      setStatus(t("status_sync_error", "Server niet bereikbaar"), "error");
+      console.warn("Lokale sync faalde", err);
+      setStatus(t("status_sync_error", "Lokale opslag niet beschikbaar"), "error");
     });
 }
 
@@ -2982,12 +2964,19 @@ function resetServerData() {
   if (!confirm(t("confirm_reset_server", "Weet je zeker dat je de serverdata wilt resetten?"))) return;
   resetServer()
     .then(() => {
-      setStatus(t("status_server_reset", "Serverdata gewist"), "ok");
-      syncWithServer(false);
+      state.waters = [];
+      state.stekken = [];
+      state.rigs = [];
+      state.imports = [];
+      state.importsMeta = { stored: 0, total: 0 };
+      saveState();
+      setStatus(t("status_server_reset", "Lokale opslag gewist"), "ok");
+      whenMapReady(() => refreshDataLayers());
+      populateTables();
     })
     .catch(err => {
       console.error(err);
-      setStatus(t("status_server_reset_error", "Server reset mislukt"), "error");
+      setStatus(t("status_server_reset_error", "Lokale reset mislukt"), "error");
     });
 }
 
