@@ -2428,18 +2428,27 @@ function persistSpot(spot, showStatus = true) {
 }
 
 /* ---------- SERVER SYNC ---------- */
-function syncWithServer(pushLocal) {
-  return fetchSpots()
-    .then(spots => {
-      if (Array.isArray(spots)) {
-        mergeServerData(spots);
-        setStatus(`${t("status_sync_done", "Lokale opslag geladen")} (${spots.length})`, "ok");
-      }
-      if (Array.isArray(catches)) {
-        state.catches = catches;
-        updateCatchList();
-        saveState();
-      }
+  function syncWithServer(pushLocal) {
+    const spotPromise = fetchSpots().catch(err => {
+      console.warn("Spots ophalen mislukt", err);
+      return [];
+    });
+    const catchPromise = fetchCatches().catch(err => {
+      console.warn("Vangsten ophalen mislukt", err);
+      return [];
+    });
+
+    return Promise.all([spotPromise, catchPromise])
+      .then(([spots, catchList]) => {
+        if (Array.isArray(spots)) {
+          mergeServerData(spots);
+          setStatus(`${t("status_sync_done", "Lokale opslag geladen")} (${spots.length})`, "ok");
+        }
+        if (Array.isArray(catchList)) {
+          state.catches = catchList;
+          updateCatchList();
+          saveState();
+        }
 
       if (!pushLocal) return;
       const all = [...state.waters, ...state.stekken, ...state.rigs];

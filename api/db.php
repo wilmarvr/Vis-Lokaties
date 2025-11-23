@@ -103,6 +103,19 @@ function vislok_bootstrap(?array $overrides = null): PDO
 
 function vislok_ensure_schema(PDO $pdo): void
 {
+    $columnExists = function (string $table, string $column) use ($pdo): bool {
+        $stmt = $pdo->prepare('SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?');
+        $stmt->execute([$table, $column]);
+        return (int)$stmt->fetchColumn() > 0;
+    };
+
+    $ensureColumn = function (string $table, string $column, string $definition) use ($pdo, $columnExists): void {
+        if ($columnExists($table, $column)) {
+            return;
+        }
+        $pdo->exec("ALTER TABLE {$table} ADD COLUMN {$definition}");
+    };
+
     $pdo->exec('CREATE TABLE IF NOT EXISTS waters (
         id VARCHAR(64) PRIMARY KEY,
         name VARCHAR(255) NOT NULL,
@@ -150,6 +163,17 @@ function vislok_ensure_schema(PDO $pdo): void
         CONSTRAINT fk_catch_stek FOREIGN KEY (stek_id) REFERENCES stekken(id) ON DELETE SET NULL,
         CONSTRAINT fk_catch_rig FOREIGN KEY (rig_id) REFERENCES rigs(id) ON DELETE SET NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci');
+
+    // Upgrade legacy catch schemas
+    $ensureColumn('catches', 'water_id', 'water_id VARCHAR(64) NULL AFTER id');
+    $ensureColumn('catches', 'stek_id', 'stek_id VARCHAR(64) NULL AFTER water_id');
+    $ensureColumn('catches', 'rig_id', 'rig_id VARCHAR(64) NULL AFTER stek_id');
+    $ensureColumn('catches', 'weight_kg', 'weight_kg DOUBLE NULL AFTER rig_id');
+    $ensureColumn('catches', 'weight_lbs', 'weight_lbs DOUBLE NULL AFTER weight_kg');
+    $ensureColumn('catches', 'length_cm', 'length_cm DOUBLE NULL AFTER weight_lbs');
+    $ensureColumn('catches', 'notes', 'notes TEXT NULL AFTER length_cm');
+    $ensureColumn('catches', 'photo', 'photo VARCHAR(255) NULL AFTER notes');
+    $ensureColumn('catches', 'caught_at', 'caught_at DATETIME NULL AFTER photo');
 
     $pdo->exec('CREATE TABLE IF NOT EXISTS bathy_imports (
         id VARCHAR(64) PRIMARY KEY,
