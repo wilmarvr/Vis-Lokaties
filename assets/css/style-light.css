@@ -101,6 +101,14 @@ header small {
   justify-content: flex-end;
   gap: 6px;
 }
+.toolbar-heading {
+  font-weight: 700;
+  color: var(--fg-strong);
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+}
 .toolbar-group {
   display: flex;
   align-items: center;
