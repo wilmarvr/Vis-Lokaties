@@ -583,6 +583,7 @@ function bindEvents() {
     notes: document.getElementById("catchNotes"),
     photo: document.getElementById("catchPhoto"),
     reset: document.getElementById("btnResetCatch"),
+    summaryLabel: document.getElementById("catchSummarySelection"),
     selectionLabel: document.getElementById("catchSelectionLabel"),
     list: document.getElementById("catchList")
   };
@@ -2919,7 +2920,7 @@ function resetCatchForm() {
 }
 
 function updateCatchSelectionLabel() {
-  if (!catchFormEls.selectionLabel) return;
+  if (!catchFormEls.selectionLabel && !catchFormEls.summaryLabel) return;
   const stekId = catchFormEls.stek?.value || "";
   const rigId = catchFormEls.rig?.value || "";
   const stek = stekId ? findSpot("stek", stekId) : null;
@@ -2937,7 +2938,8 @@ function updateCatchSelectionLabel() {
     : stek
     ? t("catch_selected_stek", "Stek: {stek}").replace("{stek}", stek.name || stek.id)
     : t("catch_selection_placeholder", "Kies een stek of rig om een vangst vast te leggen.");
-  catchFormEls.selectionLabel.textContent = label;
+  if (catchFormEls.selectionLabel) catchFormEls.selectionLabel.textContent = label;
+  if (catchFormEls.summaryLabel) catchFormEls.summaryLabel.textContent = label;
 }
 
 function updateCatchList() {

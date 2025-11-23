@@ -33,7 +33,7 @@ const DEFAULT_SETTINGS = {
   autoLink: true,
   toolbarDrag: true,
   panelOrder: [],
-  panelOpen: {},
+  panelOpen: { catches: true },
   toolbarWidth: TOOLBAR_DEFAULT_WIDTH
 };
 

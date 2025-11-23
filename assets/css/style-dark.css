@@ -312,6 +312,12 @@ details summary {
   color: var(--accent-light);
   transition: 0.2s;
 }
+.summary-note {
+  font-size: 0.8em;
+  opacity: 0.8;
+  margin-left: 8px;
+  color: var(--fg);
+}
 details summary:hover {
   background: rgba(33,150,243,0.25);
 }
@@ -584,6 +590,12 @@ details .group h3 {
 
 .catch-table-wrapper {
   padding: 4px 8px 10px;
+}
+
+.catch-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 6px 8px;
 }
 
 #catchTable {
