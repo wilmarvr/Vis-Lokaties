@@ -1,11 +1,9 @@
 <?php
-require_once __DIR__ . '/config.php';
-require_once __DIR__ . '/db.php';
+require __DIR__ . '/db.php';
 
 try {
-    $config = vislok_current_config();
-    unset($config['pass']);
-    vislok_json_response(['config' => $config]);
+    $cfg = vislok_load_config();
+    vislok_json_response(['config' => $cfg]);
 } catch (Throwable $e) {
-    vislok_json_response(['error' => $e->getMessage()], 500);
+    vislok_error('Config ophalen mislukt', 500, ['detail' => $e->getMessage()]);
 }

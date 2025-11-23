@@ -14,6 +14,7 @@
   --ok: #1b8a55;
   --shadow: rgba(0,0,0,0.15);
   --sidebar-width: 340px;
+  --header-height: 60px;
 }
 
 /* ---------- ALGEMEEN ---------- */
@@ -21,10 +22,17 @@ html, body {
   margin: 0;
   padding: 0;
   height: 100%;
+  min-height: 100vh;
   background: var(--bg);
   color: var(--fg);
   font-family: "Segoe UI", Roboto, sans-serif;
   overflow: hidden;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
 }
 
 /* ---------- HEADER ---------- */
@@ -36,6 +44,13 @@ header {
   border-bottom: 1px solid var(--border);
   box-shadow: 0 2px 6px var(--shadow);
   padding: 6px 10px;
+  min-height: var(--header-height);
+  box-sizing: border-box;
+}
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 header h1 {
   font-size: 1.1em;
@@ -49,6 +64,9 @@ header small {
 }
 
 /* ---------- TOOLBAR ---------- */
+.toolbar-panel button,
+.toolbar-panel select,
+.toolbar-panel .toolbar-link,
 .toolbar-right button,
 .toolbar-right select,
 .toolbar-right .toolbar-link {
@@ -63,15 +81,19 @@ header small {
   display: inline-flex;
   align-items: center;
 }
+.toolbar-panel select,
 .toolbar-right select {
   min-width: 90px;
 }
+.toolbar-panel button:hover,
+.toolbar-panel .toolbar-link:hover,
 .toolbar-right button:hover,
 .toolbar-right .toolbar-link:hover {
   background: var(--accent);
   color: #fff;
   border-color: var(--accent-light);
 }
+.toolbar-panel,
 .toolbar-right {
   display: flex;
   flex-wrap: wrap;
@@ -98,6 +120,7 @@ header small {
   margin: 0;
 }
 @media (max-width: 960px) {
+  .toolbar-panel,
   .toolbar-right {
     justify-content: flex-start;
     gap: 8px;
@@ -217,12 +240,29 @@ header small {
 /* ---------- LAYOUT ---------- */
 main {
   display: flex;
-  height: calc(100% - 60px);
+  flex: 1 1 auto;
+  min-height: 0;
+  height: calc(100vh - var(--header-height));
 }
 #mapContainer {
   flex: 1;
   background: #e9ecf0;
   min-width: 0;
+  height: 100%;
+  min-height: 100%;
+}
+#toolbarResizeHandle {
+  width: 10px;
+  cursor: ew-resize;
+  background: linear-gradient(90deg, transparent 0%, rgba(0,0,0,0.05) 40%, rgba(0,0,0,0.05) 60%, transparent 100%);
+  flex: 0 0 10px;
+  border-left: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  box-shadow: inset -1px 0 2px rgba(0, 0, 0, 0.05);
+}
+#toolbarResizeHandle.is-dragging {
+  background: linear-gradient(90deg, rgba(25,118,210,0.25) 0%, rgba(25,118,210,0.35) 50%, rgba(25,118,210,0.25) 100%);
+  border-color: var(--accent);
 }
 aside#uiControls {
   width: var(--sidebar-width);
@@ -239,37 +279,21 @@ aside#uiControls {
 }
 
 /* ---------- DETAILS ---------- */
+.toolbar-panel {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
 details {
   background: #ffffff;
   border: 1px solid var(--border);
   border-radius: 4px;
   margin-bottom: 6px;
-}
-
-.toolbar-resize {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: rgba(255, 255, 255, 0.9);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 6px 8px;
-  font-size: 0.85em;
-}
-.toolbar-resize label {
-  flex: 0 0 auto;
-  font-weight: 600;
-  color: var(--accent);
-}
-.toolbar-resize input[type="range"] {
-  flex: 1 1 auto;
-  accent-color: var(--accent);
-}
-.toolbar-resize output {
-  flex: 0 0 auto;
-  min-width: 52px;
-  text-align: right;
-  font-family: "JetBrains Mono", monospace;
 }
 details summary {
   cursor: pointer;
@@ -279,6 +303,12 @@ details summary {
   border-bottom: 1px solid var(--border);
   color: var(--accent);
   transition: 0.2s;
+}
+.summary-note {
+  font-size: 0.8em;
+  opacity: 0.8;
+  margin-left: 8px;
+  color: var(--fg);
 }
 details summary:hover {
   background: rgba(33,150,243,0.15);
@@ -367,6 +397,23 @@ details .group h3 {
 
 .admin-form {
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+}
+.admin-fieldset {
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 4px 0;
+}
+.admin-fieldset legend {
+  padding: 0 6px;
+  font-weight: 700;
+  color: var(--fg-strong);
+}
+.admin-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 8px 12px;
+  margin-bottom: 6px;
 }
 .admin-form h3 {
   grid-column: 1 / -1;
@@ -537,6 +584,12 @@ details .group h3 {
 
 .catch-table-wrapper {
   padding: 4px 8px 10px;
+}
+
+.catch-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 6px 8px;
 }
 
 #catchTable {
@@ -971,6 +1024,54 @@ footer {
   margin-top: 6px;
   font-size: 0.75em;
   color: #6b7280;
+}
+
+.spot-popup-wrapper .leaflet-popup-content {
+  margin: 0;
+}
+
+.spot-popup {
+  min-width: 200px;
+}
+
+.spot-popup__title {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.spot-popup__meta {
+  font-size: 0.78em;
+  color: #6b7280;
+  margin-bottom: 8px;
+}
+
+.spot-popup__actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.spot-popup__btn {
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--fg);
+  border-radius: 4px;
+  font-size: 0.85em;
+  padding: 6px 8px;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.spot-popup__btn:hover,
+.spot-popup__btn:focus {
+  background: var(--accent-light);
+  border-color: var(--accent);
+  color: var(--fg);
+}
+
+.spot-marker--armed {
+  box-shadow: 0 0 8px rgba(59, 130, 246, 0.65);
+  transform: scale(1.15);
 }
 
 /* ---------- HEATMAP LEGENDA ---------- */
