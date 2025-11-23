@@ -512,24 +512,30 @@ function updatePlacementPreview(latlng) {
     return;
   }
 
-    let reference = null;
-    if (clickMode === "stek") {
-      reference = findNearestWater(lat, lng);
-    } else if (clickMode === "rig") {
-      reference = findNearestStek(lat, lng);
-    } else {
-      clearPlacementPreview();
-      return;
-    }
+  let reference = null;
+  if (clickMode === "stek") {
+    reference = findNearestWater(lat, lng);
+  } else if (clickMode === "rig") {
+    reference = findNearestStek(lat, lng);
+  } else {
+    clearPlacementPreview();
+    return;
+  }
 
-    const refLat = reference?.lat;
-    const refLng = reference?.lng;
-    if (!Number.isFinite(refLat) || !Number.isFinite(refLng)) {
-      clearPlacementPreview();
-      return;
-    }
+  const refLat = reference?.lat;
+  const refLng = reference?.lng;
+  if (!Number.isFinite(refLat) || !Number.isFinite(refLng)) {
+    clearPlacementPreview();
+    return;
+  }
 
-    const distance = map.distance([refLat, refLng], [lat, lng]);
+  let distance;
+  try {
+    distance = map.distance([refLat, refLng], [lat, lng]);
+  } catch (_err) {
+    clearPlacementPreview();
+    return;
+  }
   if (!Number.isFinite(distance)) {
     clearPlacementPreview();
     return;
@@ -618,12 +624,12 @@ function resolveMarkerReference(item, type) {
 function startMarkerDistancePreview(marker, item, type, initialLatLng = null) {
   if (!map) return;
   const reference = resolveMarkerReference(item, type);
-  dragDistanceContext = reference ? { marker, reference, type } : null;
-    if (!dragDistanceContext) {
-      stopMarkerDistancePreview();
-      return;
-    }
-    const startPoint = initialLatLng || (marker?.getLatLng ? marker.getLatLng() : null);
+  if (!reference || !Number.isFinite(reference.lat) || !Number.isFinite(reference.lng)) {
+    stopMarkerDistancePreview();
+    return;
+  }
+  dragDistanceContext = { marker, reference, type };
+  const startPoint = initialLatLng || (marker?.getLatLng ? marker.getLatLng() : null);
   if (!startPoint || !Number.isFinite(startPoint.lat) || !Number.isFinite(startPoint.lng)) {
     stopMarkerDistancePreview();
     return;
