@@ -2375,6 +2375,19 @@ function attachMarkerHandlers(marker, item, type) {
   marker.on("click", e => {
     swallowLeafletEvent(e);
     stopMarkerDistancePreview();
+    if (type === "stek" || type === "rig") {
+      const stekId = type === "stek"
+        ? item.id
+        : item.stekId || item.stek_id || findNearestStek(item.lat, item.lng) || "";
+      const rigId = type === "rig" ? item.id : "";
+      if (stekId) {
+        document.dispatchEvent(
+          new CustomEvent("vislok:focus-catch-form", {
+            detail: { stekId, rigId, scroll: true, highlight: true }
+          })
+        );
+      }
+    }
     showSpotPopup(marker, item, type);
   });
 }

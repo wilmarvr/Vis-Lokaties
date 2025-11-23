@@ -2577,7 +2577,7 @@ function setCatchStatus(key, fallback, type = "info") {
 }
 
 function focusCatchForm(options = {}) {
-  const { stekId = "", rigId = "", scroll = false } = options || {};
+  const { stekId = "", rigId = "", scroll = false, highlight = false } = options || {};
   const panel = document.querySelector('details[data-panel="catches"]');
   if (panel) {
     panel.open = true;
@@ -2611,11 +2611,22 @@ function focusCatchForm(options = {}) {
     title.focus();
   }
 
-  setCatchStatus(
-    "catch_hint_ready",
-    t("catch_hint_ready", "Selecteer een stek (en eventueel een rig) en vul de velden in."),
-    "info"
-  );
+  if (highlight && stekId) {
+    const stek = (state.stekken || []).find(item => item.id === stekId);
+    const rig = rigId ? (state.rigs || []).find(item => item.id === rigId) : null;
+    const name = stek?.name || stekId;
+    const rigName = rig?.name || rigId || "";
+    const message = rigName
+      ? t("catch_hint_selected_rig", "Rig {name} geselecteerd. Vul de velden in.").replace("{name}", rigName)
+      : t("catch_hint_selected", "Stek {name} geselecteerd. Vul de velden in.").replace("{name}", name);
+    setCatchStatus(rigName ? "catch_hint_selected_rig" : "catch_hint_selected", message, "info");
+  } else {
+    setCatchStatus(
+      "catch_hint_ready",
+      t("catch_hint_ready", "Selecteer een stek (en eventueel een rig) en vul de velden in."),
+      "info"
+    );
+  }
 }
 
 function upsertCatch(entry) {
