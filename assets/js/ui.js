@@ -110,11 +110,26 @@ function ensurePanelDragSetup() {
   if (!panelOrderApplied) {
     applySavedPanelOrder();
     applySavedPanelOpenStates();
+    keepCatchesPanelOpen();
     panelOrderApplied = true;
   }
 
   attachPanelDragHandlers();
   updatePanelDragState();
+}
+
+function keepCatchesPanelOpen() {
+  if (!dragContainer) return;
+  const catchesPanel = dragContainer.querySelector('details[data-panel="catches"]');
+  if (!catchesPanel) return;
+
+  // Force it open so the catch form stays visible.
+  catchesPanel.setAttribute("open", "open");
+  catchesPanel.addEventListener("toggle", () => {
+    if (!catchesPanel.open) {
+      catchesPanel.setAttribute("open", "open");
+    }
+  });
 }
 
 function applySavedPanelOrder() {
