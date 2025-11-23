@@ -57,6 +57,9 @@ let currentImportName = null;
 let catchPhotoData = null;
 let catchStekSelectEl = null;
 let catchRigSelectEl = null;
+let catchWeightKgInput = null;
+let catchWeightLbsInput = null;
+let weightSyncing = false;
 let waterDrawActive = false;
 let btnDrawWater = null;
 let btnFinishWater = null;
@@ -79,6 +82,8 @@ const FEATURE_KEYS = [
   "autoLink",
   "toolbarDrag"
 ];
+const KG_TO_LBS = 2.20462;
+const LBS_TO_KG = 1 / KG_TO_LBS;
 
 function ensureFeatureDefaults() {
   if (!state.settings) state.settings = {};
@@ -573,8 +578,13 @@ function bindEvents() {
 
   catchStekSelectEl = document.getElementById("catchStekSelect");
   catchRigSelectEl = document.getElementById("catchRigSelect");
+  catchWeightKgInput = document.getElementById("catchWeight");
+  catchWeightLbsInput = document.getElementById("catchWeightLbs");
   const catchStekSelect = catchStekSelectEl;
   const catchRigSelect = catchRigSelectEl;
+
+  catchWeightKgInput?.addEventListener("input", () => syncCatchWeights("kg"));
+  catchWeightLbsInput?.addEventListener("input", () => syncCatchWeights("lbs"));
 
   catchPhotoInput?.addEventListener("change", handleCatchPhotoSelect);
 
@@ -2478,6 +2488,7 @@ function clearCatchForm(preserveStek = true) {
   const title = document.getElementById("catchTitle");
   const species = document.getElementById("catchSpecies");
   const weight = document.getElementById("catchWeight");
+  const weightLbs = document.getElementById("catchWeightLbs");
   const length = document.getElementById("catchLength");
   const date = document.getElementById("catchDate");
   const notes = document.getElementById("catchNotes");
@@ -2485,6 +2496,7 @@ function clearCatchForm(preserveStek = true) {
   if (title) title.value = "";
   if (species) species.value = "";
   if (weight) weight.value = "";
+  if (weightLbs) weightLbs.value = "";
   if (length) length.value = "";
   if (date) date.value = "";
   if (notes) notes.value = "";
@@ -2516,6 +2528,31 @@ function handleCatchPhotoSelect(e) {
   reader.readAsDataURL(file);
 }
 
+function syncCatchWeights(source = "kg") {
+  if (weightSyncing) return;
+  weightSyncing = true;
+  const kgInput = catchWeightKgInput || document.getElementById("catchWeight");
+  const lbsInput = catchWeightLbsInput || document.getElementById("catchWeightLbs");
+
+  if (source === "kg" && kgInput && lbsInput) {
+    const kg = parseFloat(kgInput.value);
+    if (Number.isFinite(kg)) {
+      lbsInput.value = (kg * KG_TO_LBS).toFixed(2);
+    } else {
+      lbsInput.value = "";
+    }
+  } else if (source === "lbs" && kgInput && lbsInput) {
+    const lbs = parseFloat(lbsInput.value);
+    if (Number.isFinite(lbs)) {
+      kgInput.value = (lbs * LBS_TO_KG).toFixed(2);
+    } else {
+      kgInput.value = "";
+    }
+  }
+
+  weightSyncing = false;
+}
+
 function addCatchFromForm() {
   const stekSelect = document.getElementById("catchStekSelect");
   const rigSelect = document.getElementById("catchRigSelect");
@@ -2540,6 +2577,7 @@ function addCatchFromForm() {
     title: document.getElementById("catchTitle")?.value?.trim() || "",
     species: document.getElementById("catchSpecies")?.value?.trim() || "",
     weight_kg: parseFloat(document.getElementById("catchWeight")?.value),
+    weight_lbs: parseFloat(document.getElementById("catchWeightLbs")?.value),
     length_cm: parseFloat(document.getElementById("catchLength")?.value),
     caught_at: document.getElementById("catchDate")?.value || null,
     notes: document.getElementById("catchNotes")?.value?.trim() || ""
@@ -2548,6 +2586,13 @@ function addCatchFromForm() {
     payload.rig_id = rigValue;
   }
   if (!Number.isFinite(payload.weight_kg)) payload.weight_kg = null;
+  if (!Number.isFinite(payload.weight_lbs)) payload.weight_lbs = null;
+  if (payload.weight_kg === null && payload.weight_lbs !== null) {
+    payload.weight_kg = +(payload.weight_lbs * LBS_TO_KG).toFixed(2);
+  }
+  if (payload.weight_lbs === null && payload.weight_kg !== null) {
+    payload.weight_lbs = +(payload.weight_kg * KG_TO_LBS).toFixed(2);
+  }
   if (!Number.isFinite(payload.length_cm)) payload.length_cm = null;
   if (!payload.notes) payload.notes = null;
   if (catchPhotoData) payload.photo = catchPhotoData;
@@ -2854,6 +2899,7 @@ function updateCatchTable() {
       <td>${escapeHtml(item.species || "-")}</td>
       <td>${rigName}</td>
       <td>${Number.isFinite(item.weight_kg) ? item.weight_kg.toFixed(2) : "-"}</td>
+      <td>${Number.isFinite(item.weight_lbs) ? item.weight_lbs.toFixed(2) : "-"}</td>
       <td>${Number.isFinite(item.length_cm) ? item.length_cm.toFixed(1) : "-"}</td>
       <td>${photoCell}</td>
       <td class="table-actions">
@@ -2891,6 +2937,10 @@ function normalizeCatchEntry(entry) {
   if (normalized.weight_kg !== undefined) {
     const weight = Number(normalized.weight_kg);
     normalized.weight_kg = Number.isFinite(weight) ? weight : null;
+  }
+  if (normalized.weight_lbs !== undefined) {
+    const weight = Number(normalized.weight_lbs);
+    normalized.weight_lbs = Number.isFinite(weight) ? weight : null;
   }
   if (normalized.length_cm !== undefined) {
     const length = Number(normalized.length_cm);

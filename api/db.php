@@ -141,6 +141,7 @@ function vislok_ensure_schema(PDO $pdo): void
         title VARCHAR(255) NULL,
         species VARCHAR(255) NULL,
         weight_kg DOUBLE NULL,
+        weight_lbs DOUBLE NULL,
         length_cm DOUBLE NULL,
         caught_at DATETIME NULL,
         notes TEXT NULL,
@@ -149,6 +150,12 @@ function vislok_ensure_schema(PDO $pdo): void
         CONSTRAINT fk_catch_stek FOREIGN KEY (spot_id) REFERENCES stekken(id) ON DELETE SET NULL,
         CONSTRAINT fk_catch_rig FOREIGN KEY (rig_id) REFERENCES rigs(id) ON DELETE SET NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci');
+
+    try {
+        $pdo->exec('ALTER TABLE catches ADD COLUMN weight_lbs DOUBLE NULL AFTER weight_kg');
+    } catch (PDOException $e) {
+        // Column already exists or cannot be altered; ignore silently
+    }
 
     $pdo->exec('CREATE TABLE IF NOT EXISTS bathy_imports (
         id VARCHAR(64) PRIMARY KEY,

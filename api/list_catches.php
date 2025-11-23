@@ -5,11 +5,11 @@ try {
     $pdo = vislok_bootstrap();
     $input = vislok_json_input();
     if (!empty($input['spotId'])) {
-        $stmt = $pdo->prepare('SELECT id, spot_id, rig_id, title, species, weight_kg, length_cm, caught_at, notes, photo_path FROM catches WHERE spot_id = :spot');
+        $stmt = $pdo->prepare('SELECT id, spot_id, rig_id, title, species, weight_kg, weight_lbs, length_cm, caught_at, notes, photo_path FROM catches WHERE spot_id = :spot');
         $stmt->execute([':spot' => $input['spotId']]);
         $rows = $stmt->fetchAll();
     } else {
-        $rows = $pdo->query('SELECT id, spot_id, rig_id, title, species, weight_kg, length_cm, caught_at, notes, photo_path FROM catches')->fetchAll();
+        $rows = $pdo->query('SELECT id, spot_id, rig_id, title, species, weight_kg, weight_lbs, length_cm, caught_at, notes, photo_path FROM catches')->fetchAll();
     }
     $list = array_map(function ($row) {
         return [
@@ -19,6 +19,7 @@ try {
             'title' => $row['title'],
             'species' => $row['species'],
             'weight_kg' => $row['weight_kg'] !== null ? (float)$row['weight_kg'] : null,
+            'weight_lbs' => $row['weight_lbs'] !== null ? (float)$row['weight_lbs'] : null,
             'length_cm' => $row['length_cm'] !== null ? (float)$row['length_cm'] : null,
             'caught_at' => $row['caught_at'],
             'notes' => $row['notes'],
