@@ -1,7 +1,7 @@
 <?php
 require_once __DIR__ . '/db.php';
 
-try {
+vislok_api(static function () {
     $data = vislok_read_json();
     if (!isset($data['id'])) {
         $data['id'] = uniqid('spot_', true);
@@ -12,8 +12,9 @@ try {
     $lat = (float)($data['lat'] ?? 0);
     $lng = (float)($data['lng'] ?? 0);
     $val = isset($data['val']) ? (float)$data['val'] : null;
-    $note = $data['note'] ?? null;
-    $polygon = isset($data['polygon']) ? json_encode($data['polygon']) : null;
+    $note = isset($data['note']) ? trim((string)$data['note']) : null;
+    $note = $note === '' ? null : $note;
+    $polygon = array_key_exists('polygon', $data) ? json_encode($data['polygon']) : null;
     $waterId = isset($data['water_id']) ? trim((string)$data['water_id']) : null;
     $stekId = isset($data['stek_id']) ? trim((string)$data['stek_id']) : null;
     if ($waterId === '') {
@@ -28,29 +29,76 @@ try {
     }
 
     $pdo = vislok_get_connection();
-    $stmt = $pdo->prepare('REPLACE INTO spots (id, type, name, lat, lng, val, note, polygon, water_id, stek_id) VALUES (:id, :type, :name, :lat, :lng, :val, :note, :polygon, :water_id, :stek_id)');
-    $stmt->execute([
-        ':id' => $id,
-        ':type' => $type,
-        ':name' => $name,
-        ':lat' => $lat,
-        ':lng' => $lng,
-        ':val' => $val,
-        ':note' => $note,
-        ':polygon' => $polygon,
-        ':water_id' => $waterId,
-        ':stek_id' => $stekId,
-    ]);
 
-    $fetch = $pdo->prepare('SELECT id, type, name, lat, lng, val, note, polygon, water_id, stek_id, created_at FROM spots WHERE id = :id LIMIT 1');
-    $fetch->execute([':id' => $id]);
-    $saved = $fetch->fetch();
-    if ($saved && isset($saved['polygon'])) {
-        $decoded = json_decode($saved['polygon'], true);
-        $saved['polygon'] = $decoded ?: null;
+    switch ($type) {
+        case 'water':
+            $stmt = $pdo->prepare('INSERT INTO waters (id, name, lat, lng, val, note, polygon) VALUES (:id, :name, :lat, :lng, :val, :note, :polygon)
+                ON CONFLICT(id) DO UPDATE SET name=excluded.name, lat=excluded.lat, lng=excluded.lng, val=excluded.val, note=excluded.note, polygon=excluded.polygon');
+            $stmt->execute([
+                ':id' => $id,
+                ':name' => $name,
+                ':lat' => $lat,
+                ':lng' => $lng,
+                ':val' => $val,
+                ':note' => $note,
+                ':polygon' => $polygon,
+            ]);
+            break;
+        case 'stek':
+            if ($waterId) {
+                $water = vislok_fetch_water($pdo, $waterId);
+                if (!$water) {
+                    vislok_json_response(['error' => 'Water niet gevonden'], 404);
+                }
+            }
+            $stmt = $pdo->prepare('INSERT INTO stekken (id, water_id, name, lat, lng, val, note, polygon) VALUES (:id, :water_id, :name, :lat, :lng, :val, :note, :polygon)
+                ON CONFLICT(id) DO UPDATE SET water_id=excluded.water_id, name=excluded.name, lat=excluded.lat, lng=excluded.lng, val=excluded.val, note=excluded.note, polygon=excluded.polygon');
+            $stmt->execute([
+                ':id' => $id,
+                ':water_id' => $waterId,
+                ':name' => $name,
+                ':lat' => $lat,
+                ':lng' => $lng,
+                ':val' => $val,
+                ':note' => $note,
+                ':polygon' => $polygon,
+            ]);
+            break;
+        case 'rig':
+            $stek = null;
+            if ($stekId) {
+                $stek = vislok_fetch_stek($pdo, $stekId);
+                if (!$stek) {
+                    vislok_json_response(['error' => 'Stek niet gevonden'], 404);
+                }
+                if (!$waterId && !empty($stek['water_id'])) {
+                    $waterId = $stek['water_id'];
+                }
+            }
+            if ($waterId) {
+                $water = vislok_fetch_water($pdo, $waterId);
+                if (!$water) {
+                    vislok_json_response(['error' => 'Water niet gevonden'], 404);
+                }
+            }
+            $stmt = $pdo->prepare('INSERT INTO rigs (id, stek_id, water_id, name, lat, lng, val, note, polygon) VALUES (:id, :stek_id, :water_id, :name, :lat, :lng, :val, :note, :polygon)
+                ON CONFLICT(id) DO UPDATE SET stek_id=excluded.stek_id, water_id=excluded.water_id, name=excluded.name, lat=excluded.lat, lng=excluded.lng, val=excluded.val, note=excluded.note, polygon=excluded.polygon');
+            $stmt->execute([
+                ':id' => $id,
+                ':stek_id' => $stekId,
+                ':water_id' => $waterId,
+                ':name' => $name,
+                ':lat' => $lat,
+                ':lng' => $lng,
+                ':val' => $val,
+                ':note' => $note,
+                ':polygon' => $polygon,
+            ]);
+            break;
+        default:
+            vislok_json_response(['error' => 'Onbekend type'], 400);
     }
 
-    vislok_json_response(['status' => 'ok', 'spot' => $saved ?: null]);
-} catch (Throwable $e) {
-    vislok_json_response(['error' => $e->getMessage()], 500);
-}
+    $saved = vislok_find_spot($pdo, $id);
+    return ['status' => 'ok', 'spot' => $saved ?: null];
+});
