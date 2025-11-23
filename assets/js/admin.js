@@ -4,9 +4,9 @@
    Versie: 0.0.0
    ======================================================= */
 
-import { setStatus, state, saveState, loadVersionInfo } from "./core.js?v=20250611";
-import { t } from "./i18n.js?v=20250611";
-import { escapeHtml } from "./helpers.js?v=20250611";
+import { setStatus, state, saveState, loadVersionInfo } from "./core.js?v=20250715";
+import { t } from "./i18n.js?v=20250715";
+import { escapeHtml } from "./helpers.js?v=20250715";
 
 const FEATURE_DEFAULTS = {
   showData: true,
@@ -27,9 +27,6 @@ function initAdmin() {
   if (!form && !versionForm) return;
 
   const statusEl = document.getElementById("adminStatus");
-  const btnTest = document.getElementById("btnAdminTest");
-  const autoSync = document.getElementById("adminAutoSync");
-  const autoBathy = document.getElementById("adminForceBathy");
   const optionInputs = Array.from(document.querySelectorAll("[data-option]"));
 
   const versionCurrent = document.getElementById("adminVersionCurrent");
@@ -184,84 +181,35 @@ function initAdmin() {
     setPanelMessage("admin_status_loaded", "Configuratie geladen", "ok");
   }
 
-  if (form) {
-    optionInputs.forEach(input => {
-      input.addEventListener("change", () => {
-        const key = input.dataset.option;
-        const checked = input.checked;
-        if (key) {
-          if (!state.settings) state.settings = {};
-          state.settings[key] = checked;
-          saveState();
-        }
-        setPanelMessage(
-          "admin_status_option_changed",
-          "Opties bijgewerkt. Klik Opslaan om te bewaren.",
-          "info"
-        );
-      });
-    });
-
-    form.addEventListener("submit", e => {
-      e.preventDefault();
-      const payload = readFormConfig();
-      applyConfig(payload);
-      setPanelMessage("admin_status_saved", "Configuratie opgeslagen", "ok");
-      if (autoSync?.checked) {
-        triggerSync().catch(err => console.warn("Auto-sync na opslaan mislukt", err));
-      }
-    });
-
-    btnTest?.addEventListener("click", () => {
-      setPanelMessage("admin_status_test_ok", "Lokale opslag actief", "ok");
-    });
-
-    if (autoSync) {
-      autoSync.checked = state.settings?.autoSync !== false;
-      autoSync.addEventListener("change", () => {
-        state.settings.autoSync = autoSync.checked;
-        saveState();
-        const key = autoSync.checked ? "admin_status_auto_sync_on" : "admin_status_auto_sync_off";
-        const fallback = autoSync.checked ? "Auto-sync geactiveerd" : "Auto-sync gedeactiveerd";
-        setPanelMessage(key, fallback, autoSync.checked ? "ok" : "warning");
-        if (autoSync.checked) {
-          triggerSync().catch(err => console.warn("Auto-sync activatie faalde", err));
-        }
-      });
-    }
-
-    if (autoBathy) {
-      autoBathy.checked = state.settings?.saveBathy !== false;
-      autoBathy.addEventListener("change", () => {
-        const enabled = !!autoBathy.checked;
-        state.settings.saveBathy = enabled;
-        saveState();
-        const dataCheckbox = document.getElementById("saveBathy");
-        if (dataCheckbox && dataCheckbox.checked !== enabled) {
-          dataCheckbox.checked = enabled;
-          dataCheckbox.dispatchEvent(new Event("change"));
-        } else {
-          const key = enabled ? "status_bathy_db_enabled" : "status_bathy_db_disabled";
-          setStatus(
-            t(
-              key,
-              enabled
-                ? "Nieuwe imports worden in de database opgeslagen"
-                : "Nieuwe imports worden alleen lokaal opgeslagen"
-            ),
-            enabled ? "info" : "warning"
+    if (form) {
+      optionInputs.forEach(input => {
+        input.addEventListener("change", () => {
+          const key = input.dataset.option;
+          const checked = input.checked;
+          if (key) {
+            if (!state.settings) state.settings = {};
+            state.settings[key] = checked;
+            saveState();
+          }
+          setPanelMessage(
+            "admin_status_option_changed",
+            "Opties bijgewerkt. Klik Opslaan om te bewaren.",
+            "info"
           );
-        }
-        const key = enabled ? "admin_status_auto_bathy_on" : "admin_status_auto_bathy_off";
-        const fallback = enabled
-          ? "Bathymetrie wordt nu standaard opgeslagen in de database"
-          : "Bathymetrie wordt niet meer automatisch opgeslagen in de database";
-        setPanelMessage(key, fallback, enabled ? "ok" : "warning");
+        });
       });
-    }
 
-    loadConfig();
-  }
+      form.addEventListener("submit", e => {
+        e.preventDefault();
+        const payload = readFormConfig();
+        applyConfig(payload);
+        setPanelMessage("admin_status_saved", "Configuratie opgeslagen", "ok");
+      });
+
+      setPanelMessage("admin_status_test_ok", "Lokale opslag actief", "ok");
+
+      loadConfig();
+    }
 
   if (versionForm) {
     versionForm.addEventListener("submit", e => {
@@ -286,14 +234,6 @@ function initAdmin() {
       console.error("Versiegegevens laden mislukt", err);
       setVersionMessage("admin_version_error", "Versiegegevens konden niet worden geladen", "error");
     });
-}
-
-function triggerSync() {
-  const syncFn = window.VisLokData?.forceServerSync;
-  if (typeof syncFn === "function") {
-    return syncFn(true);
-  }
-  return Promise.resolve();
 }
 
 document.addEventListener("DOMContentLoaded", initAdmin);

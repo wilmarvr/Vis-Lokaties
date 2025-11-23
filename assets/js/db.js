@@ -55,14 +55,6 @@ function normalizeSpot(spot) {
   return base;
 }
 
-function safeJson(text) {
-  try {
-    return JSON.parse(text);
-  } catch (_) {
-    return null;
-  }
-}
-
 export function fetchSpots() {
   const db = loadDb();
   return Promise.resolve(db.spots.map(normalizeSpot).filter(Boolean));

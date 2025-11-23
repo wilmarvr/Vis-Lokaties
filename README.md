@@ -1,6 +1,6 @@
 # Vis Lokaties (v0.0.0)
 
-Vis Lokaties is een moderne herbouw van het oorspronkelijke bestand **“Vis lokaties 1.1.4-d.html”** met dezelfde kaartenworkflow, uitgebreide bathymetrie-imports en persistente opslag in de browser (localStorage). De toepassing is volledig meertalig (Nederlands/Engels), werkt zonder bundler en kan als statische site of op XAMPP worden geplaatst.
+Vis Lokaties is een moderne herbouw van het oorspronkelijke bestand **“Vis lokaties 1.1.4-d.html”** met dezelfde kaartenworkflow, uitgebreide bathymetrie-imports en persistente opslag in de browser (localStorage). De toepassing is volledig meertalig (Nederlands/Engels), werkt zonder bundler en kan als statische site worden geplaatst. Er is geen database of server-API meer nodig.
 
 ## Belangrijkste mogelijkheden
 
@@ -37,22 +37,21 @@ Vis Lokaties is een moderne herbouw van het oorspronkelijke bestand **“Vis lok
 | `assets/css/` | Thema’s voor licht/donker + admin-styling.【F:assets/css/style-dark.css†L1-L620】【F:assets/css/style-light.css†L1-L620】 |
 | `assets/js/` | Modules (`core`, `map`, `data`, `ui`, `weather`, `admin`, `db`, `i18n`, `helpers`).【F:assets/js/core.js†L1-L350】 |
 | `assets/vendor/osmtogeojson.js` | Gebundelde Overpass-converter (fallback op eigen parsing).【F:assets/vendor/osmtogeojson.js†L1-L2】 |
-| `api/` | Legacy PHP-endpoints (niet vereist voor lokale opslag); bewaarbaar voor eigen hostinguitbreidingen. |
 | `data/` | Persistente JSON-state + versie-informatie.【F:data/state.json†L1-L9】【F:data/version.json†L1-L10】 |
 | `lang/` | Nederlands/Engels vertalingen voor het volledige UI.【F:lang/nl.json†L1-L401】【F:lang/en.json†L1-L401】 |
 | `docs/` | Projectinventaris, herstelpunten en GitHub-sync-handleiding.【F:docs/project_inventory.md†L1-L106】【F:docs/restore_points.md†L1-L39】【F:docs/sync_github.md†L1-L98】 |
 | `scripts/` | Sync-helpers en herstelpunt-script (`create_restore_point.sh`).【F:scripts/sync_github.sh†L1-L40】【F:scripts/sync_github_full.sh†L1-L35】【F:scripts/create_restore_point.sh†L1-L45】 |
 | `uploads/` | Uploadmap voor vangstfoto’s (webserver schrijfrechten vereist). |
 
-## Installatie & gebruik (statische hosting of XAMPP)
+## Installatie & gebruik (statische hosting)
 
 1. **Benodigdheden**
-   - Een eenvoudige webserver om ES-modules te serveren (bijv. `npx serve`, XAMPP/Apache, nginx). File:// opent vaak niet door modulebeperkingen.
+   - Een eenvoudige webserver om ES-modules te serveren (bijv. `npx serve`, nginx). File:// opent vaak niet door modulebeperkingen.
    - Browser met ES modules ondersteuning (Chrome, Firefox, Edge).
 
 2. **Plaatsing**
-   - Kopieer de repo naar je webroot, bijv. `C:\xampp\htdocs\vislokaties` of `/var/www/vislokaties`, of start een statische server vanuit de projectmap.
-   - `uploads/` blijft beschikbaar voor handmatige foto-export of back-ups; applicatiedata (waters/stekken/rigs/imports/vangsten) staat in de browseropslag.
+   - Kopieer de repo naar je webroot (bv. `/var/www/vislokaties`) of start een statische server vanuit de projectmap.
+   - `uploads/` blijft beschikbaar voor handmatige foto-export of back-ups; alle applicatiedata (waters/stekken/rigs/imports/vangsten) staat in de browseropslag.
 
 3. **Werking**
    - Start de hoofdapp via `index.html`.
@@ -69,7 +68,7 @@ Vis Lokaties is een moderne herbouw van het oorspronkelijke bestand **“Vis lok
 1. Kies **Import CSV/ZIP** of **Import map**; beide sturen bestanden naar de wachtrij en tonen live-progress in `importQueue` en de legacy teller (`impCount`, `impPctAll`).【F:index.html†L189-L238】【F:assets/js/data.js†L189-L370】
 2. CSV-parser detecteert scheidingstekens, herkent kolomnamen (zoals “GPS (Lat)”) en haalt alleen lat/lon/diepte op.【F:assets/js/data.js†L736-L986】
 3. ZIP-imports worden uitgepakt met JSZip; elke CSV wordt als aparte taak verwerkt.【F:assets/js/data.js†L986-L1120】
-4. Na verwerking worden heatmap en importoverlay bijgewerkt; bij een actief databasevinkje wordt `save_import.php` aangeroepen om data server-side op te slaan.【F:assets/js/data.js†L1122-L1380】【F:api/save_import.php†L1-L69】
+4. Na verwerking worden heatmap en importoverlay bijgewerkt; alle importpunten blijven in de lokale browseropslag.【F:assets/js/data.js†L1122-L1380】
 5. De importgeschiedenis verdwijnt zodra de wachtrij leeg is, maar de statusnotitie blijft beschikbaar voor feedback.【F:assets/js/data.js†L360-L420】
 
 ## Lokalisatie & thema’s
@@ -96,9 +95,7 @@ Vis Lokaties is een moderne herbouw van het oorspronkelijke bestand **“Vis lok
 
 ## Testen & linten
 
-- Backend: `for f in api/*.php; do php -l "$f"; done`
 - Frontend modules: `node --check assets/js/*.js`
-- Scripts voeren deze checks automatisch uit vóór synchronisatie.【F:scripts/sync_github.sh†L7-L32】
 
 ## Voorbeelddata
 

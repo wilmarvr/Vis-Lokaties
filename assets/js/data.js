@@ -10,8 +10,8 @@ import {
   state,
   saveState,
   loadState
-} from "./core.js?v=20250611";
-import { updateOverview, applyFeatureVisibility } from "./ui.js?v=20250611";
+} from "./core.js?v=20250715";
+import { updateOverview, applyFeatureVisibility } from "./ui.js?v=20250715";
 import {
   refreshDataLayers,
   refreshImportLayer,
@@ -24,7 +24,7 @@ import {
   startWaterDrawing,
   finishWaterDrawing,
   cancelWaterDrawing
-} from "./map.js?v=20250611";
+} from "./map.js?v=20250715";
 import {
   saveSpot,
   fetchSpots,
@@ -37,9 +37,9 @@ import {
   saveCatch,
   deleteCatch,
   fetchBathyPoints
-} from "./db.js?v=20250611";
-import { uid, distanceM, escapeHtml } from "./helpers.js?v=20250611";
-import { t } from "./i18n.js?v=20250611";
+} from "./db.js?v=20250715";
+import { uid, distanceM, escapeHtml } from "./helpers.js?v=20250715";
+import { t } from "./i18n.js?v=20250715";
 
 let rawImports = [];
 let rawImportKeys = new Set();
