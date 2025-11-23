@@ -4,7 +4,7 @@
    Versie: 0.0.0
    ======================================================= */
 
-import { setStatus, state, saveState, loadVersionInfo } from "./core.js?v=20250715";
+import { setStatus, state, saveState, loadVersionInfo, applyVersionInfo } from "./core.js?v=20250715";
 import { t } from "./i18n.js?v=20250715";
 import { escapeHtml } from "./helpers.js?v=20250715";
 
@@ -18,7 +18,22 @@ const FEATURE_DEFAULTS = {
   showChangelog: true,
   allowManualWater: true,
   autoLink: true,
-  toolbarDrag: true
+  toolbarDrag: true,
+  cluster: true,
+  showImports: false,
+  saveBathy: true,
+  autoSync: true,
+  heatmapInvert: false,
+  heatmapClamp: false
+};
+
+const SETTING_DEFAULTS = {
+  detectionRadius: 200,
+  maxEdge: 60,
+  heatmapRadius: 25,
+  heatmapBlur: 15,
+  heatmapMin: 0,
+  heatmapMax: 10
 };
 
 function initAdmin() {
@@ -28,6 +43,7 @@ function initAdmin() {
 
   const statusEl = document.getElementById("adminStatus");
   const optionInputs = Array.from(document.querySelectorAll("[data-option]"));
+  const settingInputs = Array.from(document.querySelectorAll("[data-setting]"));
 
   const versionCurrent = document.getElementById("adminVersionCurrent");
   const versionDate = document.getElementById("adminVersionDate");
@@ -147,6 +163,17 @@ function initAdmin() {
     return values;
   }
 
+  function readSettings() {
+    const values = { ...SETTING_DEFAULTS };
+    settingInputs.forEach(input => {
+      const key = input.dataset.setting;
+      if (!key) return;
+      const parsed = parseFloat(input.value);
+      values[key] = Number.isFinite(parsed) ? parsed : SETTING_DEFAULTS[key];
+    });
+    return values;
+  }
+
   function applyOptions(options = {}) {
     const normalized = { ...FEATURE_DEFAULTS, ...(options || {}) };
     optionInputs.forEach(input => {
@@ -161,9 +188,28 @@ function initAdmin() {
     saveState();
   }
 
+  function applySettings(settings = {}) {
+    const normalized = { ...SETTING_DEFAULTS, ...(settings || {}) };
+    settingInputs.forEach(input => {
+      const key = input.dataset.setting;
+      if (!key) return;
+      const value = normalized[key];
+      if (input.type === "number") {
+        input.value = value;
+      }
+    });
+    if (!state.settings) state.settings = {};
+    Object.keys(SETTING_DEFAULTS).forEach(key => {
+      const val = normalized[key];
+      state.settings[key] = Number.isFinite(val) ? val : SETTING_DEFAULTS[key];
+    });
+    saveState();
+  }
+
   function readFormConfig() {
     return {
-      options: readOptions()
+      options: readOptions(),
+      settings: readSettings()
     };
   }
 
@@ -173,11 +219,16 @@ function initAdmin() {
     } else {
       applyOptions();
     }
+    if (config.settings) {
+      applySettings(config.settings);
+    } else {
+      applySettings();
+    }
   }
 
   function loadConfig() {
     if (!form) return;
-    applyConfig({ options: state.settings || FEATURE_DEFAULTS });
+    applyConfig({ options: state.settings || FEATURE_DEFAULTS, settings: state.settings || SETTING_DEFAULTS });
     setPanelMessage("admin_status_loaded", "Configuratie geladen", "ok");
   }
 
@@ -191,6 +242,23 @@ function initAdmin() {
             state.settings[key] = checked;
             saveState();
           }
+          setPanelMessage(
+            "admin_status_option_changed",
+            "Opties bijgewerkt. Klik Opslaan om te bewaren.",
+            "info"
+          );
+        });
+      });
+
+      settingInputs.forEach(input => {
+        input.addEventListener("change", () => {
+          const key = input.dataset.setting;
+          if (!key) return;
+          const val = parseFloat(input.value);
+          const normalized = Number.isFinite(val) ? val : SETTING_DEFAULTS[key];
+          if (!state.settings) state.settings = {};
+          state.settings[key] = normalized;
+          saveState();
           setPanelMessage(
             "admin_status_option_changed",
             "Opties bijgewerkt. Klik Opslaan om te bewaren.",

@@ -79,6 +79,14 @@ header small {
   justify-content: flex-end;
   gap: 6px;
 }
+.toolbar-heading {
+  font-weight: 700;
+  color: var(--fg-strong);
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+}
 .toolbar-group {
   display: flex;
   align-items: center;
@@ -367,6 +375,23 @@ details .group h3 {
 
 .admin-form {
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+}
+.admin-fieldset {
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 4px 0;
+}
+.admin-fieldset legend {
+  padding: 0 6px;
+  font-weight: 700;
+  color: var(--fg-strong);
+}
+.admin-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 8px 12px;
+  margin-bottom: 6px;
 }
 .admin-form h3 {
   grid-column: 1 / -1;

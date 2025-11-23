@@ -129,7 +129,7 @@ export function setFooterInfo({
   }
 }
 
-function applyVersionInfo(info) {
+export function applyVersionInfo(info) {
   const current = info?.current || APP_VERSION;
   const releases = Array.isArray(info?.releases) ? info.releases : [];
   state.version = { current, releases };
