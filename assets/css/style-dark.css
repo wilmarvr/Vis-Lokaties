@@ -14,6 +14,7 @@
   --ok: #00cc88;
   --shadow: rgba(0,0,0,0.5);
   --sidebar-width: 340px;
+  --header-height: 60px;
 }
 
 /* ---------- ALGEMEEN ---------- */
@@ -21,10 +22,17 @@ html, body {
   margin: 0;
   padding: 0;
   height: 100%;
+  min-height: 100vh;
   background: var(--bg);
   color: var(--fg);
   font-family: "Segoe UI", Roboto, sans-serif;
   overflow: hidden;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
 }
 
 /* ---------- HEADER ---------- */
@@ -36,6 +44,8 @@ header {
   box-shadow: 0 2px 6px var(--shadow);
   border-bottom: 1px solid var(--border);
   padding: 6px 10px;
+  min-height: var(--header-height);
+  box-sizing: border-box;
 }
 header h1 {
   font-size: 1.1em;
@@ -49,6 +59,9 @@ header small {
 }
 
 /* ---------- TOOLBAR ---------- */
+.toolbar-panel button,
+.toolbar-panel select,
+.toolbar-panel .toolbar-link,
 .toolbar-right button,
 .toolbar-right select,
 .toolbar-right .toolbar-link {
@@ -63,15 +76,19 @@ header small {
   display: inline-flex;
   align-items: center;
 }
+.toolbar-panel select,
 .toolbar-right select {
   min-width: 90px;
 }
+.toolbar-panel button:hover,
+.toolbar-panel .toolbar-link:hover,
 .toolbar-right button:hover,
 .toolbar-right .toolbar-link:hover {
   background: var(--accent);
   color: #fff;
   border-color: var(--accent-light);
 }
+.toolbar-panel,
 .toolbar-right {
   display: flex;
   flex-wrap: wrap;
@@ -98,6 +115,7 @@ header small {
   margin: 0;
 }
 @media (max-width: 960px) {
+  .toolbar-panel,
   .toolbar-right {
     justify-content: flex-start;
     gap: 8px;
@@ -217,12 +235,29 @@ header small {
 /* ---------- LAYOUT ---------- */
 main {
   display: flex;
-  height: calc(100% - 60px);
+  flex: 1 1 auto;
+  min-height: 0;
+  height: calc(100vh - var(--header-height));
 }
 #mapContainer {
   flex: 1;
   background: #06090e;
   min-width: 0;
+  height: 100%;
+  min-height: 100%;
+}
+#toolbarResizeHandle {
+  width: 10px;
+  cursor: ew-resize;
+  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.06) 40%, rgba(255,255,255,0.06) 60%, transparent 100%);
+  flex: 0 0 10px;
+  border-left: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  box-shadow: inset -1px 0 2px rgba(0, 0, 0, 0.3);
+}
+#toolbarResizeHandle.is-dragging {
+  background: linear-gradient(90deg, rgba(33,150,243,0.25) 0%, rgba(33,150,243,0.4) 50%, rgba(33,150,243,0.25) 100%);
+  border-color: var(--accent);
 }
 aside#uiControls {
   width: var(--sidebar-width);
@@ -246,30 +281,14 @@ details {
   margin-bottom: 6px;
 }
 
-.toolbar-resize {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: rgba(12, 16, 22, 0.9);
+.toolbar-panel {
   border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 6px 8px;
-  font-size: 0.85em;
-}
-.toolbar-resize label {
-  flex: 0 0 auto;
-  font-weight: 600;
-  color: var(--accent-light);
-}
-.toolbar-resize input[type="range"] {
-  flex: 1 1 auto;
-  accent-color: var(--accent);
-}
-.toolbar-resize output {
-  flex: 0 0 auto;
-  min-width: 52px;
-  text-align: right;
-  font-family: "JetBrains Mono", monospace;
+  border-radius: 6px;
+  padding: 8px;
+  background: #121721;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 details summary {
   cursor: pointer;
@@ -367,6 +386,23 @@ details .group h3 {
 
 .admin-form {
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+}
+.admin-fieldset {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 4px 0;
+}
+.admin-fieldset legend {
+  padding: 0 6px;
+  font-weight: 700;
+  color: var(--fg-strong);
+}
+.admin-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 8px 12px;
+  margin-bottom: 6px;
 }
 .admin-form h3 {
   grid-column: 1 / -1;
@@ -974,6 +1010,54 @@ footer {
   margin-top: 6px;
   font-size: 0.75em;
   color: #9ca3af;
+}
+
+.spot-popup-wrapper .leaflet-popup-content {
+  margin: 0;
+}
+
+.spot-popup {
+  min-width: 200px;
+}
+
+.spot-popup__title {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.spot-popup__meta {
+  font-size: 0.78em;
+  color: #9ca3af;
+  margin-bottom: 8px;
+}
+
+.spot-popup__actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.spot-popup__btn {
+  border: 1px solid var(--border);
+  background: rgba(26,32,44,0.9);
+  color: var(--fg);
+  border-radius: 4px;
+  font-size: 0.85em;
+  padding: 6px 8px;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.spot-popup__btn:hover,
+.spot-popup__btn:focus {
+  background: rgba(55,65,81,0.95);
+  border-color: var(--accent);
+  color: var(--fg);
+}
+
+.spot-marker--armed {
+  box-shadow: 0 0 10px rgba(96, 165, 250, 0.8);
+  transform: scale(1.15);
 }
 
 /* ---------- HEATMAP LEGENDA ---------- */
