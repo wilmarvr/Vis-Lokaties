@@ -75,7 +75,7 @@ function clampToolbarWidth(value) {
   return Math.min(max, Math.max(TOOLBAR_MIN_WIDTH, Math.round(target)));
 }
 
-function clampNumber(value, min, max, fallback) {
+function clampValue(value, min, max, fallback) {
   const num = Number(value);
   if (!Number.isFinite(num)) return fallback;
   return Math.min(max, Math.max(min, num));
@@ -83,52 +83,10 @@ function clampNumber(value, min, max, fallback) {
 
 function sanitizeSettings(raw = {}) {
   const merged = { ...DEFAULT_SETTINGS, ...raw };
-  merged.heatmapRadius = clampNumber(merged.heatmapRadius, 1, 120, DEFAULT_SETTINGS.heatmapRadius);
-  merged.heatmapBlur = clampNumber(merged.heatmapBlur, 1, 120, DEFAULT_SETTINGS.heatmapBlur);
-  merged.detectionRadius = clampNumber(merged.detectionRadius, 10, 10000, DEFAULT_SETTINGS.detectionRadius);
-  merged.maxEdge = clampNumber(merged.maxEdge, 1, 1000, DEFAULT_SETTINGS.maxEdge);
-  merged.toolbarWidth = clampToolbarWidth(merged.toolbarWidth ?? DEFAULT_SETTINGS.toolbarWidth);
-
-  merged.heatmapMin = Number.isFinite(merged.heatmapMin) ? merged.heatmapMin : DEFAULT_SETTINGS.heatmapMin;
-  merged.heatmapMax = Number.isFinite(merged.heatmapMax) ? merged.heatmapMax : DEFAULT_SETTINGS.heatmapMax;
-  if (merged.heatmapMax <= merged.heatmapMin) {
-    merged.heatmapMax = merged.heatmapMin + 1;
-  }
-
-  merged.heatmapInvert = !!merged.heatmapInvert;
-  merged.heatmapClamp = !!merged.heatmapClamp;
-  merged.cluster = !!merged.cluster;
-  merged.tooltipDepth = !!merged.tooltipDepth;
-  merged.saveBathy = !!merged.saveBathy;
-  merged.autoSync = !!merged.autoSync;
-  merged.showImports = !!merged.showImports;
-  merged.showData = !!merged.showData;
-  merged.showWeather = !!merged.showWeather;
-  merged.showContours = !!merged.showContours;
-  merged.showCatches = !!merged.showCatches;
-  merged.showManage = !!merged.showManage;
-  merged.showOverview = !!merged.showOverview;
-  merged.showChangelog = !!merged.showChangelog;
-  merged.allowManualWater = !!merged.allowManualWater;
-  merged.autoLink = !!merged.autoLink;
-  merged.toolbarDrag = !!merged.toolbarDrag;
-  merged.panelOrder = Array.isArray(merged.panelOrder) ? merged.panelOrder : [];
-
-  return merged;
-}
-
-function clampNumber(value, min, max, fallback) {
-  const num = Number(value);
-  if (!Number.isFinite(num)) return fallback;
-  return Math.min(max, Math.max(min, num));
-}
-
-function sanitizeSettings(raw = {}) {
-  const merged = { ...DEFAULT_SETTINGS, ...raw };
-  merged.heatmapRadius = clampNumber(merged.heatmapRadius, 1, 120, DEFAULT_SETTINGS.heatmapRadius);
-  merged.heatmapBlur = clampNumber(merged.heatmapBlur, 1, 120, DEFAULT_SETTINGS.heatmapBlur);
-  merged.detectionRadius = clampNumber(merged.detectionRadius, 10, 10000, DEFAULT_SETTINGS.detectionRadius);
-  merged.maxEdge = clampNumber(merged.maxEdge, 1, 1000, DEFAULT_SETTINGS.maxEdge);
+  merged.heatmapRadius = clampValue(merged.heatmapRadius, 1, 120, DEFAULT_SETTINGS.heatmapRadius);
+  merged.heatmapBlur = clampValue(merged.heatmapBlur, 1, 120, DEFAULT_SETTINGS.heatmapBlur);
+  merged.detectionRadius = clampValue(merged.detectionRadius, 10, 10000, DEFAULT_SETTINGS.detectionRadius);
+  merged.maxEdge = clampValue(merged.maxEdge, 1, 1000, DEFAULT_SETTINGS.maxEdge);
   merged.toolbarWidth = clampToolbarWidth(merged.toolbarWidth ?? DEFAULT_SETTINGS.toolbarWidth);
 
   merged.heatmapMin = Number.isFinite(merged.heatmapMin) ? merged.heatmapMin : DEFAULT_SETTINGS.heatmapMin;
@@ -378,7 +336,7 @@ export function initCore() {
   if (heatRadius) {
     heatRadius.value = state.settings.heatmapRadius;
     heatRadius.addEventListener("input", () => {
-      const radius = clampNumber(parseInt(heatRadius.value, 10), 1, 120, DEFAULT_SETTINGS.heatmapRadius);
+      const radius = clampValue(parseInt(heatRadius.value, 10), 1, 120, DEFAULT_SETTINGS.heatmapRadius);
       state.settings.heatmapRadius = radius;
       heatRadius.value = radius;
       saveState();
@@ -390,7 +348,7 @@ export function initCore() {
   if (heatBlur) {
     heatBlur.value = state.settings.heatmapBlur;
     heatBlur.addEventListener("input", () => {
-      const blur = clampNumber(parseInt(heatBlur.value, 10), 1, 120, DEFAULT_SETTINGS.heatmapBlur);
+      const blur = clampValue(parseInt(heatBlur.value, 10), 1, 120, DEFAULT_SETTINGS.heatmapBlur);
       state.settings.heatmapBlur = blur;
       heatBlur.value = blur;
       saveState();
