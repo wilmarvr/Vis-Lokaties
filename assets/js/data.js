@@ -10,8 +10,8 @@ import {
   state,
   saveState,
   loadState
-} from "./core.js?v=20250611";
-import { updateOverview, applyFeatureVisibility } from "./ui.js?v=20250611";
+} from "./core.js?v=20250715";
+import { updateOverview, applyFeatureVisibility } from "./ui.js?v=20250715";
 import {
   refreshDataLayers,
   refreshImportLayer,
@@ -24,7 +24,7 @@ import {
   startWaterDrawing,
   finishWaterDrawing,
   cancelWaterDrawing
-} from "./map.js?v=20250611";
+} from "./map.js?v=20250715";
 import {
   saveSpot,
   fetchSpots,
@@ -37,9 +37,9 @@ import {
   saveCatch,
   deleteCatch,
   fetchBathyPoints
-} from "./db.js?v=20250611";
-import { uid, distanceM, escapeHtml } from "./helpers.js?v=20250611";
-import { t } from "./i18n.js?v=20250611";
+} from "./db.js?v=20250715";
+import { uid, distanceM, escapeHtml } from "./helpers.js?v=20250715";
+import { t } from "./i18n.js?v=20250715";
 
 let rawImports = [];
 let rawImportKeys = new Set();
@@ -90,6 +90,9 @@ function ensureFeatureDefaults() {
   if (!Array.isArray(state.settings.panelOrder)) {
     state.settings.panelOrder = [];
   }
+  if (!state.settings.panelOpen || typeof state.settings.panelOpen !== "object") {
+    state.settings.panelOpen = {};
+  }
 }
 
 function applyFeatureSettings(options = {}) {
@@ -128,22 +131,8 @@ function applyFeatureSettings(options = {}) {
 }
 
 function loadRemoteConfigOptions() {
-  return fetch("api/get_config.php")
-    .then(response => {
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      return response.json();
-    })
-    .then(data => {
-      if (data?.config?.options) {
-        applyFeatureSettings(data.config.options);
-      } else {
-        applyFeatureVisibility();
-      }
-    })
-    .catch(err => {
-      console.warn("Kon configuratie-opties niet laden", err);
-      applyFeatureVisibility();
-    });
+  applyFeatureSettings(state.settings || {});
+  return Promise.resolve();
 }
 
 function setImportMeta({ stored, total, truncated = false, dropped = false } = {}) {
@@ -459,6 +448,9 @@ function bindEvents() {
   const btnGeo = document.getElementById("btnImportGeoJSON");
   const btnSaveHtml = document.getElementById("btnSaveHtml");
   const btnSaveHtmlData = document.getElementById("btnSaveHtmlData");
+  const btnLocalSave = document.getElementById("btnLocalSave");
+  const btnLocalLoad = document.getElementById("btnLocalLoad");
+  const btnLocalReset = document.getElementById("btnLocalReset");
   const btnExportJSON = document.getElementById("btnExportGeoJSON");
   const btnExportZIP = document.getElementById("btnExportZIP");
   const btnFilterDepth = document.getElementById("btnFilterDepth");
@@ -501,6 +493,9 @@ function bindEvents() {
   btnGeo?.addEventListener("click", openGeoJSONDialog);
   btnSaveHtml?.addEventListener("click", exportHTML);
   btnSaveHtmlData?.addEventListener("click", exportHTMLWithData);
+  btnLocalSave?.addEventListener("click", localSave);
+  btnLocalLoad?.addEventListener("click", localLoad);
+  btnLocalReset?.addEventListener("click", localReset);
   btnExportJSON?.addEventListener("click", exportGeoJSON);
   btnExportZIP?.addEventListener("click", exportZIP);
   btnFilterDepth?.addEventListener("click", applyDepthFilter);
@@ -606,12 +601,31 @@ function bindEvents() {
   catchRigSelect?.addEventListener("change", () => {
     const current = catchRigSelect.value || "";
     catchRigSelect.dataset.selectedRig = current;
-    if (!current) return;
-    const rig = (state.rigs || []).find(item => item.id === current);
-    if (rig) {
-      const message = t("catch_hint_selected_rig", "Rig {name} geselecteerd. Vul de velden in.")
-        .replace("{name}", rig.name || rig.id);
-      setCatchStatus("catch_hint_selected_rig", message, "info");
+    if (current) {
+      const parentStek = resolveStekForRig(current);
+      if (parentStek && catchStekSelect) {
+        catchStekSelect.dataset.selectedStek = parentStek;
+        catchStekSelect.value = parentStek;
+        updateCatchStekOptions(parentStek, current);
+        return;
+      }
+      const rig = (state.rigs || []).find(item => item.id === current);
+      if (rig) {
+        const message = t("catch_hint_selected_rig", "Rig {name} geselecteerd. Vul de velden in.")
+          .replace("{name}", rig.name || rig.id);
+        setCatchStatus("catch_hint_selected_rig", message, "info");
+      }
+    } else if (catchStekSelect?.value) {
+      const stek = (state.stekken || []).find(item => item.id === catchStekSelect.value);
+      const message = t("catch_hint_selected", "Stek {name} geselecteerd. Vul de velden in.")
+        .replace("{name}", stek?.name || stek?.id || "stek");
+      setCatchStatus("catch_hint_selected", message, "info");
+    } else {
+      setCatchStatus(
+        "catch_hint_ready",
+        t("catch_hint_ready", "Selecteer een stek (en eventueel een rig) en vul de velden in."),
+        "info"
+      );
     }
   });
 
@@ -1415,14 +1429,14 @@ function formatDate(value) {
           scheduleBathyViewportFetch(lastViewportDetail);
         }
         if (showStatus) {
-          setStatus(t("status_imports_synced", "Serverimporten bijgewerkt"), "ok");
+          setStatus(t("status_imports_synced", "Lokale imports bijgewerkt"), "ok");
         }
       })
       .catch(err => {
-        console.warn("Kon serverimporten niet laden", err);
+        console.warn("Kon lokale imports niet laden", err);
         bathyServerAvailable = false;
         if (showStatus) {
-          setStatus(t("status_imports_sync_error", "Serverimporten konden niet geladen worden"), "error");
+          setStatus(t("status_imports_sync_error", "Imports konden niet geladen worden"), "error");
         }
       });
   }
@@ -2505,6 +2519,14 @@ function handleCatchPhotoSelect(e) {
 function addCatchFromForm() {
   const stekSelect = document.getElementById("catchStekSelect");
   const rigSelect = document.getElementById("catchRigSelect");
+  if (!stekSelect?.value && rigSelect?.value) {
+    const parent = resolveStekForRig(rigSelect.value);
+    if (parent) {
+      stekSelect.value = parent;
+      stekSelect.dataset.selectedStek = parent;
+      updateCatchRigOptions(parent, rigSelect.value);
+    }
+  }
   if (!stekSelect || !stekSelect.value) {
     setCatchStatus("catch_error_stek", "Kies eerst een stek", "error");
     return;
@@ -2581,8 +2603,17 @@ function setCatchStatus(key, fallback, type = "info") {
   }
 }
 
+function resolveStekForRig(rigId) {
+  if (!rigId) return "";
+  const rig = (state.rigs || []).find(item => item.id === rigId);
+  return rig?.stekId || rig?.stek_id || "";
+}
+
 function focusCatchForm(options = {}) {
-  const { stekId = "", rigId = "", scroll = false } = options || {};
+  let { stekId = "", rigId = "", scroll = false, highlight = false } = options || {};
+  if (!stekId && rigId) {
+    stekId = resolveStekForRig(rigId) || stekId;
+  }
   const panel = document.querySelector('details[data-panel="catches"]');
   if (panel) {
     panel.open = true;
@@ -2616,11 +2647,22 @@ function focusCatchForm(options = {}) {
     title.focus();
   }
 
-  setCatchStatus(
-    "catch_hint_ready",
-    t("catch_hint_ready", "Selecteer een stek (en eventueel een rig) en vul de velden in."),
-    "info"
-  );
+  if (highlight && stekId) {
+    const stek = (state.stekken || []).find(item => item.id === stekId);
+    const rig = rigId ? (state.rigs || []).find(item => item.id === rigId) : null;
+    const name = stek?.name || stekId;
+    const rigName = rig?.name || rigId || "";
+    const message = rigName
+      ? t("catch_hint_selected_rig", "Rig {name} geselecteerd. Vul de velden in.").replace("{name}", rigName)
+      : t("catch_hint_selected", "Stek {name} geselecteerd. Vul de velden in.").replace("{name}", name);
+    setCatchStatus(rigName ? "catch_hint_selected_rig" : "catch_hint_selected", message, "info");
+  } else {
+    setCatchStatus(
+      "catch_hint_ready",
+      t("catch_hint_ready", "Selecteer een stek (en eventueel een rig) en vul de velden in."),
+      "info"
+    );
+  }
 }
 
 function upsertCatch(entry) {
@@ -2650,6 +2692,9 @@ function updateCatchStekOptions(preferredStek, preferredRig) {
   let desired = select.dataset.selectedStek || select.value || "";
   if (preferredStek !== undefined) {
     desired = preferredStek || "";
+  }
+  if (!desired && preferredRig) {
+    desired = resolveStekForRig(preferredRig) || "";
   }
 
   select.innerHTML = "";
@@ -2913,7 +2958,7 @@ function syncWithServer(pushLocal) {
     .then(([spots, catches]) => {
       if (Array.isArray(spots)) {
         mergeServerData(spots);
-        setStatus(`${t("status_sync_done", "Server synchronisatie voltooid")} (${spots.length})`, "ok");
+        setStatus(`${t("status_sync_done", "Lokale opslag geladen")} (${spots.length})`, "ok");
       }
       if (Array.isArray(catches)) {
         mergeServerCatches(catches);
@@ -2923,19 +2968,15 @@ function syncWithServer(pushLocal) {
 
       if (!pushLocal) return;
       const all = [...state.waters, ...state.stekken, ...state.rigs];
-      return all
-        .reduce(
-          (chain, spot) =>
-            chain.then(() =>
-              saveSpot(spot).catch(err => {
-                console.warn("Spot upload faalde", err);
-              })
-            ),
-          Promise.resolve()
-        )
-        .then(() => {
-          setStatus(t("status_sync_push", "Lokale data naar server geschreven"), "ok");
-        });
+      return all.reduce(
+        (chain, spot) =>
+          chain.then(() =>
+            saveSpot(spot).catch(err => {
+              console.warn("Lokale opslag bijwerken faalde", err);
+            })
+          ),
+        Promise.resolve()
+      );
     })
     .then(() => {
       whenMapReady(() => refreshDataLayers());
@@ -2945,8 +2986,8 @@ function syncWithServer(pushLocal) {
       return loadServerImportSummary();
     })
     .catch(err => {
-      console.warn("Server sync faalde", err);
-      setStatus(t("status_sync_error", "Server niet bereikbaar"), "error");
+      console.warn("Lokale sync faalde", err);
+      setStatus(t("status_sync_error", "Lokale opslag niet beschikbaar"), "error");
     });
 }
 
@@ -2982,12 +3023,19 @@ function resetServerData() {
   if (!confirm(t("confirm_reset_server", "Weet je zeker dat je de serverdata wilt resetten?"))) return;
   resetServer()
     .then(() => {
-      setStatus(t("status_server_reset", "Serverdata gewist"), "ok");
-      syncWithServer(false);
+      state.waters = [];
+      state.stekken = [];
+      state.rigs = [];
+      state.imports = [];
+      state.importsMeta = { stored: 0, total: 0 };
+      saveState();
+      setStatus(t("status_server_reset", "Lokale opslag gewist"), "ok");
+      whenMapReady(() => refreshDataLayers());
+      populateTables();
     })
     .catch(err => {
       console.error(err);
-      setStatus(t("status_server_reset_error", "Server reset mislukt"), "error");
+      setStatus(t("status_server_reset_error", "Lokale reset mislukt"), "error");
     });
 }
 
@@ -3325,26 +3373,4 @@ window.VisLokData = { forceServerSync };
 /* ---------- EVENTKOPPELINGEN ---------- */
 document.addEventListener("DOMContentLoaded", () => {
   initData();
-
-  const toolbar = document.querySelector(".toolbar-right");
-  if (toolbar && !document.getElementById("btnLocalSave")) {
-    const btnSaveLocal = document.createElement("button");
-    btnSaveLocal.id = "btnLocalSave";
-    btnSaveLocal.textContent = t("btn_local_save", "💾 Opslaan");
-    btnSaveLocal.addEventListener("click", localSave);
-
-    const btnLoadLocal = document.createElement("button");
-    btnLoadLocal.id = "btnLocalLoad";
-    btnLoadLocal.textContent = t("btn_local_load", "📂 Laden");
-    btnLoadLocal.addEventListener("click", localLoad);
-
-    const btnResetLocal = document.createElement("button");
-    btnResetLocal.id = "btnLocalReset";
-    btnResetLocal.textContent = t("btn_local_reset", "🗑️ Reset");
-    btnResetLocal.addEventListener("click", localReset);
-
-    toolbar.appendChild(btnSaveLocal);
-    toolbar.appendChild(btnLoadLocal);
-    toolbar.appendChild(btnResetLocal);
-  }
 });
