@@ -25,7 +25,7 @@ Vis Lokaties is een moderne herbouw van het oorspronkelijke bestand **“Vis lok
 
 ### Weer, admin & versiebeheer
 - Weerpaneel met datum/uur-keuze, dichtheid, overlay-toggle en pijllagen.【F:index.html†L435-L520】【F:assets/js/weather.js†L38-L210】
-- Adminpagina voor databasepad (optioneel), autosync, bathy-voorkeuren en releasebeheer (`version.json`). De database werkt standaard uit de doos op `data/vislok.sqlite`; aanpassen is alleen nodig als je een eigen pad wilt forceren.【F:admin.html†L15-L115】【F:assets/js/admin.js†L32-L220】【F:data/version.json†L1-L10】
+- Adminpagina voor autosync, bathy-voorkeuren en releasebeheer (`version.json`). De database draait standaard op `data/vislok.sqlite` en vergt geen configuratie.【F:admin.html†L15-L110】【F:assets/js/admin.js†L32-L220】【F:data/version.json†L1-L10】
 - Versie blijft op **v0.0.0** totdat klaar voor release; beheer gebeurt via admin of direct in `data/version.json`.【F:admin.html†L17-L77】【F:data/version.json†L1-L10】
 
 ## Directory-overzicht
@@ -56,8 +56,8 @@ Vis Lokaties is een moderne herbouw van het oorspronkelijke bestand **“Vis lok
    - Controleer dat `uploads/` en `data/` bestaan; de applicatie maakt `data/vislok.sqlite` automatisch aan als hij ontbreekt.【F:api/db.php†L33-L106】
 
 3. **Database (geen MySQL nodig)**
-   - Standaard gebruikt de app `data/vislok.sqlite`. Je hoeft niets te configureren.
-   - Optioneel: open `http://localhost/vislokaties/admin.html` en vul een eigen pad in als je de database elders wilt bewaren; laat het veld leeg om het standaardpad te gebruiken.【F:admin.html†L27-L70】【F:assets/js/admin.js†L132-L210】
+   - De app gebruikt altijd `data/vislok.sqlite`; extra configuratie is niet nodig.
+   - Open `http://localhost/vislokaties/admin.html` om sync- en interface-opties te beheren of de verbinding te testen.
    - De backend zorgt bij de eerste request dat de map bestaat, de SQLite-file wordt aangemaakt en alle tabellen worden opgebouwd.【F:api/db.php†L33-L169】
 
 4. **Werking**
@@ -67,7 +67,7 @@ Vis Lokaties is een moderne herbouw van het oorspronkelijke bestand **“Vis lok
    - Vangsten toevoegen via het **Vangsten**-paneel; foto’s worden opgeslagen onder `uploads/` en het pad komt in de `catches`-tabel.【F:assets/js/data.js†L1382-L1706】【F:api/save_catch.php†L1-L126】
 
 5. **Admin & versiebeheer**
-   - Beheer bathy-voorkeuren, optionele databasepadoverride en releases op de adminpagina.
+    - Beheer bathy-voorkeuren en releases op de adminpagina.
    - Het project blijft op versie **0.0.0** totdat een nieuwe release wordt opgeslagen.【F:data/version.json†L1-L10】
 
 ## Database-overzicht (SQLite)

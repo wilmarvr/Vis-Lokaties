@@ -26,7 +26,6 @@ function initAdmin() {
   const versionForm = document.getElementById("adminVersionForm");
   if (!form && !versionForm) return;
 
-  const pathInput = document.getElementById("adminDbPath");
   const statusEl = document.getElementById("adminStatus");
   const btnTest = document.getElementById("btnAdminTest");
   const autoSync = document.getElementById("adminAutoSync");
@@ -167,13 +166,11 @@ function initAdmin() {
 
   function readFormConfig() {
     return {
-      path: pathInput?.value?.trim() || "",
       options: readOptions()
     };
   }
 
   function applyConfig(config = {}) {
-    if (pathInput) pathInput.value = config.path || "";
     if (config.options) {
       applyOptions(config.options);
     } else {

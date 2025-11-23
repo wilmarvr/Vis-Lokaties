@@ -9,8 +9,6 @@ try {
     }
 
     $config = [
-        // Pad is optioneel: lege waarde betekent standaardpad.
-        'path' => $data['path'] ?? '',
         'options' => $data['options'] ?? []
     ];
 

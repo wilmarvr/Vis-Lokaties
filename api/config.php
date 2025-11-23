@@ -2,15 +2,12 @@
 // =======================================================
 // Vis Lokaties — config.php
 // Eenvoudige configuratie voor SQLite.
-// Laadt standaardwaarden en optionele overrides uit config.local.json
-// zodat de waarden via de admin-interface aangepast kunnen worden.
+// De database draait altijd op het ingebouwde pad; alleen UI-opties zijn instelbaar.
 // =======================================================
 
 const VISLOK_DEFAULT_PATH = __DIR__ . '/../data/vislok.sqlite';
 
 const VISLOK_CONFIG_DEFAULT = [
-    // Standaard SQLite-bestand in de data-map (niet meer verplicht aan te passen)
-    'path' => VISLOK_DEFAULT_PATH,
     'options' => []
 ];
 
@@ -68,15 +65,7 @@ function vislok_normalise_path(string $path): string
 
 function vislok_sanitise_config(array $config): array
 {
-    // DB-pad is niet langer verplicht instelbaar; we nemen het over als hij mee komt,
-    // maar vallen altijd terug op het veilige standaardpad.
-    $path = VISLOK_DEFAULT_PATH;
-    if (isset($config['path']) && $config['path'] !== '') {
-        $path = vislok_normalise_path((string)$config['path']);
-    }
-
     return [
-        'path' => $path,
         'options' => vislok_sanitise_options($config['options'] ?? [])
     ];
 }
@@ -89,14 +78,6 @@ function vislok_load_config(bool $refresh = false): array
     }
 
     $config = VISLOK_CONFIG_DEFAULT;
-
-    // Omgevingsoverrides eerst toepassen (bijv. via .env of hostingpaneel)
-    foreach (VISLOK_ENV_KEYS as $key => $envKey) {
-        $value = getenv($envKey);
-        if ($value !== false && $value !== null && $value !== '') {
-            $config[$key] = $value;
-        }
-    }
 
     $path = vislok_config_path();
     if (is_readable($path)) {
@@ -132,4 +113,4 @@ function vislok_current_config(): array
 }
 
 $config = vislok_current_config();
-define('DB_PATH', $config['path']);
+define('DB_PATH', VISLOK_DEFAULT_PATH);
