@@ -129,9 +129,19 @@ function applyFeatureSettings(options = {}) {
 
 function loadRemoteConfigOptions() {
   return fetch("api/get_config.php")
-    .then(response => {
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      return response.json();
+    .then(async response => {
+      const text = await response.text();
+      let parsed = null;
+      try {
+        parsed = text ? JSON.parse(text) : null;
+      } catch (err) {
+        throw new Error(`HTTP ${response.status}: ongeldige JSON (${text.slice(0, 120) || 'leeg'})`);
+      }
+      if (!response.ok) {
+        const msg = parsed?.error || `HTTP ${response.status}`;
+        throw new Error(msg);
+      }
+      return parsed;
     })
     .then(data => {
       if (data?.config?.options) {

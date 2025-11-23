@@ -142,9 +142,19 @@ function applyVersionInfo(info) {
 
 export function loadVersionInfo(showStatus = false) {
   return fetch('api/get_version.php')
-    .then(response => {
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      return response.json();
+    .then(async response => {
+      const text = await response.text();
+      let parsed = null;
+      try {
+        parsed = text ? JSON.parse(text) : null;
+      } catch (err) {
+        throw new Error(`HTTP ${response.status}: ongeldige JSON (${text.slice(0, 120) || 'leeg'})`);
+      }
+      if (!response.ok) {
+        const msg = parsed?.error || `HTTP ${response.status}`;
+        throw new Error(msg);
+      }
+      return parsed;
     })
     .then(data => {
       const version = applyVersionInfo(data?.version || {});
