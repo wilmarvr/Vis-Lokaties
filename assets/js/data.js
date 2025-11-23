@@ -60,6 +60,7 @@ let catchRigSelectEl = null;
 let catchWeightKgInput = null;
 let catchWeightLbsInput = null;
 let weightSyncing = false;
+let catchSelectionLabel = null;
 let waterDrawActive = false;
 let btnDrawWater = null;
 let btnFinishWater = null;
@@ -591,6 +592,7 @@ function bindEvents() {
   catchStekSelect?.addEventListener("change", () => {
     const current = catchStekSelect.value || "";
     catchStekSelect.dataset.selectedStek = current;
+    updateCatchSelectionLabel(current, catchRigSelect?.value || "");
     updateCatchRigOptions(current);
     if (current) {
       const stek = (state.stekken || []).find(item => item.id === current);
@@ -617,6 +619,7 @@ function bindEvents() {
         catchStekSelect.dataset.selectedStek = parentStek;
         catchStekSelect.value = parentStek;
         updateCatchStekOptions(parentStek, current);
+        updateCatchSelectionLabel(parentStek, current);
         return;
       }
       const rig = (state.rigs || []).find(item => item.id === current);
@@ -624,20 +627,25 @@ function bindEvents() {
         const message = t("catch_hint_selected_rig", "Rig {name} geselecteerd. Vul de velden in.")
           .replace("{name}", rig.name || rig.id);
         setCatchStatus("catch_hint_selected_rig", message, "info");
+        updateCatchSelectionLabel(resolveStekForRig(current) || "", current);
       }
     } else if (catchStekSelect?.value) {
       const stek = (state.stekken || []).find(item => item.id === catchStekSelect.value);
       const message = t("catch_hint_selected", "Stek {name} geselecteerd. Vul de velden in.")
         .replace("{name}", stek?.name || stek?.id || "stek");
       setCatchStatus("catch_hint_selected", message, "info");
+      updateCatchSelectionLabel(catchStekSelect.value, "");
     } else {
       setCatchStatus(
         "catch_hint_ready",
         t("catch_hint_ready", "Selecteer een stek (en eventueel een rig) en vul de velden in."),
         "info"
       );
+      updateCatchSelectionLabel();
     }
   });
+
+  updateCatchSelectionLabel(catchStekSelect?.value || "", catchRigSelect?.value || "");
 
   catchTable?.addEventListener("click", e => {
     const target = e.target.closest("button[data-catch-action]");
@@ -2503,6 +2511,7 @@ function clearCatchForm(preserveStek = true) {
   if (photo) photo.value = "";
   catchPhotoData = null;
   updateCatchRigOptions(stekSelect?.value || "");
+  updateCatchSelectionLabel(stekSelect?.value || "", rigSelect?.value || "");
 }
 
 function handleCatchPhotoSelect(e) {
@@ -2648,6 +2657,26 @@ function setCatchStatus(key, fallback, type = "info") {
   }
 }
 
+function updateCatchSelectionLabel(stekId = "", rigId = "") {
+  if (!catchSelectionLabel) {
+    catchSelectionLabel = document.getElementById("catchSelectionLabel");
+  }
+  if (!catchSelectionLabel) return;
+
+  const stek = (state.stekken || []).find(item => item.id === stekId);
+  const rig = (state.rigs || []).find(item => item.id === rigId);
+  if (rig && stek) {
+    catchSelectionLabel.textContent = t("catch_selected_rig", "Rig {rig} @ {stek}")
+      .replace("{rig}", rig.name || rig.id)
+      .replace("{stek}", stek.name || stek.id);
+  } else if (stek) {
+    catchSelectionLabel.textContent = t("catch_selected_stek", "Stek {stek} geselecteerd")
+      .replace("{stek}", stek.name || stek.id);
+  } else {
+    catchSelectionLabel.textContent = t("catch_selected_none", "Geen stek of rig geselecteerd");
+  }
+}
+
 function resolveStekForRig(rigId) {
   if (!rigId) return "";
   const rig = (state.rigs || []).find(item => item.id === rigId);
@@ -2675,6 +2704,7 @@ function focusCatchForm(options = {}) {
   }
 
   updateCatchStekOptions(stekId, rigId);
+  updateCatchSelectionLabel(stekId, rigId);
 
   const select = catchStekSelectEl || document.getElementById("catchStekSelect");
   if (select && typeof select.focus === "function") {
@@ -2707,6 +2737,7 @@ function focusCatchForm(options = {}) {
       t("catch_hint_ready", "Selecteer een stek (en eventueel een rig) en vul de velden in."),
       "info"
     );
+    updateCatchSelectionLabel();
   }
 }
 
@@ -2781,6 +2812,7 @@ function updateCatchStekOptions(preferredStek, preferredRig) {
 
   select.disabled = items.length === 0;
   select.dataset.selectedStek = select.value || "";
+  updateCatchSelectionLabel(select.value || "", preferredRig || "");
 
   const addBtn = document.getElementById("btnAddCatch");
   if (addBtn) {
@@ -2858,6 +2890,7 @@ function updateCatchRigOptions(stekId = "", preferredRig) {
 
   select.disabled = !stekId;
   select.dataset.selectedRig = select.value || "";
+  updateCatchSelectionLabel(stekId || "", select.value || "");
 }
 
 function updateCatchTable() {

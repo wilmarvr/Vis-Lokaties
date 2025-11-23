@@ -25,7 +25,8 @@ export function applyFeatureVisibility() {
     data: features.showData !== false,
     weather: features.showWeather !== false,
     contours: features.showContours !== false,
-    catches: features.showCatches !== false,
+    // Vangsten-paneel altijd zichtbaar zodat het invoerformulier beschikbaar blijft
+    catches: true,
     manage: features.showManage !== false,
     overview: features.showOverview !== false,
     about: features.showChangelog !== false
