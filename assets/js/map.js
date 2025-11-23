@@ -499,69 +499,73 @@ function clearPlacementPreview() {
 }
 
 function updatePlacementPreview(latlng) {
-  if (!map) return;
-  if (!latlng || clickMode === "none") {
-    clearPlacementPreview();
-    return;
-  }
-
-  const lat = latlng?.lat;
-  const lng = latlng?.lng;
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-    clearPlacementPreview();
-    return;
-  }
-
-  let reference = null;
-  if (clickMode === "stek") {
-    reference = findNearestWater(lat, lng);
-  } else if (clickMode === "rig") {
-    reference = findNearestStek(lat, lng);
-  } else {
-    clearPlacementPreview();
-    return;
-  }
-
-  const refLat = reference?.lat;
-  const refLng = reference?.lng;
-  if (!Number.isFinite(refLat) || !Number.isFinite(refLng)) {
-    clearPlacementPreview();
-    return;
-  }
-
-  let distance;
   try {
-    distance = map.distance([refLat, refLng], [lat, lng]);
+    if (!map) return;
+    if (!latlng || clickMode === "none") {
+      clearPlacementPreview();
+      return;
+    }
+
+    const lat = latlng?.lat;
+    const lng = latlng?.lng;
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      clearPlacementPreview();
+      return;
+    }
+
+    let reference = null;
+    if (clickMode === "stek") {
+      reference = findNearestWater(lat, lng);
+    } else if (clickMode === "rig") {
+      reference = findNearestStek(lat, lng);
+    } else {
+      clearPlacementPreview();
+      return;
+    }
+
+    const refLat = reference?.lat;
+    const refLng = reference?.lng;
+    if (!Number.isFinite(refLat) || !Number.isFinite(refLng)) {
+      clearPlacementPreview();
+      return;
+    }
+
+    let distance;
+    try {
+      distance = map.distance([refLat, refLng], [lat, lng]);
+    } catch (_err) {
+      clearPlacementPreview();
+      return;
+    }
+    if (!Number.isFinite(distance)) {
+      clearPlacementPreview();
+      return;
+    }
+
+    const labelKey = clickMode === "stek" ? "preview_stek_distance" : "preview_rig_distance";
+    const rounded = Math.round(distance);
+    const text = t(labelKey, clickMode === "stek" ? "Afstand tot water: {distance} m" : "Distance to spot: {distance} m")
+      .replace("{distance}", String(rounded));
+    const nameLine = escapeHtml(reference.name || reference.id || "");
+
+    if (!placementTooltip) {
+      placementTooltip = L.tooltip({
+        permanent: false,
+        direction: "top",
+        className: "placement-tip",
+        opacity: 0.9
+      }).addTo(map);
+    }
+
+    const label = nameLine ? `${text}<br><small>${nameLine}</small>` : text;
+    placementTooltip.setLatLng([lat, lng]);
+    placementTooltip.setContent(label);
+
+    placementBase = reference;
+    placementMode = clickMode;
   } catch (_err) {
     clearPlacementPreview();
-    return;
   }
-  if (!Number.isFinite(distance)) {
-    clearPlacementPreview();
-    return;
-  }
-
-  const labelKey = clickMode === "stek" ? "preview_stek_distance" : "preview_rig_distance";
-  const rounded = Math.round(distance);
-  const text = t(labelKey, clickMode === "stek" ? "Afstand tot water: {distance} m" : "Distance to spot: {distance} m")
-    .replace("{distance}", String(rounded));
-  const nameLine = escapeHtml(reference.name || reference.id || "");
-
-  if (!placementTooltip) {
-    placementTooltip = L.tooltip({
-      permanent: false,
-      direction: "top",
-      className: "placement-tip",
-      opacity: 0.9
-    }).addTo(map);
-  }
-
-  const label = nameLine ? `${text}<br><small>${nameLine}</small>` : text;
-  placementTooltip.setLatLng([lat, lng]);
-  placementTooltip.setContent(label);
-
-  placementBase = reference;
-  placementMode = clickMode;
 }
 
 function findNearestWater(lat, lng) {
