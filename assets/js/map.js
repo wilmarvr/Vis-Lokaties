@@ -148,6 +148,7 @@ export function initMap() {
   map.on("dragend", markClickSuppressed);
 
   setFooterInfo({ zoom: `| ${t("footer_zoom", "Zoom")}: ${map.getZoom()}` });
+  emitMapBounds();
 
   bindUI();
   refreshDataLayers();
@@ -155,7 +156,6 @@ export function initMap() {
   if (state.imports?.length) {
     showHeatmap(false);
   }
-  emitMapBounds();
 
   setStatus(t("status_map_ready", "Kaart geladen"), "ok");
   log("Kaart init voltooid");

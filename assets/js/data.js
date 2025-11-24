@@ -576,9 +576,6 @@ function bindEvents() {
 
   catchFormEls = {
     panel: document.querySelector('details[data-panel="catches"]'),
-    openBtn: document.getElementById("btnOpenCatchModal"),
-    modal: document.getElementById("catchModal"),
-    title: document.getElementById("catchModalTitle"),
     form: document.getElementById("catchModalForm"),
     id: document.getElementById("catchModalId"),
     stek: document.getElementById("catchModalStek"),
@@ -591,7 +588,6 @@ function bindEvents() {
     date: document.getElementById("catchModalDate"),
     deleteBtn: document.getElementById("btnDeleteCatch"),
     cancelBtn: document.getElementById("btnCancelCatch"),
-    closeBtn: document.getElementById("catchModalClose"),
     summaryLabel: document.getElementById("catchSummarySelection"),
     selectionLabel: document.getElementById("catchSelectionLabel"),
     list: document.getElementById("catchList")
@@ -600,7 +596,6 @@ function bindEvents() {
   ensureCatchFormVisible();
   bindCatchForm();
 
-  // Open the catch modal once on init so the fields are immediately visible/editable.
   openCatchModal({ forceNew: true });
 
   document.addEventListener("vislok:focus-catch-form", e => focusCatchForm(e.detail));
@@ -2939,9 +2934,7 @@ function bindCatchForm() {
   syncWeights(catchFormEls.weightKg, catchFormEls.weightLbs, 2.20462);
   syncWeights(catchFormEls.weightLbs, catchFormEls.weightKg, 0.453592);
 
-  catchFormEls.openBtn?.addEventListener("click", () => openCatchModal());
   catchFormEls.cancelBtn?.addEventListener("click", closeCatchModal);
-  catchFormEls.closeBtn?.addEventListener("click", closeCatchModal);
   catchFormEls.deleteBtn?.addEventListener("click", handleCatchDelete);
   catchFormEls.list?.addEventListener("click", handleCatchListClick);
 }
@@ -2951,7 +2944,7 @@ function focusCatchForm(detail = {}) {
 }
 
 function openCatchModal(detail = {}) {
-  if (!catchFormEls.modal || !catchFormEls.form) return;
+  if (!catchFormEls.form) return;
   const existing = detail.forceNew ? null : detail.catchId ? state.catches?.find(c => c.id === detail.catchId) : null;
   activeCatchId = existing?.id || null;
   catchFormEls.id.value = existing?.id || "";
@@ -2964,23 +2957,16 @@ function openCatchModal(detail = {}) {
   if (catchFormEls.notes) catchFormEls.notes.value = existing?.notes || "";
   if (catchFormEls.date) catchFormEls.date.value = toDatetimeLocal(existing?.caught_at);
   if (catchFormEls.photo) catchFormEls.photo.value = "";
-  if (catchFormEls.title) {
-    catchFormEls.title.textContent = existing
-      ? t("catch_modal_title_edit", "Vangst bewerken")
-      : t("catch_modal_title_new", "Nieuwe vangst");
-  }
   if (catchFormEls.deleteBtn) catchFormEls.deleteBtn.hidden = !existing;
   updateCatchSelectionLabel();
-  catchFormEls.modal.classList.remove("hidden");
-  if (detail.scroll) {
-    catchFormEls.modal.scrollIntoView({ behavior: "smooth" });
+  if (detail.scroll && catchFormEls.form) {
+    catchFormEls.form.scrollIntoView({ behavior: "smooth" });
   }
 }
 
 function closeCatchModal() {
   activeCatchId = null;
   if (catchFormEls.form) catchFormEls.form.reset();
-  if (catchFormEls.modal) catchFormEls.modal.classList.add("hidden");
   updateCatchSelectionLabel();
 }
 
