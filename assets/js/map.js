@@ -1826,6 +1826,8 @@ export function startGPS() {
       const latlng = [latitude, longitude];
       state.center = latlng;
       if (state.gpsActive) map.panTo(latlng);
+      // Update live depth feedback at the GPS coordinate so hover/drag tooling reflects movement.
+      updateMouseHover({ lat: latitude, lng: longitude });
     },
     err => {
       setStatus(`${t("status_gps_error", "GPS-fout")}: ${err.message}`, "error");
