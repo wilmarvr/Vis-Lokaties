@@ -4,24 +4,16 @@
    Versie: 0.1.0
    ======================================================= */
 
-import {
-  setStatus,
-  log,
-  state,
-  saveState,
-  setToolbarWidth,
-  TOOLBAR_MIN_WIDTH,
-  TOOLBAR_MAX_WIDTH,
-  TOOLBAR_DEFAULT_WIDTH
-} from "./core.js?v=20250611";
-import { populateTables } from "./data.js?v=20250611";
-import { setDictionary, t, getLanguage } from "./i18n.js?v=20250611";
-import { escapeHtml } from "./helpers.js?v=20250611";
+import { setStatus, log, state, saveState, setToolbarWidth, TOOLBAR_MIN_WIDTH } from "./core.js?v=20250715";
+import { populateTables } from "./data.js?v=20250715";
+import { setDictionary, t, getLanguage } from "./i18n.js?v=20250715";
+import { escapeHtml } from "./helpers.js?v=20250715";
 
 let dragContainer = null;
 let panelOrderApplied = false;
 let draggingPanel = null;
-let toolbarWidthInitialized = false;
+let widthDragActive = false;
+let lastWidth = null;
 
 export function applyFeatureVisibility() {
   const container = document.getElementById("uiControls");
@@ -33,7 +25,6 @@ export function applyFeatureVisibility() {
     data: features.showData !== false,
     weather: features.showWeather !== false,
     contours: features.showContours !== false,
-    catches: features.showCatches !== false,
     manage: features.showManage !== false,
     overview: features.showOverview !== false,
     about: features.showChangelog !== false
@@ -59,36 +50,42 @@ export function applyFeatureVisibility() {
   ensurePanelDragSetup();
 }
 
-function initToolbarWidthControl() {
-  const slider = document.getElementById("toolbarWidthControl");
-  const output = document.getElementById("toolbarWidthValue");
-  if (!slider || !output) {
-    return;
-  }
+function initToolbarResizeHandle() {
+  const handle = document.getElementById("toolbarResizeHandle");
+  const main = document.querySelector("main");
+  if (!handle || !main) return;
 
-  if (!slider.min) slider.min = String(TOOLBAR_MIN_WIDTH);
-  if (!slider.max) slider.max = String(TOOLBAR_MAX_WIDTH);
+  const stopDrag = () => {
+    if (!widthDragActive) return;
+    widthDragActive = false;
+    handle.classList.remove("is-dragging");
+    window.removeEventListener("pointermove", applyDrag);
+    window.removeEventListener("pointerup", stopDrag);
+    window.removeEventListener("pointercancel", stopDrag);
+    if (lastWidth !== null) {
+      setToolbarWidth(lastWidth, true);
+    }
+  };
 
-  const current = state.settings?.toolbarWidth ?? TOOLBAR_DEFAULT_WIDTH;
-  setToolbarWidth(current, false);
+  const applyDrag = event => {
+    if (!widthDragActive) return;
+    const point = event.touches?.[0] || event;
+    if (!point || typeof point.clientX !== "number") return;
+    const rect = main.getBoundingClientRect();
+    const desired = rect.right - point.clientX;
+    lastWidth = setToolbarWidth(desired, false);
+    event.preventDefault();
+  };
 
-  if (!toolbarWidthInitialized) {
-    slider.addEventListener("input", () => {
-      const value = Number(slider.value);
-      setToolbarWidth(value, false);
-    });
-
-    slider.addEventListener("change", () => {
-      const value = Number(slider.value);
-      const applied = setToolbarWidth(value, true);
-      slider.value = String(applied);
-      setStatus(t("status_toolbar_width", "Toolbarbreedte bijgewerkt"), "ok");
-    });
-
-    toolbarWidthInitialized = true;
-  } else {
-    output.textContent = `${state.settings.toolbarWidth || TOOLBAR_DEFAULT_WIDTH}px`;
-  }
+  handle.addEventListener("pointerdown", event => {
+    widthDragActive = true;
+    handle.classList.add("is-dragging");
+    lastWidth = state.settings?.toolbarWidth ?? TOOLBAR_MIN_WIDTH;
+    applyDrag(event);
+    window.addEventListener("pointermove", applyDrag);
+    window.addEventListener("pointerup", stopDrag);
+    window.addEventListener("pointercancel", stopDrag);
+  });
 }
 
 function ensurePanelDragSetup() {
@@ -112,11 +109,27 @@ function ensurePanelDragSetup() {
 
   if (!panelOrderApplied) {
     applySavedPanelOrder();
+    applySavedPanelOpenStates();
+    keepCatchesPanelOpen();
     panelOrderApplied = true;
   }
 
   attachPanelDragHandlers();
   updatePanelDragState();
+}
+
+function keepCatchesPanelOpen() {
+  if (!dragContainer) return;
+  const catchesPanel = dragContainer.querySelector('details[data-panel="catches"]');
+  if (!catchesPanel) return;
+
+  // Force it open so the catch form stays visible.
+  catchesPanel.setAttribute("open", "open");
+  catchesPanel.addEventListener("toggle", () => {
+    if (!catchesPanel.open) {
+      catchesPanel.setAttribute("open", "open");
+    }
+  });
 }
 
 function applySavedPanelOrder() {
@@ -148,8 +161,24 @@ function attachPanelDragHandlers() {
   panels.forEach(panel => {
     panel.removeEventListener("dragstart", handlePanelDragStart);
     panel.removeEventListener("dragend", handlePanelDragEnd);
+    panel.removeEventListener("toggle", handlePanelToggle);
     panel.addEventListener("dragstart", handlePanelDragStart);
     panel.addEventListener("dragend", handlePanelDragEnd);
+    panel.addEventListener("toggle", handlePanelToggle);
+  });
+}
+
+function applySavedPanelOpenStates() {
+  if (!dragContainer) return;
+  const saved = state.settings?.panelOpen || {};
+  dragContainer.querySelectorAll("details[data-panel]").forEach(panel => {
+    const id = panel.dataset.panel;
+    if (!id) return;
+    if (saved[id] === true) {
+      panel.setAttribute("open", "open");
+    } else if (saved[id] === false) {
+      panel.removeAttribute("open");
+    }
   });
 }
 
@@ -205,6 +234,22 @@ function handlePanelDrop(event) {
   persistPanelOrder();
 }
 
+function handlePanelToggle(event) {
+  const panel = event.currentTarget;
+  const id = panel?.dataset?.panel;
+  if (!id) return;
+  if (!state.settings || typeof state.settings !== "object") {
+    state.settings = {};
+  }
+  if (!state.settings.panelOpen || typeof state.settings.panelOpen !== "object") {
+    state.settings.panelOpen = {};
+  }
+  const isOpen = !!panel.open;
+  if (state.settings.panelOpen[id] === isOpen) return;
+  state.settings.panelOpen[id] = isOpen;
+  saveState();
+}
+
 function getPanelAfterElement(cursorY) {
   if (!dragContainer) return null;
   const panels = Array.from(dragContainer.querySelectorAll("details[data-panel]:not(.dragging)"))
@@ -236,7 +281,7 @@ function persistPanelOrder() {
 export function initUI() {
   log("UI gestart");
 
-  initToolbarWidthControl();
+  initToolbarResizeHandle();
 
   const langSelect = document.getElementById("langSelect");
   if (langSelect) {

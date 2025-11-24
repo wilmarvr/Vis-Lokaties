@@ -10,8 +10,8 @@ import {
   state,
   saveState,
   loadState
-} from "./core.js?v=20250611";
-import { updateOverview, applyFeatureVisibility } from "./ui.js?v=20250611";
+} from "./core.js?v=20250715";
+import { updateOverview, applyFeatureVisibility } from "./ui.js?v=20250715";
 import {
   refreshDataLayers,
   refreshImportLayer,
@@ -24,7 +24,7 @@ import {
   startWaterDrawing,
   finishWaterDrawing,
   cancelWaterDrawing
-} from "./map.js?v=20250611";
+} from "./map.js?v=20250715";
 import {
   saveSpot,
   fetchSpots,
@@ -33,13 +33,13 @@ import {
   saveBathyBatch,
   fetchBathyImports,
   clearBathyImports,
+  fetchBathyPoints,
   fetchCatches,
   saveCatch,
-  deleteCatch,
-  fetchBathyPoints
-} from "./db.js?v=20250611";
-import { uid, distanceM, escapeHtml } from "./helpers.js?v=20250611";
-import { t } from "./i18n.js?v=20250611";
+  deleteCatch
+} from "./db.js?v=20250715";
+import { uid, distanceM, escapeHtml } from "./helpers.js?v=20250715";
+import { t } from "./i18n.js?v=20250715";
 
 let rawImports = [];
 let rawImportKeys = new Set();
@@ -52,11 +52,10 @@ let importProcessed = 0;
 let importHistory = [];
 let serverImports = [];
 let serverImportSummary = { batches: 0, points: 0 };
+let catchFormEls = {};
+let activeCatchId = null;
 const importEntryMap = new WeakMap();
 let currentImportName = null;
-let catchPhotoData = null;
-let catchStekSelectEl = null;
-let catchRigSelectEl = null;
 let waterDrawActive = false;
 let btnDrawWater = null;
 let btnFinishWater = null;
@@ -71,7 +70,6 @@ const FEATURE_KEYS = [
   "showData",
   "showWeather",
   "showContours",
-  "showCatches",
   "showManage",
   "showOverview",
   "showChangelog",
@@ -79,7 +77,6 @@ const FEATURE_KEYS = [
   "autoLink",
   "toolbarDrag"
 ];
-
 function ensureFeatureDefaults() {
   if (!state.settings) state.settings = {};
   FEATURE_KEYS.forEach(key => {
@@ -89,6 +86,9 @@ function ensureFeatureDefaults() {
   });
   if (!Array.isArray(state.settings.panelOrder)) {
     state.settings.panelOrder = [];
+  }
+  if (!state.settings.panelOpen || typeof state.settings.panelOpen !== "object") {
+    state.settings.panelOpen = {};
   }
 }
 
@@ -128,22 +128,8 @@ function applyFeatureSettings(options = {}) {
 }
 
 function loadRemoteConfigOptions() {
-  return fetch("api/get_config.php")
-    .then(response => {
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      return response.json();
-    })
-    .then(data => {
-      if (data?.config?.options) {
-        applyFeatureSettings(data.config.options);
-      } else {
-        applyFeatureVisibility();
-      }
-    })
-    .catch(err => {
-      console.warn("Kon configuratie-opties niet laden", err);
-      applyFeatureVisibility();
-    });
+  applyFeatureSettings(state.settings || {});
+  return Promise.resolve();
 }
 
 function setImportMeta({ stored, total, truncated = false, dropped = false } = {}) {
@@ -401,7 +387,6 @@ export function initData() {
   if (!state.waters) state.waters = [];
   if (!state.stekken) state.stekken = [];
   if (!state.rigs) state.rigs = [];
-  if (!state.catches) state.catches = [];
   if (!state.filters) state.filters = { depthMin: 0, depthMax: 10 };
   applyFeatureVisibility();
   normalizeImportMeta();
@@ -434,10 +419,7 @@ export function initData() {
   updateOverview();
   updateImportStats();
   updateImportTable();
-  updateCatchStekOptions();
-  updateCatchTable();
   updateToolbarLinks();
-  focusCatchForm({ scroll: false });
   clearDetectionSummary();
   loadRemoteConfigOptions();
   log("Data-init voltooid");
@@ -459,6 +441,9 @@ function bindEvents() {
   const btnGeo = document.getElementById("btnImportGeoJSON");
   const btnSaveHtml = document.getElementById("btnSaveHtml");
   const btnSaveHtmlData = document.getElementById("btnSaveHtmlData");
+  const btnLocalSave = document.getElementById("btnLocalSave");
+  const btnLocalLoad = document.getElementById("btnLocalLoad");
+  const btnLocalReset = document.getElementById("btnLocalReset");
   const btnExportJSON = document.getElementById("btnExportGeoJSON");
   const btnExportZIP = document.getElementById("btnExportZIP");
   const btnFilterDepth = document.getElementById("btnFilterDepth");
@@ -477,9 +462,6 @@ function bindEvents() {
   const btnClearBathyServer = document.getElementById("btnClearBathyServer");
   const btnExportAll = document.getElementById("btnExportAll");
   const chkShowImports = document.getElementById("toggleImports");
-  const btnAddCatch = document.getElementById("btnAddCatch");
-  const catchPhotoInput = document.getElementById("catchPhoto");
-  const catchTable = document.getElementById("catchTable");
   btnDrawWater = document.getElementById("btnDrawWaterPoly");
   btnFinishWater = document.getElementById("btnFinishWaterPoly");
   btnCancelWater = document.getElementById("btnCancelWaterPoly");
@@ -501,6 +483,9 @@ function bindEvents() {
   btnGeo?.addEventListener("click", openGeoJSONDialog);
   btnSaveHtml?.addEventListener("click", exportHTML);
   btnSaveHtmlData?.addEventListener("click", exportHTMLWithData);
+  btnLocalSave?.addEventListener("click", localSave);
+  btnLocalLoad?.addEventListener("click", localLoad);
+  btnLocalReset?.addEventListener("click", localReset);
   btnExportJSON?.addEventListener("click", exportGeoJSON);
   btnExportZIP?.addEventListener("click", exportZIP);
   btnFilterDepth?.addEventListener("click", applyDepthFilter);
@@ -570,61 +555,6 @@ function bindEvents() {
     });
   }
   btnExportAll?.addEventListener("click", exportAll);
-
-  btnAddCatch?.addEventListener("click", e => {
-    e.preventDefault();
-    addCatchFromForm();
-  });
-
-  catchStekSelectEl = document.getElementById("catchStekSelect");
-  catchRigSelectEl = document.getElementById("catchRigSelect");
-  const catchStekSelect = catchStekSelectEl;
-  const catchRigSelect = catchRigSelectEl;
-
-  catchPhotoInput?.addEventListener("change", handleCatchPhotoSelect);
-
-  catchStekSelect?.addEventListener("change", () => {
-    const current = catchStekSelect.value || "";
-    catchStekSelect.dataset.selectedStek = current;
-    updateCatchRigOptions(current);
-    if (current) {
-      const stek = (state.stekken || []).find(item => item.id === current);
-      if (stek) {
-        const message = t("catch_hint_selected", "Stek {name} geselecteerd. Vul de velden in.")
-          .replace("{name}", stek.name || stek.id);
-        setCatchStatus("catch_hint_selected", message, "info");
-        return;
-      }
-    }
-    setCatchStatus(
-      "catch_hint_ready",
-      t("catch_hint_ready", "Selecteer een stek (en eventueel een rig) en vul de velden in."),
-      "info"
-    );
-  });
-
-  catchRigSelect?.addEventListener("change", () => {
-    const current = catchRigSelect.value || "";
-    catchRigSelect.dataset.selectedRig = current;
-    if (!current) return;
-    const rig = (state.rigs || []).find(item => item.id === current);
-    if (rig) {
-      const message = t("catch_hint_selected_rig", "Rig {name} geselecteerd. Vul de velden in.")
-        .replace("{name}", rig.name || rig.id);
-      setCatchStatus("catch_hint_selected_rig", message, "info");
-    }
-  });
-
-  catchTable?.addEventListener("click", e => {
-    const target = e.target.closest("button[data-catch-action]");
-    if (!target) return;
-    const id = target.dataset.id;
-    if (!id) return;
-    if (target.dataset.catchAction === "delete") {
-      deleteCatchEntry(id);
-    }
-  });
-
   setWaterDrawButtons(false);
 
   const langSelect = document.getElementById("langSelect");
@@ -644,6 +574,32 @@ function bindEvents() {
     });
   });
 
+  catchFormEls = {
+    panel: document.querySelector('details[data-panel="catches"]'),
+    form: document.getElementById("catchModalForm"),
+    id: document.getElementById("catchModalId"),
+    stek: document.getElementById("catchModalStek"),
+    rig: document.getElementById("catchModalRig"),
+    weightKg: document.getElementById("catchModalWeightKg"),
+    weightLbs: document.getElementById("catchModalWeightLbs"),
+    length: document.getElementById("catchModalLength"),
+    notes: document.getElementById("catchModalNotes"),
+    photo: document.getElementById("catchModalPhoto"),
+    date: document.getElementById("catchModalDate"),
+    deleteBtn: document.getElementById("btnDeleteCatch"),
+    cancelBtn: document.getElementById("btnCancelCatch"),
+    summaryLabel: document.getElementById("catchSummarySelection"),
+    selectionLabel: document.getElementById("catchSelectionLabel"),
+    list: document.getElementById("catchList")
+  };
+
+  ensureCatchFormVisible();
+  bindCatchForm();
+
+  openCatchModal({ forceNew: true });
+
+  document.addEventListener("vislok:focus-catch-form", e => focusCatchForm(e.detail));
+
   setInterval(populateTables, 10000);
   setInterval(autoSave, 60000);
 
@@ -659,8 +615,16 @@ function bindEvents() {
   document.addEventListener("vislok:bathy-stats", e => updateBathyPanel(e.detail));
   document.addEventListener("vislok:storage-truncated", handleStorageTruncated);
   document.addEventListener("vislok:storage-error", handleStorageError);
-  document.addEventListener("vislok:focus-catch-form", e => focusCatchForm(e?.detail || {}));
   document.addEventListener("vislok:map-bounds", e => scheduleBathyViewportFetch(e?.detail || e));
+}
+
+function ensureCatchFormVisible() {
+  if (catchFormEls.panel) {
+    catchFormEls.panel.setAttribute("open", "open");
+    catchFormEls.panel.classList.remove("is-hidden");
+  }
+  if (catchFormEls.selectionLabel) catchFormEls.selectionLabel.hidden = false;
+  if (catchFormEls.list) catchFormEls.list.hidden = false;
 }
 
 /* ---------- MAP EVENT HANDLERS ---------- */
@@ -720,16 +684,6 @@ function onMapNewSpot(e) {
     if (!action || !id || !type) return;
     const spot = findSpot(type, id);
     if (!spot) return;
-    if (action === "catch") {
-      if (type === "stek") {
-        focusCatchForm({ stekId: spot.id, scroll: true });
-      } else if (type === "rig") {
-        const stekId = spot.stekId || spot.stek_id || findNearestStekId(spot);
-        focusCatchForm({ stekId: stekId || "", rigId: spot.id, scroll: true });
-      }
-      return;
-    }
-
     if (action === "rename") {
     const newName = window.prompt(t("prompt_rename", "Nieuwe naam"), spot.name || "");
     if (newName === null) return;
@@ -1255,13 +1209,6 @@ function removeSpotFromState(type, id) {
     });
     if (dirty) saveState();
   }
-  if (type === "stek" && Array.isArray(state.catches)) {
-    const originalLength = state.catches.length;
-    state.catches = state.catches.filter(item => item.spot_id !== id);
-    if (state.catches.length !== originalLength) {
-      updateCatchTable();
-    }
-  }
   if (type === "stek") {
     let dirty = false;
     (state.rigs || []).forEach(rig => {
@@ -1415,14 +1362,14 @@ function formatDate(value) {
           scheduleBathyViewportFetch(lastViewportDetail);
         }
         if (showStatus) {
-          setStatus(t("status_imports_synced", "Serverimporten bijgewerkt"), "ok");
+          setStatus(t("status_imports_synced", "Lokale imports bijgewerkt"), "ok");
         }
       })
       .catch(err => {
-        console.warn("Kon serverimporten niet laden", err);
+        console.warn("Kon lokale imports niet laden", err);
         bathyServerAvailable = false;
         if (showStatus) {
-          setStatus(t("status_imports_sync_error", "Serverimporten konden niet geladen worden"), "error");
+          setStatus(t("status_imports_sync_error", "Imports konden niet geladen worden"), "error");
         }
       });
   }
@@ -1950,7 +1897,8 @@ function mergeImportPoints(points, options = {}) {
     setImportMeta({ stored: state.imports.length, total: state.imports.length, truncated: false, dropped: false });
   }
 
-  if (options.save !== false) {
+  const shouldSaveState = options.save === true;
+  if (shouldSaveState) {
     saveState();
   }
 
@@ -2445,415 +2393,6 @@ function normalizeDatabase() {
   setStatus(t("status_normalized", "Database genormaliseerd"), "ok");
 }
 
-function clearCatchForm(preserveStek = true) {
-  const stekSelect = document.getElementById("catchStekSelect");
-  const rigSelect = document.getElementById("catchRigSelect");
-  if (!preserveStek && stekSelect) {
-    stekSelect.value = "";
-    stekSelect.dataset.selectedStek = "";
-  }
-  if (rigSelect) {
-    if (!preserveStek || !stekSelect?.value) {
-      rigSelect.value = "";
-    }
-    rigSelect.dataset.selectedRig = rigSelect.value || "";
-    if (!stekSelect?.value) {
-      rigSelect.disabled = true;
-    }
-  }
-  const title = document.getElementById("catchTitle");
-  const species = document.getElementById("catchSpecies");
-  const weight = document.getElementById("catchWeight");
-  const length = document.getElementById("catchLength");
-  const date = document.getElementById("catchDate");
-  const notes = document.getElementById("catchNotes");
-  const photo = document.getElementById("catchPhoto");
-  if (title) title.value = "";
-  if (species) species.value = "";
-  if (weight) weight.value = "";
-  if (length) length.value = "";
-  if (date) date.value = "";
-  if (notes) notes.value = "";
-  if (photo) photo.value = "";
-  catchPhotoData = null;
-  updateCatchRigOptions(stekSelect?.value || "");
-}
-
-function handleCatchPhotoSelect(e) {
-  const file = e.target?.files?.[0];
-  if (!file) {
-    catchPhotoData = null;
-    return;
-  }
-  if (!file.type.startsWith("image/")) {
-    setCatchStatus("catch_error_photo", "Selecteer een geldig beeldbestand", "error");
-    e.target.value = "";
-    catchPhotoData = null;
-    return;
-  }
-  const reader = new FileReader();
-  reader.onload = evt => {
-    catchPhotoData = typeof evt.target?.result === "string" ? evt.target.result : null;
-  };
-  reader.onerror = () => {
-    catchPhotoData = null;
-    setCatchStatus("catch_error_photo", "Selecteer een geldig beeldbestand", "error");
-  };
-  reader.readAsDataURL(file);
-}
-
-function addCatchFromForm() {
-  const stekSelect = document.getElementById("catchStekSelect");
-  const rigSelect = document.getElementById("catchRigSelect");
-  if (!stekSelect || !stekSelect.value) {
-    setCatchStatus("catch_error_stek", "Kies eerst een stek", "error");
-    return;
-  }
-  const rigValue = rigSelect && !rigSelect.disabled ? rigSelect.value : "";
-  if (rigSelect) {
-    rigSelect.dataset.selectedRig = rigValue || "";
-  }
-  const payload = {
-    spot_id: stekSelect.value,
-    title: document.getElementById("catchTitle")?.value?.trim() || "",
-    species: document.getElementById("catchSpecies")?.value?.trim() || "",
-    weight_kg: parseFloat(document.getElementById("catchWeight")?.value),
-    length_cm: parseFloat(document.getElementById("catchLength")?.value),
-    caught_at: document.getElementById("catchDate")?.value || null,
-    notes: document.getElementById("catchNotes")?.value?.trim() || ""
-  };
-  if (rigValue) {
-    payload.rig_id = rigValue;
-  }
-  if (!Number.isFinite(payload.weight_kg)) payload.weight_kg = null;
-  if (!Number.isFinite(payload.length_cm)) payload.length_cm = null;
-  if (!payload.notes) payload.notes = null;
-  if (catchPhotoData) payload.photo = catchPhotoData;
-
-  setCatchStatus("status_catch_saving", "Vangst wordt opgeslagen...", "info");
-  saveCatch(payload)
-    .then(saved => {
-      if (!saved) throw new Error("Geen antwoord");
-      upsertCatch(saved);
-      saveState();
-      updateCatchTable();
-      clearCatchForm();
-      setCatchStatus("status_catch_saved", "Vangst opgeslagen", "ok");
-    })
-    .catch(err => {
-      console.error("Vangst opslaan mislukt", err);
-      setCatchStatus("status_catch_error", "Vangst kon niet worden opgeslagen", "error");
-    });
-}
-
-function deleteCatchEntry(id) {
-  if (!window.confirm(t("confirm_delete_catch", "Vangst verwijderen?"))) return;
-  deleteCatch(id)
-    .then(() => {
-      state.catches = (state.catches || []).filter(item => item.id !== id);
-      saveState();
-      updateCatchTable();
-      setCatchStatus("status_catch_deleted", "Vangst verwijderd", "ok");
-    })
-    .catch(err => {
-      console.warn("Vangst verwijderen mislukt", err);
-      setCatchStatus("status_catch_delete_error", "Vangst kon niet worden verwijderd", "error");
-    });
-}
-
-function setCatchStatus(key, fallback, type = "info") {
-  const statusEl = document.getElementById("catchStatus");
-  const message = t(key, fallback);
-  if (statusEl) {
-    statusEl.textContent = message;
-    statusEl.classList.remove("error", "success");
-    if (type === "error") statusEl.classList.add("error");
-    if (type === "ok" || type === "success") statusEl.classList.add("success");
-  }
-  if (type === "error") {
-    setStatus(message, "error");
-  } else if (type === "ok" || type === "success") {
-    setStatus(message, "ok");
-  } else if (type === "warn" || type === "warning") {
-    setStatus(message, "warn");
-  } else if (type === "debug" && message) {
-    log(`[catch] ${message}`);
-  }
-}
-
-function focusCatchForm(options = {}) {
-  const { stekId = "", rigId = "", scroll = false } = options || {};
-  const panel = document.querySelector('details[data-panel="catches"]');
-  if (panel) {
-    panel.open = true;
-    if (scroll && typeof panel.scrollIntoView === "function") {
-      panel.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
-  }
-
-  if (catchStekSelectEl && stekId) {
-    catchStekSelectEl.dataset.selectedStek = stekId;
-  }
-  if (catchRigSelectEl && rigId) {
-    catchRigSelectEl.dataset.selectedRig = rigId;
-  }
-
-  updateCatchStekOptions(stekId, rigId);
-
-  const select = catchStekSelectEl || document.getElementById("catchStekSelect");
-  if (select && typeof select.focus === "function") {
-    select.focus();
-  }
-
-  const rigSelect = catchRigSelectEl || document.getElementById("catchRigSelect");
-  if (rigSelect && rigId && !rigSelect.disabled) {
-    rigSelect.value = rigId;
-    rigSelect.dataset.selectedRig = rigId;
-  }
-
-  const title = document.getElementById("catchTitle");
-  if (stekId && title && typeof title.focus === "function") {
-    title.focus();
-  }
-
-  setCatchStatus(
-    "catch_hint_ready",
-    t("catch_hint_ready", "Selecteer een stek (en eventueel een rig) en vul de velden in."),
-    "info"
-  );
-}
-
-function upsertCatch(entry) {
-  const normalized = normalizeCatchEntry(entry);
-  if (!normalized?.id) return;
-  if (!state.catches) state.catches = [];
-  const idx = state.catches.findIndex(item => item.id === normalized.id);
-  if (idx >= 0) {
-    state.catches[idx] = { ...state.catches[idx], ...normalized };
-  } else {
-    state.catches.push(normalized);
-  }
-  state.catches.sort(compareCatches);
-}
-
-function compareCatches(a, b) {
-  const aDate = a?.caught_at || a?.created_at || "";
-  const bDate = b?.caught_at || b?.created_at || "";
-  if (aDate === bDate) return (b.created_at || "").localeCompare(a.created_at || "");
-  return (bDate || "").localeCompare(aDate || "");
-}
-
-function updateCatchStekOptions(preferredStek, preferredRig) {
-  const select = catchStekSelectEl || document.getElementById("catchStekSelect");
-  if (!select) return;
-
-  let desired = select.dataset.selectedStek || select.value || "";
-  if (preferredStek !== undefined) {
-    desired = preferredStek || "";
-  }
-
-  select.innerHTML = "";
-
-  const items = (state.stekken || [])
-    .slice()
-    .sort((a, b) => (a.name || "").localeCompare(b.name || ""));
-
-  const placeholder = document.createElement("option");
-  placeholder.value = "";
-  placeholder.textContent = t("catch_option_select", "Kies een stek");
-  if (items.length) {
-    placeholder.disabled = true;
-    placeholder.hidden = true;
-  }
-  select.appendChild(placeholder);
-
-  let defaultValue = desired;
-  items.forEach(stek => {
-    const option = document.createElement("option");
-    option.value = stek.id;
-    option.textContent = stek.name || stek.id;
-    if (!defaultValue) {
-      defaultValue = stek.id;
-    }
-    if (stek.id === desired) {
-      defaultValue = desired;
-    }
-    select.appendChild(option);
-  });
-
-  if (defaultValue && items.some(item => item.id === defaultValue)) {
-    select.value = defaultValue;
-  } else if (items.length) {
-    select.value = items[0].id;
-  } else {
-    select.value = "";
-  }
-
-  select.disabled = items.length === 0;
-  select.dataset.selectedStek = select.value || "";
-
-  const addBtn = document.getElementById("btnAddCatch");
-  if (addBtn) {
-    addBtn.disabled = items.length === 0;
-  }
-
-  const statusEl = document.getElementById("catchStatus");
-  const locked = statusEl?.classList.contains("error") || statusEl?.classList.contains("success");
-
-  if (!items.length) {
-    if (!locked) {
-      setCatchStatus(
-        "catch_hint_need_stek",
-        t("catch_hint_need_stek", "Voeg eerst een stek toe om vangsten te registreren."),
-        "info"
-      );
-    }
-    updateCatchRigOptions("", preferredRig);
-    return;
-  }
-
-  updateCatchRigOptions(select.value || "", preferredRig);
-
-  if (!locked) {
-    if (select.value) {
-      const stek = items.find(item => item.id === select.value);
-      const message = t("catch_hint_selected", "Stek {name} geselecteerd. Vul de velden in.")
-        .replace("{name}", stek?.name || stek?.id || "stek");
-      setCatchStatus("catch_hint_selected", message, "info");
-    } else if (!(state.catches && state.catches.length)) {
-      setCatchStatus(
-        "catch_hint_ready",
-        t("catch_hint_ready", "Selecteer een stek (en eventueel een rig) en vul de velden in."),
-        "info"
-      );
-    }
-  }
-}
-
-function updateCatchRigOptions(stekId = "", preferredRig) {
-  const select = catchRigSelectEl || document.getElementById("catchRigSelect");
-  if (!select) return;
-
-  let desired = select.dataset.selectedRig || select.value || "";
-  if (preferredRig !== undefined) {
-    desired = preferredRig || "";
-  }
-
-  select.innerHTML = "";
-
-  const rigs = (state.rigs || [])
-    .filter(rig => !stekId || rig.stekId === stekId)
-    .sort((a, b) => (a.name || "").localeCompare(b.name || ""));
-
-  const baseLabel = rigs.length
-    ? t("catch_option_rig_none", "No rig")
-    : t("catch_option_rig", "Choose a rig (optional)");
-  const placeholder = document.createElement("option");
-  placeholder.value = "";
-  placeholder.textContent = baseLabel;
-  select.appendChild(placeholder);
-
-  rigs.forEach(rig => {
-    const option = document.createElement("option");
-    option.value = rig.id;
-    option.textContent = rig.name || rig.id;
-    select.appendChild(option);
-  });
-
-  if (desired && rigs.some(rig => rig.id === desired)) {
-    select.value = desired;
-  } else {
-    select.value = "";
-  }
-
-  select.disabled = !stekId;
-  select.dataset.selectedRig = select.value || "";
-}
-
-function updateCatchTable() {
-  const tbody = document.querySelector("#catchTable tbody");
-  const empty = document.getElementById("catchTableEmpty");
-  if (!tbody) return;
-  tbody.innerHTML = "";
-  const catches = (state.catches || []).slice().sort(compareCatches);
-  if (!catches.length) {
-    if (empty) empty.style.display = "block";
-    setCatchStatus(
-      "catch_hint_ready",
-      t("catch_hint_ready", "Selecteer een stek (en eventueel een rig) en vul de velden in."),
-      "info"
-    );
-    return;
-  }
-  if (empty) empty.style.display = "none";
-
-  catches.forEach(item => {
-    const tr = document.createElement("tr");
-    const stek = state.stekken?.find(s => s.id === item.spot_id);
-    const rigId = item.rig_id || item.rigId || "";
-    const rig = rigId ? state.rigs?.find(r => r.id === rigId) : null;
-    const stekName = escapeHtml(stek?.name || t("catch_unknown_stek", "Onbekende stek"));
-    const rigName = rig
-      ? escapeHtml(rig.name || rig.id)
-      : rigId
-      ? escapeHtml(t("catch_unknown_rig", "Onbekende rig"))
-      : escapeHtml(t("catch_option_rig_none", "Geen rig"));
-    const photoCell = item.photo_path
-      ? `<a href="${escapeHtml(item.photo_path)}" target="_blank" rel="noopener">${t("catch_view_photo", "Bekijk")}</a>`
-      : "–";
-    const date = item.caught_at || item.created_at || "";
-    tr.innerHTML = `
-      <td>${stekName}</td>
-      <td>${escapeHtml(item.title || "-")}</td>
-      <td>${date ? escapeHtml(date) : "-"}</td>
-      <td>${escapeHtml(item.species || "-")}</td>
-      <td>${rigName}</td>
-      <td>${Number.isFinite(item.weight_kg) ? item.weight_kg.toFixed(2) : "-"}</td>
-      <td>${Number.isFinite(item.length_cm) ? item.length_cm.toFixed(1) : "-"}</td>
-      <td>${photoCell}</td>
-      <td class="table-actions">
-        <button data-catch-action="delete" data-id="${escapeHtml(item.id)}">${t("action_delete", "Verwijder")}</button>
-      </td>
-    `;
-    tbody.appendChild(tr);
-  });
-}
-
-function mergeServerCatches(remote) {
-  if (!Array.isArray(remote)) return;
-  if (!state.catches) state.catches = [];
-  const map = new Map();
-  state.catches.forEach(item => {
-    if (item?.id) map.set(item.id, item);
-  });
-  remote.forEach(item => {
-    const normalized = normalizeCatchEntry(item);
-    if (normalized?.id) map.set(normalized.id, normalized);
-  });
-  state.catches = Array.from(map.values()).sort(compareCatches);
-  saveState();
-}
-
-function normalizeCatchEntry(entry) {
-  if (!entry) return null;
-  const normalized = { ...entry };
-  if (normalized.rigId && !normalized.rig_id) {
-    normalized.rig_id = normalized.rigId;
-  }
-  if (normalized.rig_id && !normalized.rigId) {
-    normalized.rigId = normalized.rig_id;
-  }
-  if (normalized.weight_kg !== undefined) {
-    const weight = Number(normalized.weight_kg);
-    normalized.weight_kg = Number.isFinite(weight) ? weight : null;
-  }
-  if (normalized.length_cm !== undefined) {
-    const length = Number(normalized.length_cm);
-    normalized.length_cm = Number.isFinite(length) ? length : null;
-  }
-  if (normalized.notes === "") normalized.notes = null;
-  return normalized;
-}
 
 function persistSpot(spot, showStatus = true) {
   ensureSpotRelationships(spot);
@@ -2908,34 +2447,39 @@ function persistSpot(spot, showStatus = true) {
 }
 
 /* ---------- SERVER SYNC ---------- */
-function syncWithServer(pushLocal) {
-  return Promise.all([fetchSpots(), fetchCatches()])
-    .then(([spots, catches]) => {
-      if (Array.isArray(spots)) {
-        mergeServerData(spots);
-        setStatus(`${t("status_sync_done", "Server synchronisatie voltooid")} (${spots.length})`, "ok");
-      }
-      if (Array.isArray(catches)) {
-        mergeServerCatches(catches);
-      }
-      updateCatchStekOptions();
-      updateCatchTable();
+  function syncWithServer(pushLocal) {
+    const spotPromise = fetchSpots().catch(err => {
+      console.warn("Spots ophalen mislukt", err);
+      return [];
+    });
+    const catchPromise = fetchCatches().catch(err => {
+      console.warn("Vangsten ophalen mislukt", err);
+      return [];
+    });
+
+    return Promise.all([spotPromise, catchPromise])
+      .then(([spots, catchList]) => {
+        if (Array.isArray(spots)) {
+          mergeServerData(spots);
+          setStatus(`${t("status_sync_done", "Lokale opslag geladen")} (${spots.length})`, "ok");
+        }
+        if (Array.isArray(catchList)) {
+          state.catches = catchList;
+          updateCatchList();
+          saveState();
+        }
 
       if (!pushLocal) return;
       const all = [...state.waters, ...state.stekken, ...state.rigs];
-      return all
-        .reduce(
-          (chain, spot) =>
-            chain.then(() =>
-              saveSpot(spot).catch(err => {
-                console.warn("Spot upload faalde", err);
-              })
-            ),
-          Promise.resolve()
-        )
-        .then(() => {
-          setStatus(t("status_sync_push", "Lokale data naar server geschreven"), "ok");
-        });
+      return all.reduce(
+        (chain, spot) =>
+          chain.then(() =>
+            saveSpot(spot).catch(err => {
+              console.warn("Lokale opslag bijwerken faalde", err);
+            })
+          ),
+        Promise.resolve()
+      );
     })
     .then(() => {
       whenMapReady(() => refreshDataLayers());
@@ -2945,8 +2489,8 @@ function syncWithServer(pushLocal) {
       return loadServerImportSummary();
     })
     .catch(err => {
-      console.warn("Server sync faalde", err);
-      setStatus(t("status_sync_error", "Server niet bereikbaar"), "error");
+      console.warn("Lokale sync faalde", err);
+      setStatus(t("status_sync_error", "Lokale opslag niet beschikbaar"), "error");
     });
 }
 
@@ -2982,24 +2526,30 @@ function resetServerData() {
   if (!confirm(t("confirm_reset_server", "Weet je zeker dat je de serverdata wilt resetten?"))) return;
   resetServer()
     .then(() => {
-      setStatus(t("status_server_reset", "Serverdata gewist"), "ok");
-      syncWithServer(false);
+      state.waters = [];
+      state.stekken = [];
+      state.rigs = [];
+      state.catches = [];
+      state.imports = [];
+      state.importsMeta = { stored: 0, total: 0 };
+      saveState();
+      setStatus(t("status_server_reset", "Lokale opslag gewist"), "ok");
+      whenMapReady(() => refreshDataLayers());
+      populateTables();
     })
     .catch(err => {
       console.error(err);
-      setStatus(t("status_server_reset_error", "Server reset mislukt"), "error");
+      setStatus(t("status_server_reset_error", "Lokale reset mislukt"), "error");
     });
 }
 
 /* ---------- TABELLEN ---------- */
-export function populateTables() {
-  ensureManageUI();
-  updateManageTable();
-  updateImportStats();
-  updateCatchStekOptions();
-  updateCatchTable();
-  updateToolbarLinks();
-}
+  export function populateTables() {
+    ensureManageUI();
+    updateManageTable();
+    updateImportStats();
+    updateToolbarLinks();
+  }
 
 function updateToolbarLinks() {
   const container = document.getElementById("linkSummaryContent");
@@ -3136,6 +2686,89 @@ function ensureManageUI() {
   });
 }
 
+async function readPhotoInput(input) {
+  if (!input?.files?.length) return null;
+  const file = input.files[0];
+  return new Promise(resolve => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => resolve(null);
+    reader.readAsDataURL(file);
+  });
+}
+
+async function handleCatchSubmit(e) {
+  e.preventDefault();
+  if (!catchFormEls.form) return;
+  const stekId = catchFormEls.stek?.value || "";
+  let rigId = catchFormEls.rig?.value || "";
+  if (rigId && !stekId) {
+    const rig = findSpot("rig", rigId);
+    if (rig?.stekId) {
+      catchFormEls.stek.value = rig.stekId;
+    }
+  }
+  const finalStek = catchFormEls.stek?.value || "";
+  if (!finalStek) {
+    setStatus(t("error_stek_required", "Kies eerst een stek"), "error");
+    return;
+  }
+  const payload = {
+    id: activeCatchId || catchFormEls.id?.value || null,
+    stekId: finalStek,
+    rigId: rigId || null,
+    waterId: findSpot("stek", finalStek)?.waterId || null,
+    weightKg: parseFloat(catchFormEls.weightKg?.value || ""),
+    weightLbs: parseFloat(catchFormEls.weightLbs?.value || ""),
+    lengthCm: parseFloat(catchFormEls.length?.value || ""),
+    notes: catchFormEls.notes?.value || "",
+    caughtAt: normalizeDateInput(catchFormEls.date?.value)
+  };
+  if (!Number.isFinite(payload.weightKg)) payload.weightKg = null;
+  if (!Number.isFinite(payload.weightLbs)) payload.weightLbs = null;
+  if (!Number.isFinite(payload.lengthCm)) payload.lengthCm = null;
+  payload.photo = await readPhotoInput(catchFormEls.photo);
+
+  return saveCatch(payload)
+    .then(saved => {
+      upsertCatch(saved);
+      updateCatchList();
+      closeCatchModal();
+      setStatus(t("status_catch_saved", "Vangst opgeslagen"), "ok");
+    })
+    .catch(err => {
+      console.warn("Catch save failed", err);
+      setStatus(t("status_catch_save_error", "Vangst opslaan mislukt"), "error");
+    });
+}
+
+function normalizeDateInput(value) {
+  if (!value || typeof value !== "string") return null;
+  const m = value.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?/);
+  if (!m) return null;
+  const [, y, mo, d, h, mi, s] = m;
+  const sec = s || "00";
+  return `${y}-${mo}-${d} ${h}:${mi}:${sec}`;
+}
+
+function toDatetimeLocal(value) {
+  if (!value) return "";
+  const m = value.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2})(?::\d{2})?/);
+  return m ? `${m[1]}T${m[2]}` : "";
+}
+
+function upsertCatch(entry) {
+  if (!entry) return;
+  if (!state.catches) state.catches = [];
+  const idx = state.catches.findIndex(c => c.id === entry.id);
+  if (idx >= 0) {
+    state.catches[idx] = { ...state.catches[idx], ...entry };
+  } else {
+    state.catches.push(entry);
+  }
+  saveState();
+}
+
 function updateManageTable() {
   const container = document.getElementById("manageTabs");
   const table = container?.querySelector("#manageTable tbody");
@@ -3262,6 +2895,159 @@ function buildLinkCell(item, type) {
   return "";
 }
 
+function renderCatchSelects(selectedStek, selectedRig) {
+  if (!catchFormEls.stek || !catchFormEls.rig) return;
+  catchFormEls.stek.innerHTML = renderStekOptions(selectedStek || "");
+  const rigOptions = [`<option value="">${t("option_unlinked", "(geen)")}</option>`];
+  [...(state.rigs || [])]
+    .sort((a, b) => (a?.name || "").localeCompare(b?.name || ""))
+    .forEach(rig => {
+      const selected = rig.id === selectedRig ? " selected" : "";
+      rigOptions.push(`<option value="${escapeHtml(rig.id)}"${selected}>${escapeHtml(rig.name || rig.id)}</option>`);
+    });
+  catchFormEls.rig.innerHTML = rigOptions.join("");
+}
+
+function bindCatchForm() {
+  renderCatchSelects();
+  updateCatchList();
+  catchFormEls.form?.addEventListener("submit", handleCatchSubmit);
+  catchFormEls.stek?.addEventListener("change", updateCatchSelectionLabel);
+  catchFormEls.rig?.addEventListener("change", () => {
+    const rigId = catchFormEls.rig.value;
+    if (rigId) {
+      const rig = findSpot("rig", rigId);
+      if (rig?.stekId && catchFormEls.stek) catchFormEls.stek.value = rig.stekId;
+    }
+    updateCatchSelectionLabel();
+  });
+  const syncWeights = (source, target, factor) => {
+    source?.addEventListener("input", () => {
+      const val = parseFloat(source.value);
+      if (!Number.isFinite(val)) {
+        target.value = "";
+        return;
+      }
+      target.value = (val * factor).toFixed(1);
+    });
+  };
+  syncWeights(catchFormEls.weightKg, catchFormEls.weightLbs, 2.20462);
+  syncWeights(catchFormEls.weightLbs, catchFormEls.weightKg, 0.453592);
+
+  catchFormEls.cancelBtn?.addEventListener("click", closeCatchModal);
+  catchFormEls.deleteBtn?.addEventListener("click", handleCatchDelete);
+  catchFormEls.list?.addEventListener("click", handleCatchListClick);
+}
+
+function focusCatchForm(detail = {}) {
+  openCatchModal({ stekId: detail.stekId, rigId: detail.rigId, scroll: true });
+}
+
+function openCatchModal(detail = {}) {
+  if (!catchFormEls.form) return;
+  const existing = detail.forceNew ? null : detail.catchId ? state.catches?.find(c => c.id === detail.catchId) : null;
+  activeCatchId = existing?.id || null;
+  catchFormEls.id.value = existing?.id || "";
+  renderCatchSelects(detail.stekId || existing?.stek_id, detail.rigId || existing?.rig_id);
+  if (catchFormEls.stek) catchFormEls.stek.value = detail.stekId || existing?.stek_id || "";
+  if (catchFormEls.rig) catchFormEls.rig.value = detail.rigId || existing?.rig_id || "";
+  if (catchFormEls.weightKg) catchFormEls.weightKg.value = Number.isFinite(existing?.weight_kg) ? existing.weight_kg : "";
+  if (catchFormEls.weightLbs) catchFormEls.weightLbs.value = Number.isFinite(existing?.weight_lbs) ? existing.weight_lbs : "";
+  if (catchFormEls.length) catchFormEls.length.value = Number.isFinite(existing?.length_cm) ? existing.length_cm : "";
+  if (catchFormEls.notes) catchFormEls.notes.value = existing?.notes || "";
+  if (catchFormEls.date) catchFormEls.date.value = toDatetimeLocal(existing?.caught_at);
+  if (catchFormEls.photo) catchFormEls.photo.value = "";
+  if (catchFormEls.deleteBtn) catchFormEls.deleteBtn.hidden = !existing;
+  updateCatchSelectionLabel();
+  if (detail.scroll && catchFormEls.form) {
+    catchFormEls.form.scrollIntoView({ behavior: "smooth" });
+  }
+}
+
+function closeCatchModal() {
+  activeCatchId = null;
+  if (catchFormEls.form) catchFormEls.form.reset();
+  updateCatchSelectionLabel();
+}
+
+function handleCatchListClick(ev) {
+  const btn = ev.target.closest("button[data-catch-id]");
+  if (!btn) return;
+  const id = btn.dataset.catchId;
+  if (!id) return;
+  openCatchModal({ catchId: id, scroll: true });
+}
+
+function handleCatchDelete() {
+  if (!activeCatchId) {
+    closeCatchModal();
+    return;
+  }
+  if (!window.confirm(t("confirm_delete_catch", "Vangst verwijderen?"))) return;
+  deleteCatch(activeCatchId)
+    .then(() => {
+      state.catches = (state.catches || []).filter(c => c.id !== activeCatchId);
+      updateCatchList();
+      setStatus(t("status_catch_deleted", "Vangst verwijderd"), "ok");
+      closeCatchModal();
+    })
+    .catch(err => {
+      console.warn("Catch delete failed", err);
+      setStatus(t("status_catch_delete_error", "Verwijderen mislukt"), "error");
+    });
+}
+
+function updateCatchSelectionLabel() {
+  if (!catchFormEls.selectionLabel && !catchFormEls.summaryLabel) return;
+  const stekId = catchFormEls.stek?.value || "";
+  const rigId = catchFormEls.rig?.value || "";
+  const stek = stekId ? findSpot("stek", stekId) : null;
+  const rig = rigId ? findSpot("rig", rigId) : null;
+  if (rig && !stek && rig.stekId) {
+    const parent = findSpot("stek", rig.stekId);
+    if (parent) {
+      catchFormEls.stek.value = parent.id;
+    }
+  }
+  const label = rig
+    ? t("catch_selected_rig", "Rig: {rig} (stek {stek})")
+        .replace("{rig}", rig.name || rig.id)
+        .replace("{stek}", (stek || findSpot("stek", rig?.stekId || ""))?.name || "-")
+    : stek
+    ? t("catch_selected_stek", "Stek: {stek}").replace("{stek}", stek.name || stek.id)
+    : t("catch_selection_placeholder", "Kies een stek of rig om een vangst vast te leggen.");
+  if (catchFormEls.selectionLabel) catchFormEls.selectionLabel.textContent = label;
+  if (catchFormEls.summaryLabel) catchFormEls.summaryLabel.textContent = label;
+}
+
+function updateCatchList() {
+  const listEl = catchFormEls.list;
+  if (!listEl) return;
+  if (!state.catches?.length) {
+    listEl.textContent = t("catch_list_empty", "Nog geen vangsten.");
+    return;
+  }
+  const rows = state.catches
+    .slice()
+    .sort((a, b) => (b.caught_at || b.created_at || "").localeCompare(a.caught_at || a.created_at || ""))
+    .map(c => {
+      const stek = findSpot("stek", c.stek_id || "");
+      const rig = findSpot("rig", c.rig_id || "");
+      const name = rig?.name || stek?.name || c.stek_id || c.rig_id || c.id;
+      const weight = Number.isFinite(c.weight_kg)
+        ? `${c.weight_kg.toFixed(1)} kg / ${(c.weight_lbs ?? 0).toFixed(1)} lbs`
+        : "-";
+      const when = c.caught_at ? c.caught_at.split(" ")[0] : "";
+      return `
+        <div class="catch-row">
+          <div><strong>${escapeHtml(name || "-" )}</strong>${when ? ` · ${escapeHtml(when)}` : ""}</div>
+          <div class="catch-row-meta">${weight}</div>
+          <div class="catch-row-actions"><button data-catch-id="${escapeHtml(c.id)}" data-i18n="btn_edit_catch">✏️ Bewerken</button></div>
+        </div>`;
+    });
+  listEl.innerHTML = rows.join("");
+}
+
 function reassignStekWater(id, waterId) {
   const stek = findSpot("stek", id);
   if (!stek) return;
@@ -3325,26 +3111,4 @@ window.VisLokData = { forceServerSync };
 /* ---------- EVENTKOPPELINGEN ---------- */
 document.addEventListener("DOMContentLoaded", () => {
   initData();
-
-  const toolbar = document.querySelector(".toolbar-right");
-  if (toolbar && !document.getElementById("btnLocalSave")) {
-    const btnSaveLocal = document.createElement("button");
-    btnSaveLocal.id = "btnLocalSave";
-    btnSaveLocal.textContent = t("btn_local_save", "💾 Opslaan");
-    btnSaveLocal.addEventListener("click", localSave);
-
-    const btnLoadLocal = document.createElement("button");
-    btnLoadLocal.id = "btnLocalLoad";
-    btnLoadLocal.textContent = t("btn_local_load", "📂 Laden");
-    btnLoadLocal.addEventListener("click", localLoad);
-
-    const btnResetLocal = document.createElement("button");
-    btnResetLocal.id = "btnLocalReset";
-    btnResetLocal.textContent = t("btn_local_reset", "🗑️ Reset");
-    btnResetLocal.addEventListener("click", localReset);
-
-    toolbar.appendChild(btnSaveLocal);
-    toolbar.appendChild(btnLoadLocal);
-    toolbar.appendChild(btnResetLocal);
-  }
 });
