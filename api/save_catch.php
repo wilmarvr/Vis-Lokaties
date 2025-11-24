@@ -50,10 +50,19 @@ try {
     $length = isset($input['lengthCm']) ? (float)$input['lengthCm'] : null;
     $notes = substr(trim($input['notes'] ?? ''), 0, 2000);
     $photoPath = vislok_store_photo($input['photo'] ?? null);
+
+    // Preserve existing photo when no new upload is provided
+    $existingPhoto = null;
+    if ($photoPath === null && $id !== null) {
+        $stmt = $pdo->prepare('SELECT photo FROM catches WHERE id = ?');
+        $stmt->execute([$id]);
+        $existingPhoto = $stmt->fetchColumn() ?: null;
+    }
+    $photoToSave = $photoPath ?? $existingPhoto;
     $caughtAt = $input['caughtAt'] ?? null;
 
     $pdo->prepare('REPLACE INTO catches (id, water_id, stek_id, rig_id, weight_kg, weight_lbs, length_cm, notes, photo, caught_at) VALUES (?,?,?,?,?,?,?,?,?,?)')
-        ->execute([$id, $waterId, $stekId, $rigId, $kg, $lbs, $length, $notes, $photoPath, $caughtAt]);
+        ->execute([$id, $waterId, $stekId, $rigId, $kg, $lbs, $length, $notes, $photoToSave, $caughtAt]);
 
     $saved = [
         'id' => $id,
@@ -64,7 +73,7 @@ try {
         'weight_lbs' => $lbs,
         'length_cm' => $length,
         'notes' => $notes,
-        'photo' => $photoPath,
+        'photo' => $photoToSave,
         'caught_at' => $caughtAt,
     ];
     vislok_json_response(['catch' => $saved]);
