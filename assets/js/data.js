@@ -600,6 +600,9 @@ function bindEvents() {
   ensureCatchFormVisible();
   bindCatchForm();
 
+  // Open the catch modal once on init so the fields are immediately visible/editable.
+  openCatchModal({ forceNew: true });
+
   document.addEventListener("vislok:focus-catch-form", e => focusCatchForm(e.detail));
 
   setInterval(populateTables, 10000);
@@ -2949,7 +2952,7 @@ function focusCatchForm(detail = {}) {
 
 function openCatchModal(detail = {}) {
   if (!catchFormEls.modal || !catchFormEls.form) return;
-  const existing = detail.catchId ? state.catches?.find(c => c.id === detail.catchId) : null;
+  const existing = detail.forceNew ? null : detail.catchId ? state.catches?.find(c => c.id === detail.catchId) : null;
   activeCatchId = existing?.id || null;
   catchFormEls.id.value = existing?.id || "";
   renderCatchSelects(detail.stekId || existing?.stek_id, detail.rigId || existing?.rig_id);
