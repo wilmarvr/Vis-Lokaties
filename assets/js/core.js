@@ -8,6 +8,35 @@ export const APP_VERSION = "0.0.0";
 export const TOOLBAR_MIN_WIDTH = 280;
 export const TOOLBAR_MAX_WIDTH = 520;
 export const TOOLBAR_DEFAULT_WIDTH = 340;
+const STORAGE_BUDGET_BYTES = 4 * 1024 * 1024; // ~4MB veilig voor localStorage
+const DEFAULT_SETTINGS = {
+  heatmapRadius: 25,
+  heatmapBlur: 15,
+  heatmapMin: 0,
+  heatmapMax: 10,
+  heatmapInvert: false,
+  heatmapClamp: false,
+  cluster: true,
+  tooltipDepth: true,
+  detectionRadius: 200,
+  maxEdge: 60,
+  saveBathy: true,
+  autoSync: true,
+  showImports: false,
+  showData: true,
+  showWeather: true,
+  showContours: true,
+  showManage: true,
+  showOverview: true,
+  showChangelog: true,
+  allowManualWater: true,
+  autoLink: true,
+  toolbarDrag: true,
+  panelOrder: [],
+  panelOpen: { catches: true },
+  toolbarWidth: TOOLBAR_DEFAULT_WIDTH
+};
+
 export let state = {
   theme: "dark",
   language: "nl",
@@ -22,33 +51,7 @@ export let state = {
   rigs: [],
   catches: [],
   lastDetection: null,
-  settings: {
-    heatmapRadius: 25,
-    heatmapBlur: 15,
-    heatmapMin: 0,
-    heatmapMax: 10,
-    heatmapInvert: false,
-    heatmapClamp: false,
-    cluster: true,
-    tooltipDepth: true,
-    detectionRadius: 200,
-    maxEdge: 60,
-    saveBathy: true,
-    autoSync: true,
-    showImports: false,
-    showData: true,
-    showWeather: true,
-    showContours: true,
-    showCatches: true,
-    showManage: true,
-    showOverview: true,
-    showChangelog: true,
-    allowManualWater: true,
-    autoLink: true,
-    toolbarDrag: true,
-    panelOrder: [],
-    toolbarWidth: TOOLBAR_DEFAULT_WIDTH
-  },
+  settings: { ...DEFAULT_SETTINGS },
   filters: {
     depthMin: 0,
     depthMax: 10
@@ -64,11 +67,61 @@ export let state = {
 };
 
 function clampToolbarWidth(value) {
+  const target = Number.isFinite(Number(value)) ? Number(value) : TOOLBAR_DEFAULT_WIDTH;
+  const viewportMax =
+    typeof window !== "undefined" && typeof window.innerWidth === "number"
+      ? Math.max(TOOLBAR_MIN_WIDTH, Math.min(TOOLBAR_MAX_WIDTH, Math.floor(window.innerWidth - 220)))
+      : TOOLBAR_MAX_WIDTH;
+  const max = Math.max(TOOLBAR_MIN_WIDTH, viewportMax);
+  return Math.min(max, Math.max(TOOLBAR_MIN_WIDTH, Math.round(target)));
+}
+
+function clampValue(value, min, max, fallback) {
   const num = Number(value);
-  if (!Number.isFinite(num)) {
-    return TOOLBAR_DEFAULT_WIDTH;
+  if (!Number.isFinite(num)) return fallback;
+  return Math.min(max, Math.max(min, num));
+}
+
+function sanitizeSettings(raw = {}) {
+  const merged = { ...DEFAULT_SETTINGS, ...raw };
+  merged.heatmapRadius = clampValue(merged.heatmapRadius, 1, 120, DEFAULT_SETTINGS.heatmapRadius);
+  merged.heatmapBlur = clampValue(merged.heatmapBlur, 1, 120, DEFAULT_SETTINGS.heatmapBlur);
+  merged.detectionRadius = clampValue(merged.detectionRadius, 10, 10000, DEFAULT_SETTINGS.detectionRadius);
+  merged.maxEdge = clampValue(merged.maxEdge, 1, 1000, DEFAULT_SETTINGS.maxEdge);
+  merged.toolbarWidth = clampToolbarWidth(merged.toolbarWidth ?? DEFAULT_SETTINGS.toolbarWidth);
+
+  merged.heatmapMin = Number.isFinite(merged.heatmapMin) ? merged.heatmapMin : DEFAULT_SETTINGS.heatmapMin;
+  merged.heatmapMax = Number.isFinite(merged.heatmapMax) ? merged.heatmapMax : DEFAULT_SETTINGS.heatmapMax;
+  if (merged.heatmapMax <= merged.heatmapMin) {
+    merged.heatmapMax = merged.heatmapMin + 1;
   }
-  return Math.min(TOOLBAR_MAX_WIDTH, Math.max(TOOLBAR_MIN_WIDTH, Math.round(num)));
+
+  merged.heatmapInvert = !!merged.heatmapInvert;
+  merged.heatmapClamp = !!merged.heatmapClamp;
+  merged.cluster = !!merged.cluster;
+  merged.tooltipDepth = !!merged.tooltipDepth;
+  merged.saveBathy = !!merged.saveBathy;
+  merged.autoSync = !!merged.autoSync;
+  merged.showImports = !!merged.showImports;
+  merged.showData = !!merged.showData;
+  merged.showWeather = !!merged.showWeather;
+  merged.showContours = !!merged.showContours;
+  merged.showManage = !!merged.showManage;
+  merged.showOverview = !!merged.showOverview;
+  merged.showChangelog = !!merged.showChangelog;
+  merged.allowManualWater = !!merged.allowManualWater;
+  merged.autoLink = !!merged.autoLink;
+  merged.toolbarDrag = !!merged.toolbarDrag;
+  merged.panelOrder = Array.isArray(merged.panelOrder) ? merged.panelOrder : [];
+  merged.panelOpen =
+    merged.panelOpen && typeof merged.panelOpen === "object" && !Array.isArray(merged.panelOpen)
+      ? Object.keys(merged.panelOpen).reduce((acc, key) => {
+          acc[key] = merged.panelOpen[key] !== false;
+          return acc;
+        }, {})
+      : {};
+
+  return merged;
 }
 
 export function setToolbarWidth(width, persist = true) {
@@ -129,7 +182,7 @@ export function setFooterInfo({
   }
 }
 
-function applyVersionInfo(info) {
+export function applyVersionInfo(info) {
   const current = info?.current || APP_VERSION;
   const releases = Array.isArray(info?.releases) ? info.releases : [];
   state.version = { current, releases };
@@ -141,26 +194,12 @@ function applyVersionInfo(info) {
 }
 
 export function loadVersionInfo(showStatus = false) {
-  return fetch('api/get_version.php')
-    .then(response => {
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      return response.json();
-    })
-    .then(data => {
-      const version = applyVersionInfo(data?.version || {});
-      if (showStatus) {
-        setStatus(`Versiegegevens bijgewerkt (v${version})`, 'ok');
-      }
-      log(`Versiegegevens geladen: v${version}`);
-      return version;
-    })
-    .catch(err => {
-      console.warn('Kon versiegegevens niet laden', err);
-      if (showStatus) {
-        setStatus('Kon versiegegevens niet laden', 'error');
-      }
-      return APP_VERSION;
-    });
+  const version = applyVersionInfo(state.version || {});
+  if (showStatus) {
+    setStatus(`Versiegegevens bijgewerkt (v${version})`, 'ok');
+  }
+  log(`Versiegegevens geladen: v${version}`);
+  return Promise.resolve(version);
 }
 
 export function log(...args) {
@@ -224,7 +263,7 @@ export function loadState() {
       state = {
         ...state,
         ...parsed,
-        settings: { ...state.settings, ...(parsed.settings || {}) },
+        settings: sanitizeSettings(parsed.settings),
         filters: { ...state.filters, ...(parsed.filters || {}) },
         weather: { ...state.weather, ...(parsed.weather || {}) }
       };
@@ -304,7 +343,9 @@ export function initCore() {
   if (heatRadius) {
     heatRadius.value = state.settings.heatmapRadius;
     heatRadius.addEventListener("input", () => {
-      state.settings.heatmapRadius = parseInt(heatRadius.value, 10);
+      const radius = clampValue(parseInt(heatRadius.value, 10), 1, 120, DEFAULT_SETTINGS.heatmapRadius);
+      state.settings.heatmapRadius = radius;
+      heatRadius.value = radius;
       saveState();
       document.dispatchEvent(new CustomEvent("vislok:heat-radius", { detail: state.settings.heatmapRadius }));
     });
@@ -314,7 +355,9 @@ export function initCore() {
   if (heatBlur) {
     heatBlur.value = state.settings.heatmapBlur;
     heatBlur.addEventListener("input", () => {
-      state.settings.heatmapBlur = parseInt(heatBlur.value, 10);
+      const blur = clampValue(parseInt(heatBlur.value, 10), 1, 120, DEFAULT_SETTINGS.heatmapBlur);
+      state.settings.heatmapBlur = blur;
+      heatBlur.value = blur;
       saveState();
       document.dispatchEvent(new CustomEvent("vislok:heat-blur", { detail: state.settings.heatmapBlur }));
     });
@@ -324,7 +367,14 @@ export function initCore() {
   if (heatMin) {
     heatMin.value = state.settings.heatmapMin;
     heatMin.addEventListener("change", () => {
-      state.settings.heatmapMin = parseFloat(heatMin.value);
+      const parsedMin = Number.isFinite(parseFloat(heatMin.value)) ? parseFloat(heatMin.value) : DEFAULT_SETTINGS.heatmapMin;
+      state.settings.heatmapMin = parsedMin;
+      heatMin.value = parsedMin;
+      if (state.settings.heatmapMax <= parsedMin) {
+        state.settings.heatmapMax = parsedMin + 1;
+        const maxInput = document.getElementById("heatMax");
+        if (maxInput) maxInput.value = state.settings.heatmapMax;
+      }
       saveState();
       document.dispatchEvent(new CustomEvent("vislok:heat-min", { detail: state.settings.heatmapMin }));
     });
@@ -334,7 +384,10 @@ export function initCore() {
   if (heatMax) {
     heatMax.value = state.settings.heatmapMax;
     heatMax.addEventListener("change", () => {
-      state.settings.heatmapMax = parseFloat(heatMax.value);
+      const parsedMax = Number.isFinite(parseFloat(heatMax.value)) ? parseFloat(heatMax.value) : state.settings.heatmapMin + 1;
+      const safeMax = parsedMax <= state.settings.heatmapMin ? state.settings.heatmapMin + 1 : parsedMax;
+      state.settings.heatmapMax = safeMax;
+      heatMax.value = safeMax;
       saveState();
       document.dispatchEvent(new CustomEvent("vislok:heat-max", { detail: state.settings.heatmapMax }));
     });
@@ -367,33 +420,27 @@ export function initCore() {
   setStatus("Gereed");
 }
 
-function buildPersistableState() {
-  const base = { ...state, imports: [], importsMeta: state.importsMeta };
-  const persist = safeClone(base);
-  const imports = Array.isArray(state.imports) ? state.imports : [];
-  const sanitized = imports
-    .map(point => {
-      const lat = Number(point?.lat);
-      const lng = Number(point?.lng);
-      const depth = Number(point?.val ?? point?.depth);
-      const entry = {};
-      if (Number.isFinite(lat)) entry.lat = lat;
-      if (Number.isFinite(lng)) entry.lng = lng;
-      if (Number.isFinite(depth)) entry.val = depth;
-      if (Object.keys(entry).length === 0) return null;
-      return entry;
-    })
-    .filter(Boolean);
+  function buildPersistableState() {
+    const imports = Array.isArray(state.imports) ? state.imports : [];
+    // We purposely avoid storing large bathy imports in localStorage to keep
+    // the payload small. Because this is an intentional omission (not an
+    // error), we treat it as non-truncated so the UI doesn’t show quota
+    // warnings.
+    const meta = {
+      stored: 0,
+      total: imports.length,
+      truncated: false,
+      dropped: false
+    };
 
-  persist.imports = sanitized;
-  persist.importsMeta = {
-    stored: sanitized.length,
-    total: imports.length,
-    truncated: false,
-    dropped: false
-  };
-  return persist;
-}
+    // Bewaar imports alleen in geheugen (server/DB) en niet in localStorage om
+    // quota-fouten te voorkomen bij grote bathybestanden.
+    return safeClone({
+      ...state,
+      imports: [],
+      importsMeta: meta
+    });
+  }
 
 function safeClone(value) {
   if (value === null || value === undefined) return value;

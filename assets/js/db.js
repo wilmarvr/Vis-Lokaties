@@ -1,106 +1,82 @@
 /* =======================================================
    Vis Lokaties — db.js
-   Clienthelpers voor PHP API (XAMPP / MySQL)
+   MySQL-backed opslag via PHP API
    ======================================================= */
 
-const API_BASE = "api";
+const API_BASE = (typeof window !== "undefined" && window.VISLOK_API_BASE) ? window.VISLOK_API_BASE : "api";
 
-function callApi(endpoint, options = {}) {
-  return fetch(`${API_BASE}/${endpoint}`, {
+async function callApi(path, options = {}) {
+  const url = `${API_BASE}/${path}`;
+  const init = {
+    method: options.method || "GET",
     headers: { "Content-Type": "application/json" },
-    ...options
-  })
-    .then(response => {
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      return response.text();
-    })
-    .then(text => (text ? JSON.parse(text) : null))
-    .catch(err => {
-      console.warn(`API ${endpoint} faalde`, err);
-      throw err;
-    });
-}
-
-export function fetchSpots() {
-  return callApi("list_spots.php").then(result => result?.data || []);
-}
-
-export function saveSpot(spot) {
-  const payload = { ...spot };
-  if (payload.waterId !== undefined) {
-    payload.water_id = payload.waterId || null;
-    delete payload.waterId;
-  }
-  if (payload.stekId !== undefined) {
-    payload.stek_id = payload.stekId || null;
-    delete payload.stekId;
-  }
-  return callApi("save_spot.php", {
-    method: "POST",
-    body: JSON.stringify(payload)
-  }).then(result => result?.spot || null);
-}
-
-export function deleteSpot(id) {
-  return callApi("delete_spot.php", {
-    method: "POST",
-    body: JSON.stringify({ id })
-  });
-}
-
-export function resetServer() {
-  return callApi("reset_spots.php", { method: "POST" });
-}
-
-export function saveBathyBatch(payload) {
-  return callApi("save_import.php", {
-    method: "POST",
-    body: JSON.stringify(payload)
-  });
-}
-
-export function fetchBathyImports() {
-  return callApi("list_imports.php").then(result => ({
-    list: result?.data || [],
-    summary: result?.summary || { batches: 0, points: 0 }
-  }));
-}
-
-export function clearBathyImports() {
-  return callApi("clear_imports.php", { method: "POST" });
-}
-
-export function fetchBathyPoints(bounds) {
-  const payload = {
-    south: bounds?.south,
-    west: bounds?.west,
-    north: bounds?.north,
-    east: bounds?.east
+    body: options.body ? JSON.stringify(options.body) : undefined,
   };
-  return callApi("get_import_points.php", {
-    method: "POST",
-    body: JSON.stringify(payload)
-  }).then(result => result || { points: [] });
+  const res = await fetch(url, init);
+  const text = await res.text();
+  let json;
+  try {
+    json = text ? JSON.parse(text) : {};
+  } catch (err) {
+    throw new Error(`HTTP ${res.status}: ${text || res.statusText}`);
+  }
+  if (!res.ok || json.error) {
+    const detail = json?.detail ? ` (${json.detail})` : "";
+    throw new Error(`HTTP ${res.status}: ${json.error || res.statusText}${detail}`);
+  }
+  return json;
 }
 
-export function fetchCatches(spotId) {
-  const payload = spotId ? { spot_id: spotId } : {};
-  return callApi("list_catches.php", {
-    method: "POST",
-    body: JSON.stringify(payload)
-  }).then(result => result?.data || []);
+export async function fetchSpots() {
+  const data = await callApi("list_spots.php");
+  return Array.isArray(data.spots) ? data.spots : [];
 }
 
-export function saveCatch(entry) {
-  return callApi("save_catch.php", {
-    method: "POST",
-    body: JSON.stringify(entry)
-  }).then(result => result?.catch || null);
+export async function saveSpot(spot) {
+  const data = await callApi("save_spot.php", { method: "POST", body: spot });
+  return data || spot;
 }
 
-export function deleteCatch(id) {
-  return callApi("delete_catch.php", {
-    method: "POST",
-    body: JSON.stringify({ id })
-  });
+export async function deleteSpot(id, type) {
+  await callApi("delete_spot.php", { method: "POST", body: { id, type } });
 }
+
+export async function resetServer() {
+  await callApi("reset_spots.php", { method: "POST", body: {} });
+}
+
+export async function saveBathyBatch(payload) {
+  return callApi("save_import.php", { method: "POST", body: payload });
+}
+
+export async function fetchBathyImports() {
+  const data = await callApi("list_imports.php");
+  return { list: data.imports || [], summary: data.summary || { batches: 0, points: 0 } };
+}
+
+export async function clearBathyImports() {
+  await callApi("clear_imports.php", { method: "POST", body: {} });
+}
+
+export async function fetchBathyPoints(bounds) {
+  const params = bounds
+    ? `?south=${bounds.south}&north=${bounds.north}&west=${bounds.west}&east=${bounds.east}`
+    : "";
+  const data = await callApi(`get_import_points.php${params}`);
+  return { points: data.points || [] };
+}
+
+export async function fetchCatches() {
+  const data = await callApi("list_catches.php");
+  return Array.isArray(data.catches) ? data.catches : [];
+}
+
+export async function saveCatch(payload) {
+  const data = await callApi("save_catch.php", { method: "POST", body: payload });
+  return data?.catch || payload;
+}
+
+export async function deleteCatch(id) {
+  await callApi("delete_catch.php", { method: "POST", body: { id } });
+}
+
