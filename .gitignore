@@ -1,0 +1,4 @@
+data/*.sqlite
+uploads/catches/*
+!uploads/catches/.gitkeep
+data/config.local.json
