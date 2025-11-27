@@ -6,9 +6,20 @@
 
 import { distanceM } from "./helpers.js?v=20250715";
 
-function normalizedPoints(points) {
+let cacheRef = null;
+let cacheLen = 0;
+let cacheNormalized = [];
+
+export function normalizedPoints(points) {
   if (!Array.isArray(points)) return [];
-  return points
+  const length = points.length;
+  if (points === cacheRef && length === cacheLen) {
+    return cacheNormalized;
+  }
+
+  cacheRef = points;
+  cacheLen = length;
+  cacheNormalized = points
     .map(p => {
       const lat = Number(p?.lat ?? p?.latitude);
       const lng = Number(p?.lng ?? p?.lon ?? p?.longitude);
@@ -16,6 +27,8 @@ function normalizedPoints(points) {
       return { lat, lng, depth };
     })
     .filter(p => Number.isFinite(p.lat) && Number.isFinite(p.lng) && Number.isFinite(p.depth));
+
+  return cacheNormalized;
 }
 
 export function interpolateDepthAt(lat, lng, points, options = {}) {
