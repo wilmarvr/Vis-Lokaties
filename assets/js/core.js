@@ -49,7 +49,6 @@ export let state = {
   waters: [],
   stekken: [],
   rigs: [],
-  catches: [],
   lastDetection: null,
   settings: { ...DEFAULT_SETTINGS },
   filters: {
