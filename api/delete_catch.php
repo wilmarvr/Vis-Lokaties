@@ -1,31 +1,15 @@
 <?php
-require_once __DIR__ . '/db.php';
+require __DIR__ . '/db.php';
 
 try {
-    $payload = vislok_read_json();
-    $id = $payload['id'] ?? null;
-    if (!$id) {
-        vislok_json_response(['error' => 'id vereist'], 400);
+    $input = vislok_json_input();
+    if (empty($input['id'])) {
+        vislok_error('Catch ID ontbreekt', 400);
     }
-
-    $pdo = vislok_get_connection();
-    $stmt = $pdo->prepare('SELECT photo_path FROM catches WHERE id = :id LIMIT 1');
-    $stmt->execute([':id' => $id]);
-    $existing = $stmt->fetch();
-    if (!$existing) {
-        vislok_json_response(['status' => 'ok']);
-    }
-
-    $pdo->prepare('DELETE FROM catches WHERE id = :id')->execute([':id' => $id]);
-
-    if (!empty($existing['photo_path'])) {
-        $file = realpath(__DIR__ . '/../' . $existing['photo_path']);
-        if ($file && strpos($file, realpath(__DIR__ . '/..')) === 0) {
-            @unlink($file);
-        }
-    }
-
-    vislok_json_response(['status' => 'ok']);
+    $pdo = vislok_bootstrap();
+    $stmt = $pdo->prepare('DELETE FROM catches WHERE id = ?');
+    $stmt->execute([$input['id']]);
+    vislok_json_response(['ok' => true]);
 } catch (Throwable $e) {
-    vislok_json_response(['error' => $e->getMessage()], 500);
+    vislok_error('Catch delete failed', 500, ['detail' => $e->getMessage()]);
 }
