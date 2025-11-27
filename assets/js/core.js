@@ -421,11 +421,15 @@ export function initCore() {
 
   function buildPersistableState() {
     const imports = Array.isArray(state.imports) ? state.imports : [];
+    // We purposely avoid storing large bathy imports in localStorage to keep
+    // the payload small. Because this is an intentional omission (not an
+    // error), we treat it as non-truncated so the UI doesn’t show quota
+    // warnings.
     const meta = {
       stored: 0,
       total: imports.length,
-      truncated: imports.length > 0,
-      dropped: imports.length > 0
+      truncated: false,
+      dropped: false
     };
 
     // Bewaar imports alleen in geheugen (server/DB) en niet in localStorage om

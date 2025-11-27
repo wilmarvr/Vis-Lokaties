@@ -1919,6 +1919,10 @@ function mergeImportPoints(points, options = {}) {
     );
   }
 
+  // Laat de kaart weten dat de bathy-set is bijgewerkt zodat diepte tooltips
+  // direct opnieuw kunnen worden berekend.
+  document.dispatchEvent(new CustomEvent("vislok:bathy-updated"));
+
   return { added: unique.length, duplicates };
 }
 
@@ -1926,7 +1930,7 @@ function applyImports(imported, meta = {}) {
   const incoming = Array.isArray(imported) ? imported : [];
   const { added, duplicates } = mergeImportPoints(incoming, {
     updateMeta: meta.updateMeta !== false,
-    save: meta.save !== false,
+    save: false,
     refresh: meta.refresh !== false,
     stats: meta.stats !== false
   });

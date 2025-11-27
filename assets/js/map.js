@@ -56,6 +56,7 @@ let dragDistanceLine = null;
 let dragDistanceContext = null;
 let spotPopup = null;
 let spotPopupData = null;
+let lastHoverLatLng = null;
 const markerRegistry = {
   stek: new Map(),
   rig: new Map()
@@ -390,6 +391,7 @@ function updateMouseHover(latlng) {
   if (!map) return;
   const lat = latlng?.lat;
   const lng = latlng?.lng;
+  lastHoverLatLng = Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
     if (depthTooltip && map.hasLayer(depthTooltip)) {
       depthTooltip.remove();
@@ -445,6 +447,12 @@ function updateMouseHover(latlng) {
   setFooterInfo({ depth: `| ${t("footer_depth", "Diepte")}: –` });
   depthTooltip.setContent(`${t("footer_depth", "Diepte")}: –`);
 }
+
+document.addEventListener("vislok:bathy-updated", () => {
+  if (lastHoverLatLng) {
+    updateMouseHover(lastHoverLatLng);
+  }
+});
 
 /* ---------- PICK / CLICK MODES ---------- */
 
