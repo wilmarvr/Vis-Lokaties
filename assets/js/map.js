@@ -6,6 +6,7 @@
 
 import { setStatus, log, state, saveState, setFooterInfo } from "./core.js?v=20250715";
 import { distanceM, formatLatLng, escapeHtml } from "./helpers.js?v=20250715";
+import { interpolateDepthAt } from "./depth.js?v=20250715";
 import { t } from "./i18n.js?v=20250715";
 
 const OVERPASS_ENDPOINTS = [
@@ -412,7 +413,11 @@ function updateMouseHover(latlng) {
     depthTooltip.addTo(map);
   }
 
-  const info = interpolateDepth(lat, lng);
+  const info = interpolateDepthAt(lat, lng, state.imports, {
+    maxNeighbors: 25,
+    cutoff: 1200,
+    power: 2
+  });
   if (info) {
     const { value, distance, count } = info;
     setFooterInfo({ depth: `| ${t("footer_depth", "Diepte")}: ${value.toFixed(1)}m @ ${Math.round(distance)}m` });
@@ -439,52 +444,6 @@ function updateMouseHover(latlng) {
 
   setFooterInfo({ depth: `| ${t("footer_depth", "Diepte")}: –` });
   depthTooltip.setContent(`${t("footer_depth", "Diepte")}: –`);
-}
-
-function interpolateDepth(lat, lng) {
-  if (!state.imports?.length) return null;
-  const maxNeighbors = 25;
-  const power = 2;
-  const cutoff = 1200; // meter
-  const candidates = [];
-  let nearest = Infinity;
-
-  for (const p of state.imports) {
-    const d = map.distance([lat, lng], [p.lat, p.lng]);
-    if (!Number.isFinite(d)) continue;
-    if (d < nearest) nearest = d;
-    if (d <= cutoff) {
-      candidates.push({ point: p, distance: d });
-    }
-  }
-
-  if (!candidates.length) {
-    const sorted = [...state.imports]
-      .map(p => ({ point: p, distance: map.distance([lat, lng], [p.lat, p.lng]) }))
-      .sort((a, b) => a.distance - b.distance)
-      .slice(0, maxNeighbors);
-    candidates.push(...sorted);
-  }
-
-  if (!candidates.length) return null;
-
-  let numerator = 0;
-  let denominator = 0;
-  let count = 0;
-  for (const { point, distance } of candidates.slice(0, maxNeighbors)) {
-    const val = point.val ?? point.depth;
-    if (!Number.isFinite(val)) continue;
-    count += 1;
-    if (distance === 0) {
-      return { value: val, distance: 0, count: 1 };
-    }
-    const weight = 1 / Math.pow(distance, power);
-    numerator += weight * val;
-    denominator += weight;
-  }
-
-  if (!denominator) return null;
-  return { value: numerator / denominator, distance: nearest, count };
 }
 
 /* ---------- PICK / CLICK MODES ---------- */
@@ -683,7 +642,11 @@ function updateMarkerDistancePreview(latlng) {
   const rounded = Math.round(distance);
   const text = t(labelKey, fallback).replace("{distance}", String(rounded));
   const nameLine = escapeHtml(reference.name || reference.id || "");
-  const depthInfo = interpolateDepth(latlng.lat, latlng.lng);
+  const depthInfo = interpolateDepthAt(latlng.lat, latlng.lng, state.imports, {
+    maxNeighbors: 25,
+    cutoff: 1200,
+    power: 2
+  });
   const depthLine = depthInfo && Number.isFinite(depthInfo.value)
     ? `${t("footer_depth", "Diepte")}: ${depthInfo.value.toFixed(1)} m`
     : "";
